@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --background: #eef2f6;
+  --surface: #ffffff;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+
+  /* Functional clinical slot palette (color = appointment type) */
+  --slot-prehospital: #fde7ef;
+  --slot-prehospital-bd: #f0a3c0;
+  --slot-blocked: #e2e8f0;
+  --slot-blocked-bd: #cbd5e1;
+  --slot-dispensary: #ffffff;
+  --slot-dispensary-bd: #dbe3ec;
+  --slot-echo: #dbeafe;
+  --slot-echo-bd: #93c5fd;
+  --slot-reserve: #ffedd5;
+  --slot-reserve-bd: #fdba74;
+
+  --accent-available: #16a34a;
+  --accent-booked: #1e293b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle diagonal hatch for LOCKED slots — reads as "not yet open" at a glance */
+.slot-locked-hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(100, 116, 139, 0.08),
+    rgba(100, 116, 139, 0.08) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}

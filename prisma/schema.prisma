@@ -1,0 +1,257 @@
+// Ambulance booking system — Prisma schema
+// Slot-release rules are DATA (release_policies / slot_rules / settings), not hardcoded.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  NURSE
+}
+
+enum DayType {
+  REGULAR_THURSDAY
+  REGULAR_FRIDAY
+  MANUAL_WEDNESDAY
+  LAST_FRIDAY
+  CLOSED
+}
+
+enum CalendarDayStatus {
+  CLOSED
+  GENERATED
+  OPEN
+  PARTIALLY_LOCKED
+}
+
+enum SlotStatus {
+  LOCKED
+  AVAILABLE
+  BOOKED
+  BLOCKED
+  CANCELLED
+  COMPLETED
+}
+
+enum AppointmentType {
+  PRE_HOSPITAL
+  CONSULTATION_BLOCKED
+  DISPENSARY
+  ECHO
+  ACUTE_RESERVE
+  CUSTOM
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  ARRIVED
+  NO_SHOW
+  CANCELLED
+  RESCHEDULED
+  COMPLETED
+}
+
+enum ReleaseType {
+  IMMEDIATE
+  DAYS_BEFORE
+  MANUAL_ONLY
+  LAST_FRIDAY_30_DAYS_BEFORE
+}
+
+model User {
+  id               String   @id @default(cuid())
+  name             String
+  email            String   @unique
+  role             Role     @default(NURSE)
+  passwordHash     String?  @map("password_hash")
+  externalAuthId   String?  @map("external_auth_id")
+  totpSecret       String?  @map("totp_secret")
+  twoFactorEnabled Boolean  @default(false) @map("two_factor_enabled")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  openedDays          CalendarDay[] @relation("OpenedBy")
+  createdAppointments Appointment[] @relation("CreatedBy")
+  updatedAppointments Appointment[] @relation("UpdatedBy")
+  auditLogs           AuditLog[]
+  settingsUpdated     Setting[]
+
+  @@map("users")
+}
+
+model Patient {
+  id                String    @id @default(cuid())
+  firstName         String    @map("first_name")
+  lastName          String    @map("last_name")
+  dateOfBirth       DateTime? @map("date_of_birth") @db.Date
+  phone             String?
+  email             String?
+  externalPatientId String?   @map("external_patient_id")
+  note              String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  appointments Appointment[]
+
+  @@index([lastName, firstName])
+  @@map("patients")
+}
+
+model ScheduleTemplate {
+  id                  String    @id @default(cuid())
+  name                String
+  dayOfWeek           Int       @map("day_of_week") // JS getDay(): 0=Sun .. 6=Sat
+  startTime           String    @map("start_time") // "HH:MM" wall clock
+  endTime             String    @map("end_time")
+  slotDurationMinutes Int       @default(30) @map("slot_duration_minutes")
+  isActive            Boolean   @default(true) @map("is_active")
+  validFrom           DateTime? @map("valid_from") @db.Date
+  validTo             DateTime? @map("valid_to") @db.Date
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  slotRules SlotRule[]
+
+  @@index([dayOfWeek, isActive])
+  @@map("schedule_templates")
+}
+
+model SlotRule {
+  id              String          @id @default(cuid())
+  templateId      String          @map("template_id")
+  name            String
+  startTime       String          @map("start_time") // "HH:MM"
+  endTime         String          @map("end_time")
+  appointmentType AppointmentType @map("appointment_type")
+  color           String
+  isBookable      Boolean         @default(true) @map("is_bookable")
+  releasePolicyId String?         @map("release_policy_id")
+  priority        Int             @default(0)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  template      ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  releasePolicy ReleasePolicy?   @relation(fields: [releasePolicyId], references: [id])
+
+  @@index([templateId])
+  @@map("slot_rules")
+}
+
+model ReleasePolicy {
+  id                    String      @id @default(cuid())
+  name                  String
+  releaseType           ReleaseType @map("release_type")
+  daysBefore            Int?        @map("days_before")
+  requiresAdminOverride Boolean     @default(false) @map("requires_admin_override")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  slotRules SlotRule[]
+
+  @@map("release_policies")
+}
+
+model CalendarDay {
+  id             String            @id @default(cuid())
+  date           DateTime          @unique @db.Date
+  dayType        DayType           @map("day_type")
+  status         CalendarDayStatus @default(CLOSED)
+  openedByUserId String?           @map("opened_by_user_id")
+  openedAt       DateTime?         @map("opened_at")
+  note           String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  openedBy User?             @relation("OpenedBy", fields: [openedByUserId], references: [id])
+  slots    AppointmentSlot[]
+
+  @@index([date])
+  @@map("calendar_days")
+}
+
+model AppointmentSlot {
+  id              String          @id @default(cuid())
+  calendarDayId   String          @map("calendar_day_id")
+  startAt         DateTime        @map("start_at") @db.Timestamptz(6)
+  endAt           DateTime        @map("end_at") @db.Timestamptz(6)
+  appointmentType AppointmentType @map("appointment_type")
+  status          SlotStatus      @default(LOCKED)
+  releaseAt       DateTime?       @map("release_at") @db.Timestamptz(6)
+  color           String
+  ruleId          String?         @map("rule_id")
+  lockedReason    String?         @map("locked_reason")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  calendarDay  CalendarDay   @relation(fields: [calendarDayId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@unique([calendarDayId, startAt])
+  @@index([releaseAt, status])
+  @@index([startAt])
+  @@map("appointment_slots")
+}
+
+model Appointment {
+  id                 String            @id @default(cuid())
+  slotId             String            @map("slot_id")
+  patientId          String            @map("patient_id")
+  appointmentType    AppointmentType   @map("appointment_type")
+  status             AppointmentStatus @default(SCHEDULED)
+  note               String?
+  createdByUserId    String?           @map("created_by_user_id")
+  updatedByUserId    String?           @map("updated_by_user_id")
+  cancellationReason String?           @map("cancellation_reason")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  slot      AppointmentSlot @relation(fields: [slotId], references: [id])
+  patient   Patient         @relation(fields: [patientId], references: [id])
+  createdBy User?           @relation("CreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy User?           @relation("UpdatedBy", fields: [updatedByUserId], references: [id])
+
+  @@index([slotId])
+  @@index([patientId])
+  @@index([status])
+  @@map("appointments")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?  @map("actor_user_id")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  action      String
+  beforeData  Json?    @map("before_data")
+  afterData   Json?    @map("after_data")
+  reason      String?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           Json
+  updatedByUserId String?  @map("updated_by_user_id")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedByUserId], references: [id])
+
+  @@map("settings")
+}
