@@ -8,13 +8,15 @@ import {
   Plus,
   Loader2,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import type { CalendarDayDTO, SlotDTO } from "@/lib/api-types";
 import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
-import { apiSend } from "@/lib/client";
+import { apiSend, ApiError } from "@/lib/client";
 import { useToast } from "@/components/ui/Toast";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SlotCard } from "./SlotCard";
 import { BookingDialog } from "@/components/booking/BookingDialog";
 import {
@@ -61,6 +63,9 @@ export function CalendarView({
   );
   const [dialog, setDialog] = useState<Dialog>(null);
   const [opening, setOpening] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [pendingOverride, setPendingOverride] = useState<string | null>(null);
 
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
@@ -80,6 +85,9 @@ export function CalendarView({
       ),
     [weekStart],
   );
+
+  // Mobile shows one day; never default to a non-working day (e.g. today = Sunday).
+  const mobileDay = workingIsos.includes(selectedDay) ? selectedDay : workingIsos[0];
 
   // Available slots of a given type across the loaded week (reschedule targets).
   const rescheduleOptionsFor = (type: string): RescheduleOption[] => {
@@ -101,20 +109,40 @@ export function CalendarView({
       setDialog({ type: "unlock", slot, dayIso });
   }
 
-  async function openOrGenerate(iso: string) {
+  async function openOrGenerate(iso: string, overrideReason?: string) {
+    const isWednesday = weekdayOf(iso) === 3;
     setOpening(iso);
     try {
-      const isWednesday = weekdayOf(iso) === 3;
       await apiSend(
         `/api/calendar-days/${iso}/${isWednesday ? "open" : "generate"}`,
         "POST",
-        {},
+        overrideReason ? { overrideReason } : {},
       );
       await invalidate();
+      setPendingOverride(null);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
+      // Another Wednesday is already open this month → offer an audited override.
+      if (e instanceof ApiError && e.code === "CONFLICT" && isWednesday && !overrideReason) {
+        setPendingOverride(iso);
+      } else {
+        toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
+      }
     } finally {
       setOpening(null);
+    }
+  }
+
+  async function deleteDay(iso: string) {
+    setDeleting(true);
+    try {
+      await apiSend(`/api/calendar-days/${iso}`, "DELETE");
+      await invalidate();
+      setPendingDelete(null);
+      toast("Deň zrušený", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Zrušenie zlyhalo", "error");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -160,6 +188,7 @@ export function CalendarView({
                 canManage={canManageDays}
                 opening={opening === iso}
                 onOpen={() => openOrGenerate(iso)}
+                onRequestDelete={() => setPendingDelete(iso)}
                 onSelect={handleSelect}
               />
             ))}
@@ -173,9 +202,10 @@ export function CalendarView({
                   key={iso}
                   type="button"
                   onClick={() => setSelectedDay(iso)}
+                  aria-pressed={mobileDay === iso}
                   className={[
                     "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium",
-                    selectedDay === iso
+                    mobileDay === iso
                       ? "bg-slate-900 text-white"
                       : "bg-white text-slate-700 ring-1 ring-slate-200",
                   ].join(" ")}
@@ -186,11 +216,12 @@ export function CalendarView({
             </div>
             <div className="mt-3">
               <DayColumn
-                iso={selectedDay}
-                day={dayByIso.get(selectedDay)}
+                iso={mobileDay}
+                day={dayByIso.get(mobileDay)}
                 canManage={canManageDays}
-                opening={opening === selectedDay}
-                onOpen={() => openOrGenerate(selectedDay)}
+                opening={opening === mobileDay}
+                onOpen={() => openOrGenerate(mobileDay)}
+                onRequestDelete={() => setPendingDelete(mobileDay)}
                 onSelect={handleSelect}
                 stacked
               />
@@ -222,6 +253,29 @@ export function CalendarView({
           dayIso={dialog.dayIso}
           onClose={close}
           onUnlocked={afterChange}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Zrušiť tento deň?"
+          description={`Zruší sa ${clinicLongDate(pendingDelete)} vrátane jeho voľných slotov. Deň s objednávkami nemožno zrušiť.`}
+          confirmLabel="Zrušiť deň"
+          tone="danger"
+          onConfirm={() => deleteDay(pendingDelete)}
+          onClose={() => (deleting ? undefined : setPendingDelete(null))}
+        />
+      )}
+
+      {pendingOverride && (
+        <ConfirmDialog
+          title="Otvoriť ďalšiu stredu?"
+          description="V tomto mesiaci je už otvorená iná streda. Otvorenie ďalšej je výnimka a zaznamená sa do auditu."
+          confirmLabel="Otvoriť stredu"
+          requireReason
+          reasonLabel="Dôvod výnimky"
+          onConfirm={(reason) => openOrGenerate(pendingOverride, reason)}
+          onClose={() => setPendingOverride(null)}
         />
       )}
     </div>
@@ -287,6 +341,7 @@ function DayColumn({
   canManage,
   opening,
   onOpen,
+  onRequestDelete,
   onSelect,
   stacked,
 }: {
@@ -295,16 +350,29 @@ function DayColumn({
   canManage: boolean;
   opening: boolean;
   onOpen: () => void;
+  onRequestDelete: () => void;
   onSelect: (slot: SlotDTO, dayIso: string) => void;
   stacked?: boolean;
 }) {
   const isWednesday = weekdayOf(iso) === 3;
+  const canDelete = canManage && day?.dayType === "MANUAL_WEDNESDAY";
   return (
     <section className="rounded-xl bg-white/60 ring-1 ring-slate-200">
-      <header className="sticky top-0 rounded-t-xl border-b border-slate-100 bg-white/90 px-3 py-2 backdrop-blur">
+      <header className="sticky top-0 flex items-center justify-between rounded-t-xl border-b border-slate-100 bg-white/90 px-3 py-2 backdrop-blur">
         <p className="text-sm font-semibold capitalize text-slate-900">
           {clinicDayChip(iso)}
         </p>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={onRequestDelete}
+            aria-label="Zrušiť deň"
+            title="Zrušiť deň"
+            className="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </header>
       <div
         className={`space-y-1.5 p-2 ${stacked ? "" : "max-h-[70vh] overflow-y-auto"}`}

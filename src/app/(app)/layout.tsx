@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth/auth";
+import { NavLink } from "@/components/layout/NavLink";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Admin",
@@ -22,16 +23,19 @@ export default async function AppLayout({
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-4">
-            <Link href="/calendar" className="font-semibold tracking-tight text-slate-900">
+            <Link
+              href="/calendar"
+              aria-label="Ambulancia — domov"
+              className="flex items-center gap-1.5 font-semibold tracking-tight text-slate-900"
+            >
+              <span className="grid h-6 w-6 place-items-center rounded-md bg-slate-900 text-xs font-bold text-white">
+                A
+              </span>
               Ambulancia
             </Link>
-            <nav className="flex items-center gap-3 text-sm">
-              <Link href="/calendar" className="font-medium text-slate-500 hover:text-slate-900">
-                Kalendár
-              </Link>
-              <Link href="/pacienti" className="font-medium text-slate-500 hover:text-slate-900">
-                Pacienti
-              </Link>
+            <nav className="flex items-center gap-4 text-sm" aria-label="Hlavná navigácia">
+              <NavLink href="/calendar">Kalendár</NavLink>
+              <NavLink href="/pacienti">Pacienti</NavLink>
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
@@ -46,18 +50,8 @@ export default async function AppLayout({
             </Link>
             {user.role === "ADMIN" && (
               <>
-                <Link
-                  href="/nastavenia"
-                  className="font-medium text-slate-500 hover:text-slate-900"
-                >
-                  Nastavenia
-                </Link>
-                <Link
-                  href="/audit"
-                  className="font-medium text-slate-500 hover:text-slate-900"
-                >
-                  Audit
-                </Link>
+                <NavLink href="/nastavenia">Nastavenia</NavLink>
+                <NavLink href="/audit">Audit</NavLink>
               </>
             )}
             <form
