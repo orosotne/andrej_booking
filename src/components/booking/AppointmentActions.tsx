@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { TextareaField } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { useToast } from "@/components/ui/Toast";
+import { CalendarClock } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
@@ -33,28 +38,27 @@ export function AppointmentActions({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { toast } = useToast();
   const appointment = slot.appointment;
   const [mode, setMode] = useState<Mode>("view");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const meta = TYPE_META[slot.appointmentType];
 
   if (!appointment) return null;
+  const apptId = appointment.id;
 
-  async function run(fn: () => Promise<unknown>) {
+  async function run(fn: () => Promise<unknown>, successMsg: string) {
     setBusy(true);
-    setError(null);
     try {
       await fn();
+      toast(successMsg, "success");
       onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Operácia zlyhala");
+      toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
       setBusy(false);
     }
   }
-
-  const apptId = appointment.id;
 
   return (
     <Modal
@@ -62,8 +66,6 @@ export function AppointmentActions({
       subtitle={`${clinicLongDate(dayIso)} · ${clinicTime(slot.startAt)}–${clinicTime(slot.endAt)} · ${meta.label}`}
       onClose={onClose}
     >
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
       {mode === "view" && (
         <div className="space-y-4">
           {appointment.patient.phone && (
@@ -80,68 +82,66 @@ export function AppointmentActions({
 
           <div className="grid grid-cols-3 gap-2">
             {STATUS_ACTIONS.map((a) => (
-              <button
+              <Button
                 key={a.value}
-                type="button"
+                variant="secondary"
+                size="sm"
                 disabled={busy}
                 onClick={() =>
-                  run(() => apiSend(`/api/appointments/${apptId}`, "PATCH", { status: a.value }))
+                  run(
+                    () => apiSend(`/api/appointments/${apptId}`, "PATCH", { status: a.value }),
+                    `Stav: ${a.label}`,
+                  )
                 }
-                className="rounded-lg border border-slate-300 px-2 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 {a.label}
-              </button>
+              </Button>
             ))}
           </div>
 
           <div className="flex gap-2 border-t border-slate-100 pt-3">
-            <button
-              type="button"
-              onClick={() => setMode("reschedule")}
-              className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
+            <Button variant="outline" fullWidth onClick={() => setMode("reschedule")}>
               Presunúť
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              fullWidth
+              className="border-red-200 bg-red-50 text-red-700 ring-0 hover:bg-red-100"
               onClick={() => setMode("cancel")}
-              className="flex-1 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
             >
               Zrušiť
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {mode === "cancel" && (
         <div className="space-y-3">
-          <label className="block">
-            <span className="text-xs font-medium text-slate-600">Dôvod zrušenia *</span>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-            />
-          </label>
+          <TextareaField
+            label="Dôvod zrušenia"
+            required
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+          />
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setMode("view")}
-              className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
+            <Button variant="outline" fullWidth onClick={() => setMode("view")}>
               Späť
-            </button>
-            <button
-              type="button"
-              disabled={busy || !reason.trim()}
+            </Button>
+            <Button
+              variant="danger"
+              fullWidth
+              loading={busy}
+              disabled={!reason.trim()}
               onClick={() =>
-                run(() => apiSend(`/api/appointments/${apptId}/cancel`, "POST", { reason }))
+                run(
+                  () => apiSend(`/api/appointments/${apptId}/cancel`, "POST", { reason }),
+                  "Objednávka zrušená",
+                )
               }
-              className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
             >
               Zrušiť objednávku
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -152,9 +152,11 @@ export function AppointmentActions({
             Vyberte voľný slot rovnakého typu ({meta.label}):
           </p>
           {rescheduleOptions.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-              V zobrazenom rozsahu nie je voľný slot tohto typu.
-            </p>
+            <EmptyState
+              icon={CalendarClock}
+              title="Žiadny voľný slot"
+              description="V zobrazenom rozsahu nie je voľný slot tohto typu."
+            />
           ) : (
             <ul className="max-h-60 space-y-1 overflow-y-auto">
               {rescheduleOptions.map((opt) => (
@@ -163,13 +165,15 @@ export function AppointmentActions({
                     type="button"
                     disabled={busy}
                     onClick={() =>
-                      run(() =>
-                        apiSend(`/api/appointments/${apptId}/reschedule`, "POST", {
-                          newSlotId: opt.slot.id,
-                        }),
+                      run(
+                        () =>
+                          apiSend(`/api/appointments/${apptId}/reschedule`, "POST", {
+                            newSlotId: opt.slot.id,
+                          }),
+                        "Objednávka presunutá",
                       )
                     }
-                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"
+                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"
                   >
                     <span className="font-medium text-slate-800">
                       {clinicDayChip(opt.dayIso)}
@@ -182,13 +186,9 @@ export function AppointmentActions({
               ))}
             </ul>
           )}
-          <button
-            type="button"
-            onClick={() => setMode("view")}
-            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
+          <Button variant="outline" fullWidth onClick={() => setMode("view")}>
             Späť
-          </button>
+          </Button>
         </div>
       )}
     </Modal>

@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
 
 export interface PatientLite {
@@ -63,6 +66,7 @@ export function PatientSearch({
           ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-label="Hľadať pacienta"
           placeholder="Hľadať pacienta (meno, priezvisko, telefón)…"
           className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
         />
@@ -77,7 +81,7 @@ export function PatientSearch({
             <button
               type="button"
               onClick={() => onSelect(p)}
-              className="flex w-full items-center justify-between px-1 py-2.5 text-left hover:bg-slate-50"
+              className="flex w-full items-center justify-between px-1 py-2.5 text-left transition hover:bg-slate-50"
             >
               <span className="font-medium text-slate-900">
                 {p.lastName} {p.firstName}
@@ -91,7 +95,7 @@ export function PatientSearch({
       <button
         type="button"
         onClick={() => setShowCreate(true)}
-        className="mt-2 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900"
+        className="mt-2 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
       >
         <UserPlus className="h-4 w-4" />
         Nový pacient
@@ -109,25 +113,25 @@ function CreatePatient({
   onCancel: () => void;
   onCreated: (p: PatientLite) => void;
 }) {
+  const { toast } = useToast();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState(initialName);
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       const r = await apiSend<{ patient: PatientLite }>("/api/patients", "POST", {
         firstName,
         lastName,
         phone: phone || undefined,
       });
+      toast("Pacient vytvorený", "success");
       onCreated(r.patient);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Chyba");
+      toast(err instanceof Error ? err.message : "Chyba", "error");
       setBusy(false);
     }
   }
@@ -135,51 +139,18 @@ function CreatePatient({
   return (
     <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Meno" value={firstName} onChange={setFirstName} required />
-        <Field label="Priezvisko" value={lastName} onChange={setLastName} required />
+        <Field label="Meno" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+        <Field label="Priezvisko" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
       </div>
-      <Field label="Telefón" value={phone} onChange={setPhone} />
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <Field label="Telefón" value={phone} onChange={(e) => setPhone(e.target.value)} />
       <div className="flex gap-2 pt-1">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
+        <Button type="button" variant="outline" fullWidth onClick={onCancel}>
           Späť
-        </button>
-        <button
-          type="submit"
-          disabled={busy || !firstName || !lastName}
-          className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-        >
+        </Button>
+        <Button type="submit" fullWidth loading={busy} disabled={!firstName || !lastName}>
           Vytvoriť a vybrať
-        </button>
+        </Button>
       </div>
     </form>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  required?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="text-xs font-medium text-slate-600">{label}</span>
-      <input
-        value={value}
-        required={required}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-      />
-    </label>
   );
 }

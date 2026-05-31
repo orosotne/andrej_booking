@@ -2,26 +2,27 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { ShieldCheck, ShieldOff, Loader2 } from "lucide-react";
+import { ShieldCheck, ShieldOff } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
 import { apiSend } from "@/lib/client";
 
 export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean }) {
+  const { toast } = useToast();
   const [enabled, setEnabled] = useState(initiallyEnabled);
   const [qr, setQr] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function startSetup() {
     setBusy(true);
-    setError(null);
     try {
       const r = await apiSend<{ qr: string; secret: string }>("/api/2fa/setup", "POST");
       setQr(r.qr);
       setSecret(r.secret);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Chyba");
+      toast(e instanceof Error ? e.message : "Chyba", "error");
     } finally {
       setBusy(false);
     }
@@ -29,15 +30,15 @@ export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean
 
   async function enable() {
     setBusy(true);
-    setError(null);
     try {
       await apiSend("/api/2fa/enable", "POST", { code });
       setEnabled(true);
       setQr(null);
       setSecret(null);
       setCode("");
+      toast("Dvojfaktorové overenie zapnuté", "success");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Chyba");
+      toast(e instanceof Error ? e.message : "Chyba", "error");
     } finally {
       setBusy(false);
     }
@@ -45,13 +46,13 @@ export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean
 
   async function disable() {
     setBusy(true);
-    setError(null);
     try {
       await apiSend("/api/2fa/disable", "POST", { code });
       setEnabled(false);
       setCode("");
+      toast("Dvojfaktorové overenie vypnuté", "success");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Chyba");
+      toast(e instanceof Error ? e.message : "Chyba", "error");
     } finally {
       setBusy(false);
     }
@@ -68,8 +69,6 @@ export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean
         Dvojfaktorová autentifikácia (TOTP)
       </h2>
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-
       {enabled ? (
         <div className="mt-3 space-y-3">
           <p className="text-sm text-emerald-700">2FA je zapnuté.</p>
@@ -77,15 +76,9 @@ export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean
             Pre vypnutie zadajte aktuálny kód z aplikácie.
           </p>
           <CodeInput value={code} onChange={setCode} />
-          <button
-            type="button"
-            onClick={disable}
-            disabled={busy || code.length !== 6}
-            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          <Button variant="danger" loading={busy} disabled={code.length !== 6} onClick={disable}>
             Vypnúť 2FA
-          </button>
+          </Button>
         </div>
       ) : qr ? (
         <div className="mt-3 space-y-3">
@@ -93,39 +86,23 @@ export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean
             Naskenujte QR kód v aplikácii (Google Authenticator, Authy…) a zadajte
             vygenerovaný kód.
           </p>
-          <img
-            src={qr}
-            alt="2FA QR kód"
-            className="h-44 w-44 rounded-lg ring-1 ring-slate-200"
-          />
+          <img src={qr} alt="2FA QR kód" className="h-44 w-44 rounded-lg ring-1 ring-slate-200" />
           {secret && (
             <p className="font-mono text-xs text-slate-400">Tajný kľúč: {secret}</p>
           )}
           <CodeInput value={code} onChange={setCode} />
-          <button
-            type="button"
-            onClick={enable}
-            disabled={busy || code.length !== 6}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          <Button variant="success" loading={busy} disabled={code.length !== 6} onClick={enable}>
             Potvrdiť a zapnúť
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="mt-3">
           <p className="text-sm text-slate-500">
             Pridajte druhý faktor pre vyššiu bezpečnosť prístupu k pacientskym dátam.
           </p>
-          <button
-            type="button"
-            onClick={startSetup}
-            disabled={busy}
-            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          <Button className="mt-2" loading={busy} onClick={startSetup}>
             Zapnúť 2FA
-          </button>
+          </Button>
         </div>
       )}
     </section>
@@ -144,6 +121,7 @@ function CodeInput({
       value={value}
       onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
       inputMode="numeric"
+      aria-label="Overovací kód"
       placeholder="123456"
       className="w-40 rounded-lg border border-slate-300 px-3 py-2 font-mono text-lg tracking-widest text-slate-900 outline-none focus:border-slate-900"
     />

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Save, Loader2 } from "lucide-react";
+import { Save } from "lucide-react";
 import { apiSend } from "@/lib/client";
+import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
 
 interface PolicyDTO {
   id: string;
@@ -29,8 +31,7 @@ export function SettingsForm({
   const [settings, setSettings] = useState(initialSettings);
   const [policies, setPolicies] = useState(initialPolicies);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const setSetting = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
@@ -39,8 +40,6 @@ export function SettingsForm({
 
   async function save() {
     setBusy(true);
-    setError(null);
-    setMsg(null);
     try {
       await apiSend("/api/settings", "PATCH", settings);
       await Promise.all(
@@ -52,9 +51,9 @@ export function SettingsForm({
             }),
           ),
       );
-      setMsg("Nastavenia uložené.");
+      toast("Nastavenia uložené", "success");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Uloženie zlyhalo");
+      toast(e instanceof Error ? e.message : "Uloženie zlyhalo", "error");
     } finally {
       setBusy(false);
     }
@@ -141,18 +140,11 @@ export function SettingsForm({
         </div>
       </Section>
 
-      <div className="mt-5 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+      <div className="mt-5">
+        <Button onClick={save} loading={busy}>
+          <Save className="h-4 w-4" />
           Uložiť
-        </button>
-        {msg && <span className="text-sm text-emerald-600">{msg}</span>}
-        {error && <span className="text-sm text-red-600">{error}</span>}
+        </Button>
       </div>
     </div>
   );

@@ -5,6 +5,9 @@ import { ChevronLeft, ChevronRight, Lock, Plus, Loader2 } from "lucide-react";
 import type { CalendarDayDTO } from "@/lib/api-types";
 import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
 import { apiSend } from "@/lib/client";
+import { useToast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 import {
   startOfWeek,
@@ -49,6 +52,7 @@ export function MonthView({
 }) {
   const [anchor, setAnchor] = useState(() => startOfMonth(todayIso()));
   const [opening, setOpening] = useState<string | null>(null);
+  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
 
   const gridStart = startOfWeek(anchor);
   const cells = useMemo(
@@ -58,6 +62,7 @@ export function MonthView({
 
   const { data, isLoading } = useCalendar(gridStart, isoAddDays(gridStart, 41));
   const invalidate = useInvalidateCalendar();
+  const { toast } = useToast();
 
   const dayByIso = useMemo(() => {
     const map = new Map<string, CalendarDayDTO>();
@@ -76,22 +81,8 @@ export function MonthView({
     [data, anchor],
   );
 
-  async function openOrGenerate(iso: string) {
+  async function performOpen(iso: string, overrideReason?: string) {
     const isWednesday = weekdayOf(iso) === 3;
-    if (
-      isWednesday &&
-      openWednesdaysThisMonth > 0 &&
-      !confirm(
-        "V tomto mesiaci je už otvorená iná streda. Otvoriť napriek tomu (vyžaduje sa dôvod)?",
-      )
-    ) {
-      return;
-    }
-    const overrideReason =
-      isWednesday && openWednesdaysThisMonth > 0
-        ? prompt("Dôvod výnimky (otvorenie ďalšej stredy v mesiaci):") ?? undefined
-        : undefined;
-
     setOpening(iso);
     try {
       await apiSend(
@@ -100,10 +91,21 @@ export function MonthView({
         overrideReason ? { overrideReason } : {},
       );
       await invalidate();
+      setPendingOpen(null);
+      toast(isWednesday ? "Streda otvorená" : "Deň vygenerovaný", "success");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Operácia zlyhala");
+      toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
     } finally {
       setOpening(null);
+    }
+  }
+
+  // A second Wednesday in the same month needs an audited override reason.
+  function requestOpen(iso: string) {
+    if (weekdayOf(iso) === 3 && openWednesdaysThisMonth > 0) {
+      setPendingOpen(iso);
+    } else {
+      performOpen(iso);
     }
   }
 
@@ -114,29 +116,32 @@ export function MonthView({
           {clinicMonthLabel(anchor)}
         </h2>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mr-1"
             onClick={() => setAnchor(startOfMonth(todayIso()))}
-            className="mr-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-white"
           >
             Tento mesiac
-          </button>
-          <button
-            type="button"
-            onClick={() => setAnchor(addMonths(anchor, -1))}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="px-2"
             aria-label="Predošlý mesiac"
-            className="rounded-lg border border-slate-300 p-1.5 text-slate-700 hover:bg-white"
+            onClick={() => setAnchor(addMonths(anchor, -1))}
           >
             <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setAnchor(addMonths(anchor, 1))}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="px-2"
             aria-label="Ďalší mesiac"
-            className="rounded-lg border border-slate-300 p-1.5 text-slate-700 hover:bg-white"
+            onClick={() => setAnchor(addMonths(anchor, 1))}
           >
             <ChevronRight className="h-5 w-5" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -158,11 +163,23 @@ export function MonthView({
             canManage={canManageDays}
             opening={opening === iso}
             loading={isLoading}
-            onOpen={() => openOrGenerate(iso)}
+            onOpen={() => requestOpen(iso)}
             onPick={() => onPickDay(iso)}
           />
         ))}
       </div>
+
+      {pendingOpen && (
+        <ConfirmDialog
+          title="Otvoriť ďalšiu stredu?"
+          description="V tomto mesiaci je už otvorená iná streda. Otvorenie ďalšej je výnimka a zaznamená sa do auditu."
+          confirmLabel="Otvoriť stredu"
+          requireReason
+          reasonLabel="Dôvod výnimky"
+          onConfirm={(reason) => performOpen(pendingOpen, reason)}
+          onClose={() => setPendingOpen(null)}
+        />
+      )}
     </div>
   );
 }

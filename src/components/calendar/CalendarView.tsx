@@ -1,10 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Plus, Loader2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  Plus,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
 import type { CalendarDayDTO, SlotDTO } from "@/lib/api-types";
 import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
 import { apiSend } from "@/lib/client";
+import { useToast } from "@/components/ui/Toast";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SlotCard } from "./SlotCard";
 import { BookingDialog } from "@/components/booking/BookingDialog";
 import {
@@ -55,6 +65,7 @@ export function CalendarView({
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
   const invalidate = useInvalidateCalendar();
+  const { toast } = useToast();
 
   const dayByIso = useMemo(() => {
     const map = new Map<string, CalendarDayDTO>();
@@ -101,7 +112,7 @@ export function CalendarView({
       );
       await invalidate();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Operácia zlyhala");
+      toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
     } finally {
       setOpening(null);
     }
@@ -128,15 +139,13 @@ export function CalendarView({
 
       <Legend />
 
-      {isLoading && (
-        <div className="flex items-center gap-2 py-16 text-slate-500">
-          <Loader2 className="h-5 w-5 animate-spin" /> Načítavam kalendár…
-        </div>
-      )}
+      {isLoading && <CalendarSkeleton />}
       {isError && (
-        <p className="py-16 text-center text-red-600">
-          {error instanceof Error ? error.message : "Chyba načítania"}
-        </p>
+        <EmptyState
+          icon={AlertTriangle}
+          title="Kalendár sa nepodarilo načítať"
+          description={error instanceof Error ? error.message : "Skúste to znova."}
+        />
       )}
 
       {!isLoading && !isError && (
@@ -328,6 +337,23 @@ function DayColumn({
         )}
       </div>
     </section>
+  );
+}
+
+function CalendarSkeleton() {
+  return (
+    <div className="mt-4 grid gap-3 md:grid-cols-3" aria-label="Načítavam kalendár" aria-busy="true">
+      {[0, 1, 2].map((col) => (
+        <div key={col} className="rounded-xl bg-white/60 p-2 ring-1 ring-slate-200">
+          <Skeleton className="mb-2 h-6 w-24" />
+          <div className="space-y-1.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

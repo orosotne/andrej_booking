@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { signIn } from "@/lib/auth/auth";
+import { Field } from "@/components/ui/Field";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 
 export const metadata = { title: "Prihlásenie — Ambulancia" };
 
@@ -35,58 +37,40 @@ export default async function LoginPage({
         <p className="mt-1 text-sm text-slate-500">Prihláste sa do systému</p>
 
         {error && (
-          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p
+            role="alert"
+            className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
             Nesprávny e-mail alebo heslo.
           </p>
         )}
 
         <form action={authenticate} className="mt-6 space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-              E-mail
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="username"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-              Heslo
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-            />
-          </div>
-          <div>
-            <label htmlFor="totp" className="block text-sm font-medium text-slate-700">
-              2FA kód <span className="font-normal text-slate-400">(ak máte zapnuté)</span>
-            </label>
-            <input
-              id="totp"
-              name="totp"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="\d{6}"
-              placeholder="123456"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono tracking-widest text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
-          >
-            Prihlásiť sa
-          </button>
+          <Field
+            label="E-mail"
+            name="email"
+            type="email"
+            required
+            autoComplete="username"
+          />
+          <Field
+            label="Heslo"
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+          />
+          <Field
+            label="2FA kód"
+            name="totp"
+            hint="Vyplňte iba ak máte zapnuté dvojfaktorové overenie"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="\d{6}"
+            placeholder="123456"
+            className="font-mono tracking-widest"
+          />
+          <SubmitButton fullWidth>Prihlásiť sa</SubmitButton>
         </form>
       </div>
     </main>

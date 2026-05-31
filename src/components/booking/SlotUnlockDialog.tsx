@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { TextareaField } from "@/components/ui/Field";
+import { useToast } from "@/components/ui/Toast";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
@@ -18,20 +21,20 @@ export function SlotUnlockDialog({
   onClose: () => void;
   onUnlocked: () => void;
 }) {
+  const { toast } = useToast();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const meta = TYPE_META[slot.appointmentType];
 
   async function unlock() {
     if (!reason.trim()) return;
     setBusy(true);
-    setError(null);
     try {
       await apiSend(`/api/slots/${slot.id}/unlock`, "POST", { reason });
+      toast("Slot odomknutý", "success");
       onUnlocked();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Odomknutie zlyhalo");
+      toast(e instanceof Error ? e.message : "Odomknutie zlyhalo", "error");
       setBusy(false);
     }
   }
@@ -48,24 +51,23 @@ export function SlotUnlockDialog({
           {slot.releaseAt ? clinicDayChip(slot.releaseAt.slice(0, 10)) : "manuálne"}.
           Odomknutie je auditované.
         </p>
-        <label className="block">
-          <span className="text-xs font-medium text-slate-600">Dôvod odomknutia *</span>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-          />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="button"
-          disabled={busy || !reason.trim()}
+        <TextareaField
+          label="Dôvod odomknutia"
+          required
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+        />
+        <Button
+          variant="primary"
+          fullWidth
+          loading={busy}
+          disabled={!reason.trim()}
           onClick={unlock}
-          className="w-full rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+          className="bg-amber-500 hover:bg-amber-600"
         >
-          {busy ? "Odomykám…" : "Odomknúť slot"}
-        </button>
+          Odomknúť slot
+        </Button>
       </div>
     </Modal>
   );

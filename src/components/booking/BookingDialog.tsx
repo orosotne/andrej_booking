@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { TextareaField } from "@/components/ui/Field";
+import { useToast } from "@/components/ui/Toast";
 import { PatientSearch, type PatientLite } from "./PatientSearch";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
@@ -19,25 +22,25 @@ export function BookingDialog({
   onClose: () => void;
   onBooked: () => void;
 }) {
+  const { toast } = useToast();
   const [patient, setPatient] = useState<PatientLite | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const meta = TYPE_META[slot.appointmentType];
 
   async function confirm() {
     if (!patient) return;
     setBusy(true);
-    setError(null);
     try {
       await apiSend(`/api/slots/${slot.id}/book`, "POST", {
         patientId: patient.id,
         appointmentType: slot.appointmentType,
         note: note || undefined,
       });
+      toast(`Objednané: ${patient.lastName} ${patient.firstName}`, "success");
       onBooked();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Objednanie zlyhalo");
+      toast(e instanceof Error ? e.message : "Objednanie zlyhalo", "error");
       setBusy(false);
     }
   }
@@ -68,28 +71,16 @@ export function BookingDialog({
             </button>
           </div>
 
-          <label className="block">
-            <span className="text-xs font-medium text-slate-600">
-              Poznámka (voliteľné)
-            </span>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-            />
-          </label>
+          <TextareaField
+            label="Poznámka (voliteľné)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+          />
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <button
-            type="button"
-            onClick={confirm}
-            disabled={busy}
-            className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {busy ? "Objednávam…" : "Potvrdiť objednávku"}
-          </button>
+          <Button variant="success" fullWidth loading={busy} onClick={confirm}>
+            Potvrdiť objednávku
+          </Button>
         </div>
       )}
     </Modal>
