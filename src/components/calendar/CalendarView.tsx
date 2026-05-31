@@ -32,18 +32,13 @@ import {
   clinicDayChip,
   clinicLongDate,
 } from "@/lib/format";
-
-const WORKING_WEEKDAYS = [3, 4, 5]; // Wed, Thu, Fri
+import { weekdayOf, WORKING_WEEKDAYS, buildDayMap } from "@/lib/calendar-ui";
 
 type Dialog =
   | { type: "book"; slot: SlotDTO; dayIso: string }
   | { type: "actions"; slot: SlotDTO; dayIso: string }
   | { type: "unlock"; slot: SlotDTO; dayIso: string }
   | null;
-
-function weekdayOf(iso: string): number {
-  return new Date(`${iso}T00:00:00.000Z`).getUTCDay();
-}
 
 export function CalendarView({
   isAdmin,
@@ -75,11 +70,7 @@ export function CalendarView({
   const invalidate = useInvalidateCalendar();
   const { toast } = useToast();
 
-  const dayByIso = useMemo(() => {
-    const map = new Map<string, CalendarDayDTO>();
-    data?.days.forEach((d) => map.set(d.date, d));
-    return map;
-  }, [data]);
+  const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
 
   const workingIsos = useMemo(
     () =>

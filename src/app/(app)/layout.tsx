@@ -2,12 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth/auth";
 import { NavLink } from "@/components/layout/NavLink";
-
-const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Admin",
-  DOCTOR: "Lekár",
-  NURSE: "Sestra",
-};
+import { ROLE_LABEL } from "@/lib/auth/roles";
 
 export default async function AppLayout({
   children,

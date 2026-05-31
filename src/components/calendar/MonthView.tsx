@@ -19,13 +19,9 @@ import {
   clinicMonthLabel,
   dayOfMonth,
 } from "@/lib/format";
+import { weekdayOf, WORKING_WEEKDAYS, buildDayMap } from "@/lib/calendar-ui";
 
 const WEEKDAY_HEADERS = ["Po", "Ut", "St", "Št", "Pi", "So", "Ne"];
-const WORKING = [3, 4, 5]; // Wed, Thu, Fri
-
-function weekdayOf(iso: string): number {
-  return new Date(`${iso}T00:00:00.000Z`).getUTCDay();
-}
 
 function summarize(day: CalendarDayDTO) {
   let available = 0;
@@ -64,11 +60,7 @@ export function MonthView({
   const invalidate = useInvalidateCalendar();
   const { toast } = useToast();
 
-  const dayByIso = useMemo(() => {
-    const map = new Map<string, CalendarDayDTO>();
-    data?.days.forEach((d) => map.set(d.date, d));
-    return map;
-  }, [data]);
+  const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
 
   const openWednesdaysThisMonth = useMemo(
     () =>
@@ -204,7 +196,7 @@ function DayCell({
   onPick: () => void;
 }) {
   const dow = weekdayOf(iso);
-  const isWorking = WORKING.includes(dow);
+  const isWorking = WORKING_WEEKDAYS.includes(dow);
   const isToday = iso === todayIso();
   const lastFriday = dow === 5 && isLastFridayOfMonth(dateOnly(iso));
 

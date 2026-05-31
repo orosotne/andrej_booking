@@ -149,6 +149,13 @@ export async function generateForward(opts: { months?: number; now?: Date } = {}
     Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months, start.getUTCDate()),
   );
 
+  // One query for the whole range instead of one findUnique per day.
+  const existing = await prisma.calendarDay.findMany({
+    where: { date: { gte: start, lte: end } },
+    select: { date: true },
+  });
+  const existingIsos = new Set(existing.map((d) => toIsoDate(d.date)));
+
   let created = 0;
   for (
     let d = new Date(start);
@@ -157,15 +164,10 @@ export async function generateForward(opts: { months?: number; now?: Date } = {}
   ) {
     const dow = d.getUTCDay();
     if (dow !== WEEKDAY.THU && dow !== WEEKDAY.FRI) continue;
+    if (existingIsos.has(toIsoDate(d))) continue;
 
-    const exists = await prisma.calendarDay.findUnique({
-      where: { date: new Date(d) },
-      select: { id: true },
-    });
-    if (!exists) {
-      await generateDay(new Date(d), { now });
-      created++;
-    }
+    await generateDay(new Date(d), { now });
+    created++;
   }
   return created;
 }

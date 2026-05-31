@@ -2,12 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
 import { TwoFactorSetup } from "@/components/admin/TwoFactorSetup";
-
-const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Admin",
-  DOCTOR: "Lekár",
-  NURSE: "Sestra",
-};
+import { ROLE_LABEL } from "@/lib/auth/roles";
 
 export default async function ProfilePage() {
   const user = await getSessionUser();
