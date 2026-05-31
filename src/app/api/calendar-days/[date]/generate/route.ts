@@ -4,6 +4,8 @@ import { generateDay } from "@/lib/slot-engine/generate";
 import { auditContext, jsonError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit/audit";
 import { prisma } from "@/lib/db";
+import { isPastIsoDate } from "@/lib/calendar-date";
+import { ValidationError } from "@/lib/errors";
 
 export async function POST(
   req: Request,
@@ -12,6 +14,9 @@ export async function POST(
   try {
     const user = await requireRole(DOCTOR_ADMIN);
     const { date } = await ctx.params;
+    if (isPastIsoDate(date)) {
+      throw new ValidationError("Nemožno generovať deň v minulosti.");
+    }
     const day = await generateDay(date);
     await recordAudit(prisma, {
       entityType: "calendar_day",

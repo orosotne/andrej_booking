@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Save } from "lucide-react";
 import { apiSend } from "@/lib/client";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 
 interface PolicyDTO {
@@ -31,7 +32,14 @@ export function SettingsForm({
   const [settings, setSettings] = useState(initialSettings);
   const [policies, setPolicies] = useState(initialPolicies);
   const [busy, setBusy] = useState(false);
+  const [showPurge, setShowPurge] = useState(false);
   const { toast } = useToast();
+
+  async function purge(): Promise<void> {
+    const r = await apiSend<{ deleted: number }>("/api/retention/purge", "POST", {});
+    setShowPurge(false);
+    toast(`Vymazaných starých záznamov: ${r.deleted}`, "success");
+  }
 
   const setSetting = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
@@ -140,12 +148,42 @@ export function SettingsForm({
         </div>
       </Section>
 
+      <Section title="Retencia údajov">
+        <NumberRow
+          label="Doba uchovania (mesiace)"
+          value={asNumber(settings.retentionMonths, 24)}
+          onChange={(v) => setSetting("retentionMonths", v)}
+        />
+        <p className="mt-2 text-sm text-slate-500">
+          Purge zmaže iba staré zrušené/presunuté objednávky staršie než uložená doba.
+          Pacienti a aktívne objednávky zostávajú. Akcia je auditovaná.
+        </p>
+        <Button
+          variant="secondary"
+          className="mt-3 border-red-200 bg-red-50 text-red-700 ring-0 hover:bg-red-100"
+          onClick={() => setShowPurge(true)}
+        >
+          Spustiť retenčný purge
+        </Button>
+      </Section>
+
       <div className="mt-5">
         <Button onClick={save} loading={busy}>
           <Save className="h-4 w-4" />
           Uložiť
         </Button>
       </div>
+
+      {showPurge && (
+        <ConfirmDialog
+          title="Spustiť retenčný purge?"
+          description="Nenávratne zmaže staré zrušené a presunuté objednávky podľa uloženej doby uchovania. Pacienti a aktívne objednávky zostanú."
+          confirmLabel="Spustiť purge"
+          tone="danger"
+          onConfirm={purge}
+          onClose={() => setShowPurge(false)}
+        />
+      )}
     </div>
   );
 }

@@ -63,3 +63,8 @@ export function dateOnly(iso: string): Date {
 export function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
+/** True if the ISO date is strictly before today (UTC). */
+export function isPastIsoDate(iso: string, now: Date = new Date()): boolean {
+  return iso < now.toISOString().slice(0, 10);
+}

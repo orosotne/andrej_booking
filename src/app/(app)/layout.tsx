@@ -50,6 +50,7 @@ export default async function AppLayout({
             </Link>
             {user.role === "ADMIN" && (
               <>
+                <NavLink href="/sablona">Šablóna</NavLink>
                 <NavLink href="/nastavenia">Nastavenia</NavLink>
                 <NavLink href="/audit">Audit</NavLink>
               </>

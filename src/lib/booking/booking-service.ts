@@ -265,3 +265,37 @@ export async function unlockSlot(input: UnlockInput) {
     return updated;
   });
 }
+
+export interface LockInput {
+  slotId: string;
+  reason?: string;
+  ctx: AuditContext;
+}
+
+/** Re-locks an open (AVAILABLE) slot, e.g. to protect capacity. Booked slots are untouched. */
+export async function lockSlot(input: LockInput) {
+  return prisma.$transaction(async (tx) => {
+    const slot = await tx.appointmentSlot.findUnique({
+      where: { id: input.slotId },
+    });
+    if (!slot) throw new NotFoundError("Slot neexistuje.");
+    if (slot.status !== "AVAILABLE") {
+      throw new ConflictError("Zamknúť možno len voľný slot.");
+    }
+
+    const updated = await tx.appointmentSlot.update({
+      where: { id: slot.id },
+      data: { status: "LOCKED", lockedReason: input.reason ?? null },
+    });
+    await recordAudit(tx, {
+      entityType: "slot",
+      entityId: slot.id,
+      action: "lock",
+      before: slot,
+      after: updated,
+      reason: input.reason ?? null,
+      ctx: input.ctx,
+    });
+    return updated;
+  });
+}

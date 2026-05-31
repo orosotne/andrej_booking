@@ -5,8 +5,8 @@ import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
 import { openDaySchema } from "@/lib/validation";
-import { ConflictError } from "@/lib/errors";
-import { dateOnly, weekdaysInMonth, WEEKDAY } from "@/lib/calendar-date";
+import { ConflictError, ValidationError } from "@/lib/errors";
+import { dateOnly, weekdaysInMonth, WEEKDAY, isPastIsoDate } from "@/lib/calendar-date";
 
 export async function POST(
   req: Request,
@@ -15,6 +15,9 @@ export async function POST(
   try {
     const user = await requireRole(DOCTOR_ADMIN);
     const { date } = await ctx.params;
+    if (isPastIsoDate(date)) {
+      throw new ValidationError("Nemožno otvoriť deň v minulosti.");
+    }
     const body = openDaySchema.parse(await req.json().catch(() => ({})));
     const target = dateOnly(date);
     const isWednesday = target.getUTCDay() === WEEKDAY.WED;

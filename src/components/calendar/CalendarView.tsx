@@ -9,6 +9,7 @@ import {
   Loader2,
   AlertTriangle,
   Trash2,
+  Ban,
 } from "lucide-react";
 import type { CalendarDayDTO, SlotDTO } from "@/lib/api-types";
 import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
@@ -66,6 +67,8 @@ export function CalendarView({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [pendingOverride, setPendingOverride] = useState<string | null>(null);
+  const [pendingClose, setPendingClose] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
 
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
@@ -146,6 +149,20 @@ export function CalendarView({
     }
   }
 
+  async function closeDay(iso: string) {
+    setClosing(true);
+    try {
+      await apiSend(`/api/calendar-days/${iso}/close`, "POST", { force: true });
+      await invalidate();
+      setPendingClose(null);
+      toast("Deň zatvorený", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Zatvorenie zlyhalo", "error");
+    } finally {
+      setClosing(false);
+    }
+  }
+
   const close = () => setDialog(null);
   const afterChange = async () => {
     await invalidate();
@@ -189,6 +206,7 @@ export function CalendarView({
                 opening={opening === iso}
                 onOpen={() => openOrGenerate(iso)}
                 onRequestDelete={() => setPendingDelete(iso)}
+                onRequestClose={() => setPendingClose(iso)}
                 onSelect={handleSelect}
               />
             ))}
@@ -222,6 +240,7 @@ export function CalendarView({
                 opening={opening === mobileDay}
                 onOpen={() => openOrGenerate(mobileDay)}
                 onRequestDelete={() => setPendingDelete(mobileDay)}
+                onRequestClose={() => setPendingClose(mobileDay)}
                 onSelect={handleSelect}
                 stacked
               />
@@ -234,6 +253,7 @@ export function CalendarView({
         <BookingDialog
           slot={dialog.slot}
           dayIso={dialog.dayIso}
+          isAdmin={isAdmin}
           onClose={close}
           onBooked={afterChange}
         />
@@ -276,6 +296,17 @@ export function CalendarView({
           reasonLabel="Dôvod výnimky"
           onConfirm={(reason) => openOrGenerate(pendingOverride, reason)}
           onClose={() => setPendingOverride(null)}
+        />
+      )}
+
+      {pendingClose && (
+        <ConfirmDialog
+          title="Zatvoriť tento deň?"
+          description={`${clinicLongDate(pendingClose)} sa zablokuje — voľné sloty už nebude možné obsadiť. Existujúce objednávky zostanú zachované.`}
+          confirmLabel="Zatvoriť deň"
+          tone="danger"
+          onConfirm={() => closeDay(pendingClose)}
+          onClose={() => (closing ? undefined : setPendingClose(null))}
         />
       )}
     </div>
@@ -342,6 +373,7 @@ function DayColumn({
   opening,
   onOpen,
   onRequestDelete,
+  onRequestClose,
   onSelect,
   stacked,
 }: {
@@ -351,11 +383,17 @@ function DayColumn({
   opening: boolean;
   onOpen: () => void;
   onRequestDelete: () => void;
+  onRequestClose: () => void;
   onSelect: (slot: SlotDTO, dayIso: string) => void;
   stacked?: boolean;
 }) {
   const isWednesday = weekdayOf(iso) === 3;
   const canDelete = canManage && day?.dayType === "MANUAL_WEDNESDAY";
+  const canClose =
+    canManage &&
+    !!day &&
+    day.dayType !== "MANUAL_WEDNESDAY" &&
+    day.status !== "CLOSED";
   return (
     <section className="rounded-xl bg-white/60 ring-1 ring-slate-200">
       <header className="sticky top-0 flex items-center justify-between rounded-t-xl border-b border-slate-100 bg-white/90 px-3 py-2 backdrop-blur">
@@ -371,6 +409,17 @@ function DayColumn({
             className="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
           >
             <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+        {canClose && (
+          <button
+            type="button"
+            onClick={onRequestClose}
+            aria-label="Zatvoriť deň"
+            title="Zatvoriť deň"
+            className="rounded-md p-1 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
+          >
+            <Ban className="h-4 w-4" />
           </button>
         )}
       </header>

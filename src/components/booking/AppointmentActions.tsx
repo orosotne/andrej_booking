@@ -17,7 +17,7 @@ export interface RescheduleOption {
   dayIso: string;
 }
 
-type Mode = "view" | "cancel" | "reschedule";
+type Mode = "view" | "cancel" | "reschedule" | "note";
 
 const STATUS_ACTIONS: { value: string; label: string }[] = [
   { value: "ARRIVED", label: "Prišiel" },
@@ -42,6 +42,7 @@ export function AppointmentActions({
   const appointment = slot.appointment;
   const [mode, setMode] = useState<Mode>("view");
   const [reason, setReason] = useState("");
+  const [noteText, setNoteText] = useState(appointment?.note ?? "");
   const [busy, setBusy] = useState(false);
   const meta = TYPE_META[slot.appointmentType];
 
@@ -71,11 +72,17 @@ export function AppointmentActions({
           {appointment.patient.phone && (
             <p className="text-sm text-slate-600">📞 {appointment.patient.phone}</p>
           )}
-          {appointment.note && (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              {appointment.note}
-            </p>
-          )}
+          <button
+            type="button"
+            onClick={() => setMode("note")}
+            className="w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-sm transition hover:bg-slate-100"
+          >
+            {appointment.note ? (
+              <span className="text-slate-700">{appointment.note}</span>
+            ) : (
+              <span className="text-slate-400">+ Pridať poznámku</span>
+            )}
+          </button>
           <p className="text-xs uppercase tracking-wide text-slate-400">
             Stav: {appointment.status}
           </p>
@@ -141,6 +148,34 @@ export function AppointmentActions({
               }
             >
               Zrušiť objednávku
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {mode === "note" && (
+        <div className="space-y-3">
+          <TextareaField
+            label="Poznámka"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            rows={3}
+          />
+          <div className="flex gap-2">
+            <Button variant="outline" fullWidth onClick={() => setMode("view")}>
+              Späť
+            </Button>
+            <Button
+              fullWidth
+              loading={busy}
+              onClick={() =>
+                run(
+                  () => apiSend(`/api/appointments/${apptId}`, "PATCH", { note: noteText }),
+                  "Poznámka uložená",
+                )
+              }
+            >
+              Uložiť poznámku
             </Button>
           </div>
         </div>

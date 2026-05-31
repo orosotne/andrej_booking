@@ -78,3 +78,36 @@ export const releasePolicyUpdateSchema = z.object({
 export const totpCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Zadajte 6-miestny kód"),
 });
+
+const hhmm = z.string().regex(/^\d{2}:\d{2}$/, "Čas musí byť HH:MM");
+const appointmentType = z.enum([
+  "PRE_HOSPITAL",
+  "CONSULTATION_BLOCKED",
+  "DISPENSARY",
+  "ECHO",
+  "ACUTE_RESERVE",
+  "CUSTOM",
+]);
+
+export const slotRuleCreateSchema = z.object({
+  templateId: z.string().min(1),
+  name: z.string().max(120).optional(),
+  startTime: hhmm,
+  endTime: hhmm,
+  appointmentType,
+  color: z.string().min(1).max(40),
+  isBookable: z.boolean(),
+  releasePolicyId: z.string().nullable().optional(),
+  priority: z.number().int().min(0).max(999).optional(),
+});
+
+export const slotRuleUpdateSchema = z.object({
+  name: z.string().max(120).optional(),
+  startTime: hhmm.optional(),
+  endTime: hhmm.optional(),
+  appointmentType: appointmentType.optional(),
+  color: z.string().min(1).max(40).optional(),
+  isBookable: z.boolean().optional(),
+  releasePolicyId: z.string().nullable().optional(),
+  priority: z.number().int().min(0).max(999).optional(),
+});

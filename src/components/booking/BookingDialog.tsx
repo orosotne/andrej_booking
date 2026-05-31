@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Lock } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { TextareaField } from "@/components/ui/Field";
@@ -14,11 +15,13 @@ import { clinicTime, clinicLongDate } from "@/lib/format";
 export function BookingDialog({
   slot,
   dayIso,
+  isAdmin = false,
   onClose,
   onBooked,
 }: {
   slot: SlotDTO;
   dayIso: string;
+  isAdmin?: boolean;
   onClose: () => void;
   onBooked: () => void;
 }) {
@@ -45,6 +48,18 @@ export function BookingDialog({
     }
   }
 
+  async function lock() {
+    setBusy(true);
+    try {
+      await apiSend(`/api/slots/${slot.id}/lock`, "POST", {});
+      toast("Slot zamknutý", "success");
+      onBooked();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Zamknutie zlyhalo", "error");
+      setBusy(false);
+    }
+  }
+
   return (
     <Modal
       title="Objednať pacienta"
@@ -52,7 +67,17 @@ export function BookingDialog({
       onClose={onClose}
     >
       {!patient ? (
-        <PatientSearch onSelect={setPatient} />
+        <div className="space-y-3">
+          <PatientSearch onSelect={setPatient} />
+          {isAdmin && (
+            <div className="border-t border-slate-100 pt-3">
+              <Button variant="outline" fullWidth loading={busy} onClick={lock}>
+                <Lock className="h-4 w-4" />
+                Zamknúť slot (chrániť kapacitu)
+              </Button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="rounded-lg bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200">
