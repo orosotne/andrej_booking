@@ -17,7 +17,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma db push && tsx prisma/seed.ts",
     "db:bootstrap": "tsx prisma/bootstrap.ts",
-    "user:create": "tsx prisma/create-user.ts"
+    "user:create": "tsx prisma/create-user.ts",
+    "user:list": "tsx prisma/list-users.ts",
+    "user:delete": "tsx prisma/delete-user.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
