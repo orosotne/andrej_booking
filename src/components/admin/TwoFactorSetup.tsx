@@ -2,12 +2,14 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiSend } from "@/lib/client";
 
 export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean }) {
+  const router = useRouter();
   const { busy, run } = useAsyncAction();
   const [enabled, setEnabled] = useState(initiallyEnabled);
   const [qr, setQr] = useState<string | null>(null);
@@ -30,6 +32,7 @@ export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean
         setQr(null);
         setSecret(null);
         setCode("");
+        router.refresh();
       },
       { success: "Dvojfaktorové overenie zapnuté" },
     );
@@ -41,6 +44,7 @@ export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean
         await apiSend("/api/2fa/disable", "POST", { code });
         setEnabled(false);
         setCode("");
+        router.refresh();
       },
       { success: "Dvojfaktorové overenie vypnuté" },
     );

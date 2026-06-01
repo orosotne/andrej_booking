@@ -5,6 +5,7 @@ import { authConfig } from "./auth.config";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "./password";
 import { verifyTotp } from "./totp";
+import { isLocked, nextFailureState, CLEARED_LOCKOUT } from "./lockout";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -26,15 +27,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
         if (!user || !user.isActive || !user.passwordHash) return null;
 
-        const ok = await verifyPassword(user.passwordHash, parsed.data.password);
-        if (!ok) return null;
+        // Too many recent failures — reject without even checking the password.
+        if (isLocked(user)) return null;
 
-        // Second factor: required only when the user has enabled 2FA.
-        if (user.twoFactorEnabled && user.totpSecret) {
+        const passwordOk = await verifyPassword(user.passwordHash, parsed.data.password);
+
+        // Second factor: required only when the user has enabled 2FA. A missing
+        // or wrong code counts as a failed attempt (login is single-step), so it
+        // is also rate-limited against brute force.
+        let secondFactorOk = true;
+        if (passwordOk && user.twoFactorEnabled && user.totpSecret) {
           const code = parsed.data.totp ?? "";
-          if (!/^\d{6}$/.test(code) || !verifyTotp(user.totpSecret, code)) {
-            return null;
-          }
+          secondFactorOk = /^\d{6}$/.test(code) && verifyTotp(user.totpSecret, code);
+        }
+
+        if (!passwordOk || !secondFactorOk) {
+          await prisma.user.update({ where: { id: user.id }, data: nextFailureState(user) });
+          return null;
+        }
+
+        if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+          await prisma.user.update({ where: { id: user.id }, data: { ...CLEARED_LOCKOUT } });
         }
 
         return {
