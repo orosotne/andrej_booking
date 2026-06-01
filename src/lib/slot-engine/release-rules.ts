@@ -47,7 +47,8 @@ export function initialSlotStatus(
   releaseAt: Date | null,
   now: Date,
 ): SlotStatusLit {
-  if (type === "CONSULTATION_BLOCKED") return "BLOCKED";
+  if (type === "CONSULTATION_BLOCKED" || type === "ECHO_DEPARTMENT_BLOCKED")
+    return "BLOCKED";
   if (releaseAt !== null && releaseAt.getTime() <= now.getTime())
     return "AVAILABLE";
   return "LOCKED";

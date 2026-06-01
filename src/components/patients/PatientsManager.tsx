@@ -124,10 +124,7 @@ function PatientDialog({
   const [form, setForm] = useState({
     firstName: patient?.firstName ?? "",
     lastName: patient?.lastName ?? "",
-    dateOfBirth: patient?.dateOfBirth ? patient.dateOfBirth.slice(0, 10) : "",
     phone: patient?.phone ?? "",
-    email: patient?.email ?? "",
-    externalPatientId: patient?.externalPatientId ?? "",
     note: patient?.note ?? "",
   });
   const set = (k: keyof typeof form, v: string) =>
@@ -138,10 +135,7 @@ function PatientDialog({
     const payload = {
       firstName: form.firstName,
       lastName: form.lastName,
-      dateOfBirth: form.dateOfBirth || undefined,
-      phone: form.phone || undefined,
-      email: form.email || undefined,
-      externalPatientId: form.externalPatientId || undefined,
+      phone: form.phone,
       note: form.note || undefined,
     };
     run(
@@ -169,18 +163,24 @@ function PatientDialog({
           <Field label="Meno" required value={form.firstName} onChange={(e) => set("firstName", e.target.value)} />
           <Field label="Priezvisko" required value={form.lastName} onChange={(e) => set("lastName", e.target.value)} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Dátum narodenia" type="date" value={form.dateOfBirth} onChange={(e) => set("dateOfBirth", e.target.value)} />
-          <Field label="Telefón" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-        </div>
-        <Field label="E-mail" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
-        <Field label="Interné číslo" value={form.externalPatientId} onChange={(e) => set("externalPatientId", e.target.value)} />
-        <TextareaField label="Poznámka" value={form.note} onChange={(e) => set("note", e.target.value)} rows={2} />
+        <Field
+          label="Telefónne číslo"
+          required
+          inputMode="tel"
+          value={form.phone}
+          onChange={(e) => set("phone", e.target.value)}
+        />
+        <TextareaField
+          label="Poznámka"
+          value={form.note}
+          onChange={(e) => set("note", e.target.value)}
+          rows={2}
+        />
         <Button
           type="submit"
           fullWidth
           loading={busy}
-          disabled={!form.firstName || !form.lastName}
+          disabled={!form.firstName || !form.lastName || !form.phone}
         >
           Uložiť
         </Button>

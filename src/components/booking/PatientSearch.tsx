@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Field } from "@/components/ui/Field";
+import { Field, TextareaField } from "@/components/ui/Field";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiGet, apiSend } from "@/lib/client";
 
@@ -117,6 +117,7 @@ function CreatePatient({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState(initialName);
   const [phone, setPhone] = useState("");
+  const [note, setNote] = useState("");
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,7 +126,8 @@ function CreatePatient({
         const r = await apiSend<{ patient: PatientLite }>("/api/patients", "POST", {
           firstName,
           lastName,
-          phone: phone || undefined,
+          phone,
+          note: note || undefined,
         });
         onCreated(r.patient);
       },
@@ -139,12 +141,29 @@ function CreatePatient({
         <Field label="Meno" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
         <Field label="Priezvisko" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
       </div>
-      <Field label="Telefón" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <Field
+        label="Telefónne číslo"
+        required
+        inputMode="tel"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+      />
+      <TextareaField
+        label="Poznámka (voliteľné)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+      />
       <div className="flex gap-2 pt-1">
         <Button type="button" variant="outline" fullWidth onClick={onCancel}>
           Späť
         </Button>
-        <Button type="submit" fullWidth loading={busy} disabled={!firstName || !lastName}>
+        <Button
+          type="submit"
+          fullWidth
+          loading={busy}
+          disabled={!firstName || !lastName || !phone}
+        >
           Vytvoriť a vybrať
         </Button>
       </div>

@@ -52,20 +52,23 @@ async function seedReleasePoliciesAndTemplates() {
   }
 
   const policies = {
-    PRE_HOSPITAL: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné (8 týždňov)", releaseType: "DAYS_BEFORE", daysBefore: 63 },
+    PRE_HOSPITAL_9D: await prisma.releasePolicy.create({
+      data: { name: "Predhospitalizačné 7:30 (9 dní)", releaseType: "DAYS_BEFORE", daysBefore: 9 },
     }),
     DISPENSARY: await prisma.releasePolicy.create({
       data: { name: "Dispenzárne (6 týždňov)", releaseType: "DAYS_BEFORE", daysBefore: 42 },
     }),
+    DISPENSARY_23D: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 11:30 (23 dní)", releaseType: "DAYS_BEFORE", daysBefore: 23 },
+    }),
+    DISPENSARY_16D: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 12:00 (16 dní)", releaseType: "DAYS_BEFORE", daysBefore: 16 },
+    }),
     ECHO: await prisma.releasePolicy.create({
       data: { name: "ECHO (4 týždne)", releaseType: "DAYS_BEFORE", daysBefore: 28 },
     }),
-    ACUTE_RESERVE: await prisma.releasePolicy.create({
-      data: { name: "Akútna rezerva (7 dní)", releaseType: "DAYS_BEFORE", daysBefore: 7, requiresAdminOverride: true },
-    }),
     BLOCKED: await prisma.releasePolicy.create({
-      data: { name: "Blokované (poradňa)", releaseType: "MANUAL_ONLY" },
+      data: { name: "Blokované (Porada / ECHO oddelenie)", releaseType: "MANUAL_ONLY" },
     }),
   } satisfies Record<PolicyKey, { id: string }>;
 
@@ -80,8 +83,8 @@ async function seedReleasePoliciesAndTemplates() {
       data: {
         name: day.name,
         dayOfWeek: day.dayOfWeek,
-        startTime: "07:00",
-        endTime: "15:30",
+        startTime: "07:30",
+        endTime: "15:20",
         slotDurationMinutes: 30,
       },
     });
@@ -94,6 +97,7 @@ async function seedReleasePoliciesAndTemplates() {
         appointmentType: block.type,
         color: block.colorKey,
         isBookable: block.bookable,
+        slotDurationMinutes: block.slotDurationMinutes ?? 30,
         releasePolicyId: policies[block.policyKey].id,
         priority: i,
       })),
@@ -104,10 +108,9 @@ async function seedReleasePoliciesAndTemplates() {
 
 async function seedSettings() {
   const settings: Record<string, unknown> = {
-    enableLateSlot: false,
     sessionTimeoutMinutes: 30,
     storeSensitivePatientData: false,
-    generateMonthsAhead: 12,
+    generateMonthsAhead: 14,
     twoFactorRequired: false,
   };
   for (const [key, value] of Object.entries(settings)) {

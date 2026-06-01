@@ -55,8 +55,8 @@ describe.skipIf(!RUN)("booking integration (requires DB)", () => {
 
   it("allows exactly one of two concurrent bookings on the same slot", async () => {
     const results = await Promise.allSettled([
-      bookSlot({ slotId, patientId, appointmentType: "DISPENSARY", ctx }),
-      bookSlot({ slotId, patientId, appointmentType: "DISPENSARY", ctx }),
+      bookSlot({ slotId, patientId, appointmentType: "DISPENSARY", patientCategory: "DISPENZAR", ctx }),
+      bookSlot({ slotId, patientId, appointmentType: "DISPENSARY", patientCategory: "DISPENZAR", ctx }),
     ]);
     const ok = results.filter((r) => r.status === "fulfilled");
     const failed = results.filter((r) => r.status === "rejected");
@@ -73,7 +73,13 @@ describe.skipIf(!RUN)("booking integration (requires DB)", () => {
       await cancelAppointment({ appointmentId: active.id, reason: "test", ctx });
     }
     await expect(
-      bookSlot({ slotId, patientId, appointmentType: "ECHO", ctx }),
+      bookSlot({
+        slotId,
+        patientId,
+        appointmentType: "ECHO",
+        patientCategory: "ECHO",
+        ctx,
+      }),
     ).rejects.toBeInstanceOf(ValidationError);
 
     // slot must be AVAILABLE again after the rolled-back wrong-type attempt

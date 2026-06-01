@@ -10,7 +10,7 @@ export const TYPE_META: Record<
     border: "var(--slot-prehospital-bd)",
   },
   CONSULTATION_BLOCKED: {
-    label: "Poradňa",
+    label: "Porada",
     bg: "var(--slot-blocked)",
     border: "var(--slot-blocked-bd)",
   },
@@ -19,7 +19,16 @@ export const TYPE_META: Record<
     bg: "var(--slot-dispensary)",
     border: "var(--slot-dispensary-bd)",
   },
-  ECHO: { label: "ECHO", bg: "var(--slot-echo)", border: "var(--slot-echo-bd)" },
+  ECHO: {
+    label: "ECHO",
+    bg: "var(--slot-echo)",
+    border: "var(--slot-echo-bd)",
+  },
+  ECHO_DEPARTMENT_BLOCKED: {
+    label: "ECHO oddelenie",
+    bg: "var(--slot-echo-dept)",
+    border: "var(--slot-echo-dept-bd)",
+  },
   ACUTE_RESERVE: {
     label: "Akútna rezerva",
     bg: "var(--slot-reserve)",
@@ -33,7 +42,7 @@ export const TYPE_META: Record<
 };
 
 export const STATUS_LABEL: Record<SlotStatusLit, string> = {
-  LOCKED: "Zamknuté",
+  LOCKED: "Voľné, dočasne uzamknuté",
   AVAILABLE: "Voľné",
   BOOKED: "Obsadené",
   BLOCKED: "Blokované",

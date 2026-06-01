@@ -38,11 +38,20 @@ function toPolicyInput(policy: PolicyRow | null): ReleasePolicyInput {
   }
 }
 
-/** Expands a rule's [startTime, endTime] block into 30-minute sub-slots. */
-function expandRule(startTime: string, endTime: string): { start: string; end: string }[] {
+/**
+ * Expands a rule's [startTime, endTime] block into sub-slots of the rule's
+ * configured duration (default 30 min). The rule itself is the smallest unit
+ * for irregular ECHO timings — each non-uniform slot is its own SlotRule row.
+ */
+function expandRule(
+  startTime: string,
+  endTime: string,
+  durationMinutes: number,
+): { start: string; end: string }[] {
+  const dur = durationMinutes > 0 ? durationMinutes : SLOT_MINUTES;
   const out: { start: string; end: string }[] = [];
-  for (let m = hhmmToMin(startTime); m < hhmmToMin(endTime); m += SLOT_MINUTES) {
-    out.push({ start: minToHhmm(m), end: minToHhmm(m + SLOT_MINUTES) });
+  for (let m = hhmmToMin(startTime); m + dur <= hhmmToMin(endTime); m += dur) {
+    out.push({ start: minToHhmm(m), end: minToHhmm(m + dur) });
   }
   return out;
 }
@@ -112,12 +121,15 @@ export async function generateDay(
     });
 
     const data = template.slotRules.flatMap((rule) => {
+      const isLocked =
+        rule.appointmentType === "CONSULTATION_BLOCKED" ||
+        rule.appointmentType === "ECHO_DEPARTMENT_BLOCKED";
       const policyInput: ReleasePolicyInput =
-        lastFri && rule.appointmentType !== "CONSULTATION_BLOCKED"
+        lastFri && !isLocked
           ? { type: "LAST_FRIDAY_30_DAYS_BEFORE" }
           : toPolicyInput(rule.releasePolicy);
 
-      return expandRule(rule.startTime, rule.endTime).map((s) => {
+      return expandRule(rule.startTime, rule.endTime, rule.slotDurationMinutes).map((s) => {
         const releaseAt = computeReleaseAt(date, policyInput, lastFri);
         return {
           calendarDayId: calendarDay.id,
@@ -189,7 +201,7 @@ export async function reopenDay(
  * intentionally never auto-generated (they are opened manually).
  */
 export async function generateForward(opts: { months?: number; now?: Date } = {}) {
-  const months = opts.months ?? 12;
+  const months = opts.months ?? 14;
   const now = opts.now ?? new Date();
   const start = dateOnly(toIsoDate(now));
   const end = new Date(
@@ -211,6 +223,8 @@ export async function generateForward(opts: { months?: number; now?: Date } = {}
   ) {
     const dow = d.getUTCDay();
     if (dow !== WEEKDAY.THU && dow !== WEEKDAY.FRI) continue;
+    // Last Friday of the month is password-gated: must be opened manually like a Wednesday.
+    if (dow === WEEKDAY.FRI && isLastFridayOfMonth(d)) continue;
     if (existingIsos.has(toIsoDate(d))) continue;
 
     await generateDay(new Date(d), { now });

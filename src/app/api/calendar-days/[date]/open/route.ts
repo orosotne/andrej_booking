@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
 import { generateDay } from "@/lib/slot-engine/generate";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,20 @@ import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
 import { openDaySchema } from "@/lib/validation";
 import { ConflictError, ValidationError } from "@/lib/errors";
-import { dateOnly, weekdaysInMonth, WEEKDAY, isPastIsoDate } from "@/lib/calendar-date";
+import {
+  dateOnly,
+  isLastFridayOfMonth,
+  weekdaysInMonth,
+  WEEKDAY,
+  isPastIsoDate,
+} from "@/lib/calendar-date";
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 export async function POST(
   req: Request,
@@ -21,6 +35,22 @@ export async function POST(
     const body = openDaySchema.parse(await req.json().catch(() => ({})));
     const target = dateOnly(date);
     const isWednesday = target.getUTCDay() === WEEKDAY.WED;
+    const isLastFri =
+      target.getUTCDay() === WEEKDAY.FRI && isLastFridayOfMonth(target);
+
+    // Password gate: streda + posledný piatok v mesiaci.
+    if (isWednesday || isLastFri) {
+      const expected = process.env.WEDNESDAY_UNLOCK_PASSWORD;
+      if (!expected) {
+        throw new ValidationError(
+          "Server nie je nakonfigurovaný (chýba WEDNESDAY_UNLOCK_PASSWORD).",
+        );
+      }
+      const provided = body.password ?? "";
+      if (!provided || !constantTimeEqual(provided, expected)) {
+        throw new ValidationError("Nesprávne heslo na otvorenie tohto dňa.");
+      }
+    }
 
     // Warn if another Wednesday in the same month is already open this month.
     if (isWednesday) {
@@ -40,7 +70,11 @@ export async function POST(
     }
 
     const day = await generateDay(target, {
-      dayType: isWednesday ? "MANUAL_WEDNESDAY" : undefined,
+      dayType: isWednesday
+        ? "MANUAL_WEDNESDAY"
+        : isLastFri
+          ? "LAST_FRIDAY"
+          : undefined,
       openedByUserId: user.id,
       note: body.note,
     });

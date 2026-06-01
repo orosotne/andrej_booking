@@ -8,6 +8,7 @@ export type AppointmentTypeLit =
   | "CONSULTATION_BLOCKED"
   | "DISPENSARY"
   | "ECHO"
+  | "ECHO_DEPARTMENT_BLOCKED"
   | "ACUTE_RESERVE"
   | "CUSTOM";
 
@@ -27,10 +28,18 @@ export type ReleaseTypeLit =
 
 export type ColorKey =
   | "pink" // PRE_HOSPITAL
-  | "grey" // CONSULTATION_BLOCKED (poradňa)
+  | "grey" // CONSULTATION_BLOCKED (Porada)
   | "white" // DISPENSARY
-  | "blue" // ECHO
-  | "orange"; // ACUTE_RESERVE
+  | "blue" // ECHO bookable
+  | "navy" // ECHO_DEPARTMENT_BLOCKED
+  | "orange"; // ACUTE_RESERVE (legacy)
+
+export type PatientCategoryLit =
+  | "DISPENZAR"
+  | "ECHO"
+  | "PRVOVYSETRENIE"
+  | "AKUTNE"
+  | "INE";
 
 export type ReleasePolicyInput =
   | { type: "IMMEDIATE" }

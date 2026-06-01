@@ -3,10 +3,11 @@ import type { AppointmentTypeLit, ColorKey } from "./types";
 // A policy key references a named ReleasePolicy seeded in the DB. The pure
 // template only carries the key; generate.ts resolves it to a real policy.
 export type PolicyKey =
-  | "PRE_HOSPITAL"
+  | "PRE_HOSPITAL_9D"
   | "DISPENSARY"
+  | "DISPENSARY_23D"
+  | "DISPENSARY_16D"
   | "ECHO"
-  | "ACUTE_RESERVE"
   | "BLOCKED";
 
 export interface BlockDef {
@@ -16,6 +17,7 @@ export interface BlockDef {
   colorKey: ColorKey;
   policyKey: PolicyKey;
   bookable: boolean;
+  slotDurationMinutes?: number; // defaults to SLOT_MINUTES (30)
 }
 
 export interface SlotDef {
@@ -29,15 +31,24 @@ export interface SlotDef {
 
 export const SLOT_MINUTES = 30;
 
-// Canonical clinic day. This is the DEFAULT used to seed slot_rules; once
-// seeded, admins edit the rules in the DB and generation reads from there.
+// Canonical clinic day (v2 layout). Seeds slot_rules; admins can edit rules in DB.
+// Each BlockDef becomes one SlotRule row; generate.ts expands it into AppointmentSlots.
+//
+// Day shape:
+//   7:30        PRE_HOSPITAL (predhospitalizačné) — opens 9 days before
+//   8:00, 8:30  Porada — manual only (locked, grey)
+//   9:00–11:00  Dispenzár — default release (42 days), 30-min sloty
+//   11:30       Dispenzár — opens 23 days before
+//   12:00       Dispenzár — opens 16 days before
+//  12:30, 13:00 ECHO oddelenie — manual only (locked, dark blue)
+//  13:30, 13:50, 14:10, 14:40, 15:00 — ECHO bookable (5 slotov po 20 min, nerovnomerné)
 export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
   {
-    start: "07:00",
+    start: "07:30",
     end: "08:00",
     type: "PRE_HOSPITAL",
     colorKey: "pink",
-    policyKey: "PRE_HOSPITAL",
+    policyKey: "PRE_HOSPITAL_9D",
     bookable: true,
   },
   {
@@ -50,46 +61,44 @@ export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
   },
   {
     start: "09:00",
-    end: "12:30",
+    end: "11:30",
     type: "DISPENSARY",
     colorKey: "white",
     policyKey: "DISPENSARY",
+    bookable: true,
+  },
+  {
+    start: "11:30",
+    end: "12:00",
+    type: "DISPENSARY",
+    colorKey: "white",
+    policyKey: "DISPENSARY_23D",
+    bookable: true,
+  },
+  {
+    start: "12:00",
+    end: "12:30",
+    type: "DISPENSARY",
+    colorKey: "white",
+    policyKey: "DISPENSARY_16D",
     bookable: true,
   },
   {
     start: "12:30",
-    end: "14:30",
-    type: "ECHO",
-    colorKey: "blue",
-    policyKey: "ECHO",
-    bookable: true,
+    end: "13:30",
+    type: "ECHO_DEPARTMENT_BLOCKED",
+    colorKey: "navy",
+    policyKey: "BLOCKED",
+    bookable: false,
   },
-  {
-    start: "14:30",
-    end: "15:00",
-    type: "DISPENSARY",
-    colorKey: "white",
-    policyKey: "DISPENSARY",
-    bookable: true,
-  },
-  {
-    start: "15:00",
-    end: "15:30",
-    type: "ACUTE_RESERVE",
-    colorKey: "orange",
-    policyKey: "ACUTE_RESERVE",
-    bookable: true,
-  },
+  // ECHO bookable: 5 slotov po 20 minútach, s 30-min prestávkou medzi 14:30 a 14:40.
+  // Každý slot je samostatný SlotRule (umožňuje nerovnomerné rozostúpenie).
+  { start: "13:30", end: "13:50", type: "ECHO", colorKey: "blue", policyKey: "ECHO", bookable: true, slotDurationMinutes: 20 },
+  { start: "13:50", end: "14:10", type: "ECHO", colorKey: "blue", policyKey: "ECHO", bookable: true, slotDurationMinutes: 20 },
+  { start: "14:10", end: "14:30", type: "ECHO", colorKey: "blue", policyKey: "ECHO", bookable: true, slotDurationMinutes: 20 },
+  { start: "14:40", end: "15:00", type: "ECHO", colorKey: "blue", policyKey: "ECHO", bookable: true, slotDurationMinutes: 20 },
+  { start: "15:00", end: "15:20", type: "ECHO", colorKey: "blue", policyKey: "ECHO", bookable: true, slotDurationMinutes: 20 },
 ];
-
-const EXTRA_LATE_BLOCK: BlockDef = {
-  start: "15:30",
-  end: "16:00",
-  type: "DISPENSARY",
-  colorKey: "white",
-  policyKey: "DISPENSARY",
-  bookable: true,
-};
 
 export function hhmmToMin(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
@@ -102,18 +111,15 @@ export function minToHhmm(min: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** Expands the day's blocks into individual 30-minute slot definitions. */
-export function buildDayTemplate(opts?: { extraLateSlot?: boolean }): SlotDef[] {
-  const blocks = opts?.extraLateSlot
-    ? [...DEFAULT_DAY_BLOCKS, EXTRA_LATE_BLOCK]
-    : DEFAULT_DAY_BLOCKS;
-
+/** Expands the day's blocks into individual slot definitions. */
+export function buildDayTemplate(): SlotDef[] {
   const slots: SlotDef[] = [];
-  for (const b of blocks) {
-    for (let m = hhmmToMin(b.start); m < hhmmToMin(b.end); m += SLOT_MINUTES) {
+  for (const b of DEFAULT_DAY_BLOCKS) {
+    const dur = b.slotDurationMinutes ?? SLOT_MINUTES;
+    for (let m = hhmmToMin(b.start); m + dur <= hhmmToMin(b.end); m += dur) {
       slots.push({
         start: minToHhmm(m),
-        end: minToHhmm(m + SLOT_MINUTES),
+        end: minToHhmm(m + dur),
         type: b.type,
         colorKey: b.colorKey,
         policyKey: b.policyKey,

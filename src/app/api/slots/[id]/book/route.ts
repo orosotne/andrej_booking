@@ -16,6 +16,8 @@ export async function POST(
       slotId: id,
       patientId: body.patientId,
       appointmentType: body.appointmentType,
+      patientCategory: body.patientCategory,
+      categoryReason: body.categoryReason,
       note: body.note,
       ctx: auditContext(req, user.id),
     });

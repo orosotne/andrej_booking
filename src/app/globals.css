@@ -16,6 +16,9 @@
   --slot-dispensary-bd: #dbe3ec;
   --slot-echo: #dbeafe;
   --slot-echo-bd: #93c5fd;
+  --slot-echo-dept: #1e3a8a;       /* ECHO oddelenie — dark navy, locked */
+  --slot-echo-dept-bd: #1e40af;
+  --slot-echo-dept-fg: #ffffff;
   --slot-reserve: #ffedd5;
   --slot-reserve-bd: #fdba74;
 
@@ -81,3 +84,49 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── Print styles: clean, ink-cheap layout of the active calendar view ─── */
+@media print {
+  /* Hide global app chrome (header, nav, footer) and any element opted out. */
+  body > div > header,
+  .no-print {
+    display: none !important;
+  }
+  /* Strip surface colors so the calendar prints on plain paper. */
+  body,
+  main {
+    background: white !important;
+    color: black !important;
+  }
+  /* Drop shadows, rings, and animations for print. */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  /* Constrain page padding so the whole grid fits on the sheet. */
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  /* Expand any 70vh scrolling slot column so the whole day prints. */
+  .print-day [class*="max-h-"] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* Avoid page breaks inside a slot card or a day cell. */
+  .print-day section,
+  .print-month [class*="grid-cols-7"] > * {
+    break-inside: avoid;
+  }
+  /* Force black borders where the screen used CSS vars. */
+  .print-day section,
+  .print-day button[disabled],
+  .print-day button {
+    border-color: #000 !important;
+  }
+}
+

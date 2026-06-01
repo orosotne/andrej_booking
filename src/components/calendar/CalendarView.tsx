@@ -61,27 +61,30 @@ export function CalendarView({
   );
   const [dialog, setDialog] = useState<Dialog>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const [pendingOverride, setPendingOverride] = useState<string | null>(null);
+  const [pendingPassword, setPendingPassword] = useState<string | null>(null);
+  const [pendingOverride, setPendingOverride] = useState<
+    { iso: string; password?: string } | null
+  >(null);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
   const [pendingReopen, setPendingReopen] = useState<string | null>(null);
 
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
   const invalidate = useInvalidateCalendar();
-  const { pendingIso, openDay, deleteDay, closeDay, reopenDay } = useDayActions();
+  const { pendingIso, openDay, deleteDay, closeDay, reopenDay, requiresPassword } =
+    useDayActions();
 
   const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
 
-  // All 7 days of the week (Mon–Sun). Non-working days render as a closed column
-  // so the week is shown in full; working days (Wed/Thu/Fri) hold the slots.
+  // Show only working days (Wed/Thu/Fri). Non-working days are not rendered.
   const weekIsos = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => isoAddDays(weekStart, i)),
+    () =>
+      Array.from({ length: 7 }, (_, i) => isoAddDays(weekStart, i)).filter(
+        (iso) => WORKING_WEEKDAYS.includes(weekdayOf(iso)),
+      ),
     [weekStart],
   );
-  const workingIsos = useMemo(
-    () => weekIsos.filter((iso) => WORKING_WEEKDAYS.includes(weekdayOf(iso))),
-    [weekIsos],
-  );
+  const workingIsos = weekIsos;
 
   // Mobile shows one day: the selected day if it's in this week, else the first working day.
   const mobileDay = weekIsos.includes(selectedDay) ? selectedDay : workingIsos[0];
@@ -106,11 +109,28 @@ export function CalendarView({
       setDialog({ type: "unlock", slot, dayIso });
   }
 
-  async function handleOpen(iso: string, overrideReason?: string) {
-    const result = await openDay(iso, overrideReason);
-    if (result === "ok") setPendingOverride(null);
-    else if (result === "conflict" && weekdayOf(iso) === 3 && !overrideReason)
-      setPendingOverride(iso);
+  async function handleOpen(
+    iso: string,
+    opts: { password?: string; overrideReason?: string } = {},
+  ) {
+    // Wed/last-Fri require a password — show the password dialog before calling.
+    if (requiresPassword(iso) && !opts.password) {
+      setPendingPassword(iso);
+      return;
+    }
+    const result = await openDay(iso, opts);
+    if (result === "ok") {
+      setPendingOverride(null);
+      setPendingPassword(null);
+    } else if (
+      result === "conflict" &&
+      weekdayOf(iso) === 3 &&
+      !opts.overrideReason
+    ) {
+      // 2nd Wednesday of month → ask for audited reason (password is already known).
+      setPendingPassword(null);
+      setPendingOverride({ iso, password: opts.password });
+    }
   }
   async function handleDelete(iso: string) {
     if ((await deleteDay(iso)) === "ok") setPendingDelete(null);
@@ -197,8 +217,8 @@ export function CalendarView({
 
       {!isLoading && !isError && !isDay && (
         <>
-          {/* Desktop: full week grid (Mon–Sun) */}
-          <div className="mt-4 hidden gap-2 md:grid md:grid-cols-7">
+          {/* Desktop: working-day grid (Streda / Štvrtok / Piatok) */}
+          <div className="mt-4 hidden gap-2 md:grid md:grid-cols-3">
             {weekIsos.map((iso) => (
               <DayColumn
                 key={iso}
@@ -293,6 +313,24 @@ export function CalendarView({
         />
       )}
 
+      {pendingPassword && (
+        <ConfirmDialog
+          title={
+            weekdayOf(pendingPassword) === 3
+              ? "Otvoriť stredu"
+              : "Otvoriť posledný piatok v mesiaci"
+          }
+          description="Tento deň je chránený. Zadajte heslo pre otvorenie."
+          confirmLabel="Otvoriť deň"
+          requirePassword
+          passwordLabel="Heslo"
+          onConfirm={({ password }) =>
+            handleOpen(pendingPassword, { password })
+          }
+          onClose={() => setPendingPassword(null)}
+        />
+      )}
+
       {pendingOverride && (
         <ConfirmDialog
           title="Otvoriť ďalšiu stredu?"
@@ -300,7 +338,12 @@ export function CalendarView({
           confirmLabel="Otvoriť stredu"
           requireReason
           reasonLabel="Dôvod výnimky"
-          onConfirm={(reason) => handleOpen(pendingOverride, reason)}
+          onConfirm={({ reason }) =>
+            handleOpen(pendingOverride.iso, {
+              password: pendingOverride.password,
+              overrideReason: reason,
+            })
+          }
           onClose={() => setPendingOverride(null)}
         />
       )}
@@ -502,8 +545,8 @@ function DayColumn({
 
 function CalendarSkeleton() {
   return (
-    <div className="mt-4 grid gap-2 md:grid-cols-7" aria-label="Načítavam kalendár" aria-busy="true">
-      {[0, 1, 2, 3, 4, 5, 6].map((col) => (
+    <div className="mt-4 grid gap-2 md:grid-cols-3" aria-label="Načítavam kalendár" aria-busy="true">
+      {[0, 1, 2].map((col) => (
         <div key={col} className="rounded-xl bg-white/60 p-2 ring-1 ring-slate-200">
           <Skeleton className="mb-2 h-6 w-24" />
           <div className="space-y-1.5">
@@ -520,10 +563,10 @@ function CalendarSkeleton() {
 function Legend() {
   const items = [
     { label: "Predhospitalizačné", color: "var(--slot-prehospital)", bd: "var(--slot-prehospital-bd)" },
-    { label: "Poradňa", color: "var(--slot-blocked)", bd: "var(--slot-blocked-bd)" },
+    { label: "Porada", color: "var(--slot-blocked)", bd: "var(--slot-blocked-bd)" },
     { label: "Dispenzárne", color: "var(--slot-dispensary)", bd: "var(--slot-dispensary-bd)" },
     { label: "ECHO", color: "var(--slot-echo)", bd: "var(--slot-echo-bd)" },
-    { label: "Akútna rezerva", color: "var(--slot-reserve)", bd: "var(--slot-reserve-bd)" },
+    { label: "ECHO oddelenie", color: "var(--slot-echo-dept)", bd: "var(--slot-echo-dept-bd)" },
   ];
   return (
     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">

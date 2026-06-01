@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/db";
 import { recordAudit, type AuditContext } from "@/lib/audit/audit";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
-import type { AppointmentTypeLit } from "@/lib/slot-engine/types";
+import type {
+  AppointmentTypeLit,
+  PatientCategoryLit,
+} from "@/lib/slot-engine/types";
+import {
+  categoryAllowsSlot,
+  PATIENT_CATEGORY_LABEL,
+} from "@/lib/patient-category";
 
 /** When a slot is freed, return it to AVAILABLE only if its release window is open. */
 function statusAfterFreeing(
@@ -17,6 +24,8 @@ export interface BookInput {
   slotId: string;
   patientId: string;
   appointmentType: AppointmentTypeLit;
+  patientCategory: PatientCategoryLit;
+  categoryReason?: string;
   note?: string;
   ctx: AuditContext;
 }
@@ -47,6 +56,17 @@ export async function bookSlot(input: BookInput) {
         `Do tohto slotu (${slot.appointmentType}) nemožno objednať typ ${input.appointmentType}.`,
       );
     }
+    if (!categoryAllowsSlot(input.patientCategory, slot.appointmentType)) {
+      throw new ValidationError(
+        `Pacient kategórie '${PATIENT_CATEGORY_LABEL[input.patientCategory]}' nepatrí do tohto slotu.`,
+      );
+    }
+    if (
+      input.patientCategory === "INE" &&
+      (!input.categoryReason || input.categoryReason.trim().length === 0)
+    ) {
+      throw new ValidationError("Pri kategórii 'Iné' je dôvod povinný.");
+    }
 
     const appointment = await tx.appointment.create({
       data: {
@@ -55,6 +75,8 @@ export async function bookSlot(input: BookInput) {
         appointmentType: slot.appointmentType,
         status: "SCHEDULED",
         note: input.note ?? null,
+        patientCategory: input.patientCategory,
+        categoryReason: input.categoryReason?.trim() || null,
         createdByUserId: input.ctx.actorUserId ?? null,
         updatedByUserId: input.ctx.actorUserId ?? null,
       },

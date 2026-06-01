@@ -46,7 +46,11 @@ export function MonthView({
   onPickDay: (iso: string) => void;
 }) {
   const [anchor, setAnchor] = useState(() => startOfMonth(todayIso()));
-  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [pendingPassword, setPendingPassword] = useState<string | null>(null);
+  const [pendingOpen, setPendingOpen] = useState<{
+    iso: string;
+    password?: string;
+  } | null>(null);
 
   const gridStart = startOfWeek(anchor);
   const cells = useMemo(
@@ -55,7 +59,7 @@ export function MonthView({
   );
 
   const { data, isLoading } = useCalendar(gridStart, isoAddDays(gridStart, 41));
-  const { pendingIso, openDay } = useDayActions();
+  const { pendingIso, openDay, requiresPassword } = useDayActions();
 
   const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
 
@@ -70,16 +74,29 @@ export function MonthView({
     [data, anchor],
   );
 
-  async function performOpen(iso: string, overrideReason?: string) {
-    const result = await openDay(iso, overrideReason);
-    if (result === "ok") setPendingOpen(null);
-    else if (result === "conflict") setPendingOpen(iso);
+  async function performOpen(
+    iso: string,
+    opts: { password?: string; overrideReason?: string } = {},
+  ) {
+    const result = await openDay(iso, opts);
+    if (result === "ok") {
+      setPendingOpen(null);
+      setPendingPassword(null);
+    } else if (result === "conflict") {
+      setPendingPassword(null);
+      setPendingOpen({ iso, password: opts.password });
+    }
   }
 
-  // A second Wednesday in the same month needs an audited override reason.
+  // Wed + last-Fri require password; 2nd Wed of month also needs audited reason.
   function requestOpen(iso: string) {
-    if (weekdayOf(iso) === 3 && openWednesdaysThisMonth > 0) {
-      setPendingOpen(iso);
+    if (requiresPassword(iso)) {
+      if (weekdayOf(iso) === 3 && openWednesdaysThisMonth > 0) {
+        // We'll collect password first, then reason via the override dialog.
+        setPendingPassword(iso);
+      } else {
+        setPendingPassword(iso);
+      }
     } else {
       performOpen(iso);
     }
@@ -145,6 +162,24 @@ export function MonthView({
         ))}
       </div>
 
+      {pendingPassword && (
+        <ConfirmDialog
+          title={
+            weekdayOf(pendingPassword) === 3
+              ? "Otvoriť stredu"
+              : "Otvoriť posledný piatok v mesiaci"
+          }
+          description="Tento deň je chránený. Zadajte heslo pre otvorenie."
+          confirmLabel="Otvoriť deň"
+          requirePassword
+          passwordLabel="Heslo"
+          onConfirm={({ password }) =>
+            performOpen(pendingPassword, { password })
+          }
+          onClose={() => setPendingPassword(null)}
+        />
+      )}
+
       {pendingOpen && (
         <ConfirmDialog
           title="Otvoriť ďalšiu stredu?"
@@ -152,7 +187,12 @@ export function MonthView({
           confirmLabel="Otvoriť stredu"
           requireReason
           reasonLabel="Dôvod výnimky"
-          onConfirm={(reason) => performOpen(pendingOpen, reason)}
+          onConfirm={({ reason }) =>
+            performOpen(pendingOpen.iso, {
+              password: pendingOpen.password,
+              overrideReason: reason,
+            })
+          }
           onClose={() => setPendingOpen(null)}
         />
       )}

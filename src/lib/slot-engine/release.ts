@@ -11,7 +11,7 @@ export async function releaseDueSlots(now: Date = new Date()): Promise<number> {
     where: {
       status: "LOCKED",
       releaseAt: { not: null, lte: now },
-      appointmentType: { not: "CONSULTATION_BLOCKED" },
+      appointmentType: { notIn: ["CONSULTATION_BLOCKED", "ECHO_DEPARTMENT_BLOCKED"] },
     },
     data: { status: "AVAILABLE" },
   });
@@ -21,7 +21,7 @@ export async function releaseDueSlots(now: Date = new Date()): Promise<number> {
 /** Runs the full daily maintenance: generate ahead, then release due slots. */
 export async function runDailyMaintenance(now: Date = new Date()) {
   const { generateForward } = await import("./generate");
-  const generated = await generateForward({ now });
+  const generated = await generateForward({ now, months: 14 });
   const released = await releaseDueSlots(now);
   return { generated, released };
 }

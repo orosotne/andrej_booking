@@ -45,8 +45,19 @@ enum AppointmentType {
   CONSULTATION_BLOCKED
   DISPENSARY
   ECHO
+  ECHO_DEPARTMENT_BLOCKED
   ACUTE_RESERVE
   CUSTOM
+}
+
+// Patient classification chosen at booking time. Governs which slot types the
+// patient may be placed into (see booking-service.ts).
+enum PatientCategory {
+  DISPENZAR
+  ECHO
+  PRVOVYSETRENIE
+  AKUTNE
+  INE
 }
 
 enum AppointmentStatus {
@@ -128,18 +139,19 @@ model ScheduleTemplate {
 }
 
 model SlotRule {
-  id              String          @id @default(cuid())
-  templateId      String          @map("template_id")
-  name            String
-  startTime       String          @map("start_time") // "HH:MM"
-  endTime         String          @map("end_time")
-  appointmentType AppointmentType @map("appointment_type")
-  color           String
-  isBookable      Boolean         @default(true) @map("is_bookable")
-  releasePolicyId String?         @map("release_policy_id")
-  priority        Int             @default(0)
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  id                  String          @id @default(cuid())
+  templateId          String          @map("template_id")
+  name                String
+  startTime           String          @map("start_time") // "HH:MM"
+  endTime             String          @map("end_time")
+  appointmentType     AppointmentType @map("appointment_type")
+  color               String
+  isBookable          Boolean         @default(true) @map("is_bookable")
+  slotDurationMinutes Int             @default(30) @map("slot_duration_minutes")
+  releasePolicyId     String?         @map("release_policy_id")
+  priority            Int             @default(0)
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
 
   template      ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   releasePolicy ReleasePolicy?   @relation(fields: [releasePolicyId], references: [id])
@@ -210,6 +222,8 @@ model Appointment {
   appointmentType    AppointmentType   @map("appointment_type")
   status             AppointmentStatus @default(SCHEDULED)
   note               String?
+  patientCategory    PatientCategory?  @map("patient_category")
+  categoryReason     String?           @map("category_reason")
   createdByUserId    String?           @map("created_by_user_id")
   updatedByUserId    String?           @map("updated_by_user_id")
   cancellationReason String?           @map("cancellation_reason")

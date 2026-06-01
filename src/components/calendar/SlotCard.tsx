@@ -13,36 +13,51 @@ export function SlotCard({
   onSelect: (slot: SlotDTO) => void;
 }) {
   const meta = TYPE_META[slot.appointmentType];
+  // LOCKED + BLOCKED slots are not clickable for staff (no override flow exposed).
+  // Admin still has unlock dialog for LOCKED via slot-actions menu.
   const clickable =
-    slot.status === "AVAILABLE" ||
-    slot.status === "BOOKED" ||
-    slot.status === "LOCKED";
+    slot.status === "AVAILABLE" || slot.status === "BOOKED" || slot.status === "LOCKED";
 
   const isLocked = slot.status === "LOCKED";
   const isBlocked = slot.status === "BLOCKED";
+  const isEchoDept = slot.appointmentType === "ECHO_DEPARTMENT_BLOCKED";
+  const isPorada = slot.appointmentType === "CONSULTATION_BLOCKED";
+
+  // ECHO oddelenie & Porada both render as locked-dark blocks (cannot be opened).
+  const isHardLocked = isEchoDept || (isPorada && isBlocked);
 
   return (
     <button
       type="button"
-      disabled={!clickable}
-      onClick={() => clickable && onSelect(slot)}
+      disabled={!clickable || isHardLocked}
+      onClick={() => clickable && !isHardLocked && onSelect(slot)}
       style={{
-        backgroundColor: isLocked ? "var(--surface)" : meta.bg,
+        backgroundColor: isHardLocked
+          ? meta.bg
+          : isLocked
+            ? "var(--surface)"
+            : meta.bg,
         borderColor: meta.border,
+        color: isEchoDept ? "var(--slot-echo-dept-fg)" : undefined,
       }}
       className={[
         "group relative w-full rounded-lg border border-l-4 px-2.5 py-2 text-left transition",
         "min-h-[56px] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30",
-        clickable ? "cursor-pointer hover:shadow-sm hover:brightness-[0.99]" : "cursor-default",
-        isLocked ? "slot-locked-hatch" : "",
-        isBlocked ? "opacity-70" : "",
+        clickable && !isHardLocked
+          ? "cursor-pointer hover:shadow-sm hover:brightness-[0.99]"
+          : "cursor-not-allowed",
+        isLocked && !isHardLocked ? "slot-locked-hatch" : "",
       ].join(" ")}
+      aria-label={`${clinicTime(slot.startAt)} ${meta.label}`}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="font-mono text-[13px] font-medium tabular-nums text-slate-900">
+        <span
+          className="font-mono text-[13px] font-medium tabular-nums"
+          style={isEchoDept ? { color: "var(--slot-echo-dept-fg)" } : undefined}
+        >
           {clinicTime(slot.startAt)}
         </span>
-        <StatusIcon status={slot.status} />
+        <StatusIcon status={slot.status} darkBg={isEchoDept} />
       </div>
 
       <div className="mt-1 leading-tight">
@@ -50,38 +65,61 @@ export function SlotCard({
           <p className="truncate text-sm font-semibold text-slate-900">
             {slot.appointment.patient.lastName} {slot.appointment.patient.firstName}
           </p>
+        ) : isEchoDept ? (
+          <p className="text-xs font-semibold uppercase tracking-wide">
+            ECHO oddelenie
+          </p>
+        ) : isPorada ? (
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            Porada
+          </p>
         ) : slot.status === "AVAILABLE" ? (
           <p className="text-sm font-medium text-emerald-700">Voľné</p>
-        ) : isBlocked ? (
-          <p className="text-xs font-medium text-slate-500">Poradňa</p>
         ) : isLocked ? (
-          <p className="text-[11px] font-medium text-slate-500">
-            Otvorí sa {slot.releaseAt ? clinicDayChip(slot.releaseAt.slice(0, 10)) : "manuálne"}
-          </p>
+          <div>
+            <p className="text-[11px] font-semibold text-amber-700">
+              Voľné, dočasne uzamknuté
+            </p>
+            <p className="text-[10px] text-slate-500">
+              Otvorí sa{" "}
+              {slot.releaseAt
+                ? clinicDayChip(slot.releaseAt.slice(0, 10))
+                : "manuálne"}
+            </p>
+          </div>
         ) : (
           <p className="text-xs font-medium text-slate-500">
             {slot.status === "COMPLETED" ? "Vybavené" : "Zrušené"}
           </p>
         )}
-        <p className="mt-0.5 truncate text-[10px] uppercase tracking-wide text-slate-400">
-          {meta.label}
-        </p>
+        {!isEchoDept && !isPorada && (
+          <p className="mt-0.5 truncate text-[10px] uppercase tracking-wide text-slate-400">
+            {meta.label}
+          </p>
+        )}
       </div>
     </button>
   );
 }
 
-function StatusIcon({ status }: { status: SlotDTO["status"] }) {
+function StatusIcon({
+  status,
+  darkBg,
+}: {
+  status: SlotDTO["status"];
+  darkBg?: boolean;
+}) {
   const cls = "h-3.5 w-3.5";
+  const lockColor = darkBg ? "text-white/80" : "text-slate-400";
   switch (status) {
     case "LOCKED":
-      return <Lock className={`${cls} text-slate-400`} aria-label="Zamknuté" />;
+      return <Lock className={`${cls} ${lockColor}`} aria-label="Voľné, dočasne uzamknuté" />;
     case "AVAILABLE":
       return <Clock3 className={`${cls} text-emerald-600`} aria-label="Voľné" />;
     case "BOOKED":
       return <User className={`${cls} text-slate-700`} aria-label="Obsadené" />;
     case "BLOCKED":
-      return <Ban className={`${cls} text-slate-400`} aria-label="Blokované" />;
+      return <Ban className={`${cls} ${darkBg ? "text-white/80" : "text-slate-400"}`} aria-label="Blokované" />;
     case "COMPLETED":
       return <Check className={`${cls} text-emerald-600`} aria-label="Vybavené" />;
     default:

@@ -5,8 +5,14 @@ import { apiSend, ApiError } from "@/lib/client";
 import { useToast } from "@/components/ui/Toast";
 import { useInvalidateCalendar } from "@/hooks/useCalendar";
 import { weekdayOf } from "@/lib/calendar-ui";
+import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 
 export type DayActionResult = "ok" | "conflict" | "error";
+
+export interface OpenDayOptions {
+  password?: string;
+  overrideReason?: string;
+}
 
 /**
  * Single source of truth for calendar-day mutations (open/generate/delete/close/reopen),
@@ -38,17 +44,27 @@ export function useDayActions() {
     }
   }
 
-  function openDay(iso: string, overrideReason?: string) {
-    const isWednesday = weekdayOf(iso) === 3;
+  /** True iff opening this day requires the WEDNESDAY_UNLOCK_PASSWORD. */
+  function requiresPassword(iso: string): boolean {
+    const dow = weekdayOf(iso);
+    if (dow === 3) return true;
+    if (dow === 5 && isLastFridayOfMonth(dateOnly(iso))) return true;
+    return false;
+  }
+
+  function openDay(iso: string, opts: OpenDayOptions = {}) {
+    const usesOpen = requiresPassword(iso);
     return call(
       iso,
       () =>
         apiSend(
-          `/api/calendar-days/${iso}/${isWednesday ? "open" : "generate"}`,
+          `/api/calendar-days/${iso}/${usesOpen ? "open" : "generate"}`,
           "POST",
-          overrideReason ? { overrideReason } : {},
+          usesOpen
+            ? { password: opts.password, overrideReason: opts.overrideReason }
+            : {},
         ),
-      isWednesday ? "Streda otvorená" : "Deň vygenerovaný",
+      usesOpen ? "Deň otvorený" : "Deň vygenerovaný",
     );
   }
 
@@ -72,5 +88,5 @@ export function useDayActions() {
     );
   }
 
-  return { pendingIso, openDay, deleteDay, closeDay, reopenDay };
+  return { pendingIso, openDay, deleteDay, closeDay, reopenDay, requiresPassword };
 }

@@ -4,7 +4,7 @@ const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Dátum musí byť vo formáte YYYY-MM-DD");
 
-// Bookable types only — CONSULTATION_BLOCKED (poradňa) can never be booked.
+// Bookable types only — CONSULTATION_BLOCKED + ECHO_DEPARTMENT_BLOCKED can never be booked.
 export const bookableType = z.enum([
   "PRE_HOSPITAL",
   "DISPENSARY",
@@ -13,16 +13,36 @@ export const bookableType = z.enum([
   "CUSTOM",
 ]);
 
+export const patientCategoryEnum = z.enum([
+  "DISPENZAR",
+  "ECHO",
+  "PRVOVYSETRENIE",
+  "AKUTNE",
+  "INE",
+]);
+
 export const calendarRangeSchema = z.object({
   from: isoDate,
   to: isoDate,
 });
 
-export const bookSlotSchema = z.object({
-  patientId: z.string().min(1),
-  appointmentType: bookableType,
-  note: z.string().max(2000).optional(),
-});
+export const bookSlotSchema = z
+  .object({
+    patientId: z.string().min(1),
+    appointmentType: bookableType,
+    patientCategory: patientCategoryEnum,
+    categoryReason: z.string().max(500).optional(),
+    note: z.string().max(2000).optional(),
+  })
+  .refine(
+    (v) =>
+      v.patientCategory !== "INE" ||
+      (v.categoryReason !== undefined && v.categoryReason.trim().length > 0),
+    {
+      message: "Pri kategórii 'Iné' je dôvod povinný.",
+      path: ["categoryReason"],
+    },
+  );
 
 export const cancelSchema = z.object({
   reason: z.string().min(1, "Dôvod je povinný").max(500),
@@ -54,18 +74,20 @@ export const updateAppointmentSchema = z.object({
 export const patientCreateSchema = z.object({
   firstName: z.string().min(1, "Meno je povinné"),
   lastName: z.string().min(1, "Priezvisko je povinné"),
+  phone: z.string().min(1, "Telefónne číslo je povinné").max(40),
   dateOfBirth: isoDate.optional(),
-  phone: z.string().max(40).optional(),
   email: z.string().email("Neplatný e-mail").optional().or(z.literal("")),
   externalPatientId: z.string().max(60).optional(),
   note: z.string().max(2000).optional(),
 });
 
+// Update keeps phone optional (admins may edit other fields without resending phone).
 export const patientUpdateSchema = patientCreateSchema.partial();
 
 export const openDaySchema = z.object({
   note: z.string().max(500).optional(),
   overrideReason: z.string().max(500).optional(),
+  password: z.string().max(200).optional(),
 });
 
 export const settingsUpdateSchema = z.record(z.string(), z.unknown());
