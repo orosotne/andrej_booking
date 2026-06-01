@@ -4,7 +4,7 @@ import { requireRole, ALL_STAFF } from "@/lib/auth/rbac";
 import { patientUpdateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
-import { NotFoundError } from "@/lib/errors";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 
 export async function PATCH(
   req: Request,
@@ -44,6 +44,41 @@ export async function PATCH(
       ctx: auditContext(req, user.id),
     });
     return NextResponse.json({ patient });
+  } catch (e) {
+    return jsonError(e);
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  try {
+    const user = await requireRole(ALL_STAFF);
+    const { id } = await ctx.params;
+
+    const patient = await prisma.patient.findUnique({ where: { id } });
+    if (!patient) throw new NotFoundError("Pacient neexistuje.");
+
+    // A patient linked to appointments is part of the medical history and must
+    // not be hard-deleted (the DB foreign key would also block it). Only
+    // appointment-free records (e.g. test/duplicate entries) can be removed.
+    const appointments = await prisma.appointment.count({ where: { patientId: id } });
+    if (appointments > 0) {
+      throw new ValidationError(
+        "Pacienta nemožno zmazať — má naviazané objednávky. Zmazať sa dá len pacient bez objednávok.",
+      );
+    }
+
+    await prisma.patient.delete({ where: { id } });
+    await recordAudit(prisma, {
+      entityType: "patient",
+      entityId: id,
+      action: "delete",
+      before: patient,
+      ctx: auditContext(req, user.id),
+    });
+    return NextResponse.json({ ok: true });
   } catch (e) {
     return jsonError(e);
   }
