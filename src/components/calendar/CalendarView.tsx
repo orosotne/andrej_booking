@@ -43,11 +43,13 @@ type Dialog =
 export function CalendarView({
   isAdmin,
   canManageDays,
+  mode = "week",
   initialWeekStart,
   initialDay,
 }: {
   isAdmin: boolean;
   canManageDays: boolean;
+  mode?: "week" | "day";
   initialWeekStart?: string;
   initialDay?: string;
 }) {
@@ -126,17 +128,43 @@ export function CalendarView({
     close();
   };
 
+  // Day mode: one day, full focus, navigated day-by-day. weekStart stays in sync
+  // so the fetched week always contains the selected day (and feeds reschedule).
+  const isDay = mode === "day";
+  function goToDay(iso: string) {
+    setSelectedDay(iso);
+    setWeekStart(startOfWeek(iso));
+  }
+  function handlePrev() {
+    if (isDay) goToDay(isoAddDays(selectedDay, -1));
+    else setWeekStart(isoAddDays(weekStart, -7));
+  }
+  function handleNext() {
+    if (isDay) goToDay(isoAddDays(selectedDay, 1));
+    else setWeekStart(isoAddDays(weekStart, 7));
+  }
+  function handleToday() {
+    if (isDay) {
+      goToDay(todayIso());
+    } else {
+      setWeekStart(startOfWeek(todayIso()));
+      setSelectedDay(todayIso());
+    }
+  }
+
   return (
     <div>
       <Header
-        weekStart={weekStart}
-        weekEnd={weekEnd}
-        onPrev={() => setWeekStart(isoAddDays(weekStart, -7))}
-        onNext={() => setWeekStart(isoAddDays(weekStart, 7))}
-        onToday={() => {
-          setWeekStart(startOfWeek(todayIso()));
-          setSelectedDay(todayIso());
-        }}
+        subtitle={
+          isDay
+            ? clinicLongDate(selectedDay)
+            : `${clinicLongDate(weekStart)} – ${clinicLongDate(weekEnd)}`
+        }
+        prevAria={isDay ? "Predošlý deň" : "Predošlý týždeň"}
+        nextAria={isDay ? "Ďalší deň" : "Ďalší týždeň"}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        onToday={handleToday}
       />
 
       <Legend />
@@ -150,7 +178,24 @@ export function CalendarView({
         />
       )}
 
-      {!isLoading && !isError && (
+      {!isLoading && !isError && isDay && (
+        <div className="mx-auto mt-4 max-w-2xl">
+          <DayColumn
+            iso={selectedDay}
+            day={dayByIso.get(selectedDay)}
+            canManage={canManageDays}
+            opening={pendingIso === selectedDay}
+            onOpen={() => handleOpen(selectedDay)}
+            onRequestDelete={() => setPendingDelete(selectedDay)}
+            onRequestClose={() => setPendingClose(selectedDay)}
+            onRequestReopen={() => setPendingReopen(selectedDay)}
+            onSelect={handleSelect}
+            stacked
+          />
+        </div>
+      )}
+
+      {!isLoading && !isError && !isDay && (
         <>
           {/* Desktop: full week grid (Mon–Sun) */}
           <div className="mt-4 hidden gap-2 md:grid md:grid-cols-7">
@@ -289,14 +334,16 @@ export function CalendarView({
 }
 
 function Header({
-  weekStart,
-  weekEnd,
+  subtitle,
+  prevAria,
+  nextAria,
   onPrev,
   onNext,
   onToday,
 }: {
-  weekStart: string;
-  weekEnd: string;
+  subtitle: string;
+  prevAria: string;
+  nextAria: string;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -308,9 +355,7 @@ function Header({
           <CalendarDays className="h-5 w-5 text-slate-400" />
           Kalendár ambulancie
         </h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          {clinicLongDate(weekStart)} – {clinicLongDate(weekEnd)}
-        </p>
+        <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
       </div>
       <div className="flex items-center gap-1">
         <button
@@ -323,7 +368,7 @@ function Header({
         <button
           type="button"
           onClick={onPrev}
-          aria-label="Predošlý týždeň"
+          aria-label={prevAria}
           className="rounded-lg border border-slate-300 p-1.5 text-slate-700 hover:bg-white"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -331,7 +376,7 @@ function Header({
         <button
           type="button"
           onClick={onNext}
-          aria-label="Ďalší týždeň"
+          aria-label={nextAria}
           className="rounded-lg border border-slate-300 p-1.5 text-slate-700 hover:bg-white"
         >
           <ChevronRight className="h-5 w-5" />
