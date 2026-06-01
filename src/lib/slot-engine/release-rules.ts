@@ -52,3 +52,31 @@ export function initialSlotStatus(
     return "AVAILABLE";
   return "LOCKED";
 }
+
+interface ReopenSlot {
+  id: string;
+  appointmentType: AppointmentTypeLit;
+  releaseAt: Date | null;
+  status: SlotStatusLit;
+}
+
+/**
+ * Reverses a close: of the slots a close turned BLOCKED, decides which become
+ * bookable again (release_at passed) versus LOCKED (not yet released). Slots
+ * blocked by rule (CONSULTATION_BLOCKED) recompute to BLOCKED and are omitted;
+ * non-blocked slots (e.g. BOOKED appointments) are left untouched.
+ */
+export function partitionReopenSlots(
+  slots: ReopenSlot[],
+  now: Date,
+): { toAvailable: string[]; toLocked: string[] } {
+  const toAvailable: string[] = [];
+  const toLocked: string[] = [];
+  for (const s of slots) {
+    if (s.status !== "BLOCKED") continue;
+    const next = initialSlotStatus(s.appointmentType, s.releaseAt, now);
+    if (next === "AVAILABLE") toAvailable.push(s.id);
+    else if (next === "LOCKED") toLocked.push(s.id);
+  }
+  return { toAvailable, toLocked };
+}

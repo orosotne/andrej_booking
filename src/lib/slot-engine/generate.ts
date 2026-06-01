@@ -8,7 +8,12 @@ import {
   type DefaultDayType,
 } from "@/lib/calendar-date";
 import { wallClockToUtc } from "@/lib/clinic-time";
-import { computeReleaseAt, initialSlotStatus } from "./release-rules";
+import { NotFoundError, ConflictError } from "@/lib/errors";
+import {
+  computeReleaseAt,
+  initialSlotStatus,
+  partitionReopenSlots,
+} from "./release-rules";
 import { hhmmToMin, minToHhmm, SLOT_MINUTES } from "./template";
 import type { ReleasePolicyInput } from "./types";
 
@@ -131,6 +136,48 @@ export async function generateDay(
 
     return tx.calendarDay.findUniqueOrThrow({
       where: { id: calendarDay.id },
+      include: { slots: { orderBy: { startAt: "asc" } } },
+    });
+  });
+}
+
+/**
+ * Reverses a close: a CLOSED day returns to GENERATED and every slot the close
+ * blocked is recomputed to its natural status (AVAILABLE once released, else
+ * LOCKED). Consultation blocks stay BLOCKED and kept appointments are untouched.
+ */
+export async function reopenDay(
+  dateInput: Date | string,
+  opts: { now?: Date } = {},
+) {
+  const date = typeof dateInput === "string" ? dateOnly(dateInput) : dateInput;
+  const now = opts.now ?? new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const day = await tx.calendarDay.findUnique({
+      where: { date },
+      include: { slots: true },
+    });
+    if (!day) throw new NotFoundError("Deň neexistuje.");
+    if (day.status !== "CLOSED") throw new ConflictError("Deň nie je zatvorený.");
+
+    const { toAvailable, toLocked } = partitionReopenSlots(day.slots, now);
+    if (toAvailable.length > 0) {
+      await tx.appointmentSlot.updateMany({
+        where: { id: { in: toAvailable } },
+        data: { status: "AVAILABLE" },
+      });
+    }
+    if (toLocked.length > 0) {
+      await tx.appointmentSlot.updateMany({
+        where: { id: { in: toLocked } },
+        data: { status: "LOCKED" },
+      });
+    }
+
+    return tx.calendarDay.update({
+      where: { id: day.id },
+      data: { status: "GENERATED" },
       include: { slots: { orderBy: { startAt: "asc" } } },
     });
   });

@@ -9,7 +9,7 @@ import { weekdayOf } from "@/lib/calendar-ui";
 export type DayActionResult = "ok" | "conflict" | "error";
 
 /**
- * Single source of truth for calendar-day mutations (open/generate/delete/close),
+ * Single source of truth for calendar-day mutations (open/generate/delete/close/reopen),
  * shared by the week and month views. Returns "conflict" (e.g. a second Wednesday
  * in a month) without a toast so the caller can prompt for an audited override.
  */
@@ -64,5 +64,13 @@ export function useDayActions() {
     );
   }
 
-  return { pendingIso, openDay, deleteDay, closeDay };
+  function reopenDay(iso: string) {
+    return call(
+      iso,
+      () => apiSend(`/api/calendar-days/${iso}/reopen`, "POST"),
+      "Deň znovu otvorený",
+    );
+  }
+
+  return { pendingIso, openDay, deleteDay, closeDay, reopenDay };
 }

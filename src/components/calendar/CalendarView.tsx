@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Trash2,
   Ban,
+  RotateCcw,
 } from "lucide-react";
 import type { CalendarDayDTO, SlotDTO } from "@/lib/api-types";
 import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
@@ -60,24 +61,28 @@ export function CalendarView({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingOverride, setPendingOverride] = useState<string | null>(null);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
+  const [pendingReopen, setPendingReopen] = useState<string | null>(null);
 
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
   const invalidate = useInvalidateCalendar();
-  const { pendingIso, openDay, deleteDay, closeDay } = useDayActions();
+  const { pendingIso, openDay, deleteDay, closeDay, reopenDay } = useDayActions();
 
   const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
 
-  const workingIsos = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => isoAddDays(weekStart, i)).filter((iso) =>
-        WORKING_WEEKDAYS.includes(weekdayOf(iso)),
-      ),
+  // All 7 days of the week (Mon–Sun). Non-working days render as a closed column
+  // so the week is shown in full; working days (Wed/Thu/Fri) hold the slots.
+  const weekIsos = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => isoAddDays(weekStart, i)),
     [weekStart],
   );
+  const workingIsos = useMemo(
+    () => weekIsos.filter((iso) => WORKING_WEEKDAYS.includes(weekdayOf(iso))),
+    [weekIsos],
+  );
 
-  // Mobile shows one day; never default to a non-working day (e.g. today = Sunday).
-  const mobileDay = workingIsos.includes(selectedDay) ? selectedDay : workingIsos[0];
+  // Mobile shows one day: the selected day if it's in this week, else the first working day.
+  const mobileDay = weekIsos.includes(selectedDay) ? selectedDay : workingIsos[0];
 
   // Available slots of a given type across the loaded week (reschedule targets).
   const rescheduleOptionsFor = (type: string): RescheduleOption[] => {
@@ -110,6 +115,9 @@ export function CalendarView({
   }
   async function handleClose(iso: string) {
     if ((await closeDay(iso)) === "ok") setPendingClose(null);
+  }
+  async function handleReopen(iso: string) {
+    if ((await reopenDay(iso)) === "ok") setPendingReopen(null);
   }
 
   const close = () => setDialog(null);
@@ -144,9 +152,9 @@ export function CalendarView({
 
       {!isLoading && !isError && (
         <>
-          {/* Desktop: week grid */}
-          <div className="mt-4 hidden gap-3 md:grid md:grid-cols-3">
-            {workingIsos.map((iso) => (
+          {/* Desktop: full week grid (Mon–Sun) */}
+          <div className="mt-4 hidden gap-2 md:grid md:grid-cols-7">
+            {weekIsos.map((iso) => (
               <DayColumn
                 key={iso}
                 iso={iso}
@@ -156,6 +164,7 @@ export function CalendarView({
                 onOpen={() => handleOpen(iso)}
                 onRequestDelete={() => setPendingDelete(iso)}
                 onRequestClose={() => setPendingClose(iso)}
+                onRequestReopen={() => setPendingReopen(iso)}
                 onSelect={handleSelect}
               />
             ))}
@@ -164,7 +173,7 @@ export function CalendarView({
           {/* Mobile: day chips + single day */}
           <div className="mt-4 md:hidden">
             <div className="flex gap-2 overflow-x-auto pb-2">
-              {workingIsos.map((iso) => (
+              {weekIsos.map((iso) => (
                 <button
                   key={iso}
                   type="button"
@@ -190,6 +199,7 @@ export function CalendarView({
                 onOpen={() => handleOpen(mobileDay)}
                 onRequestDelete={() => setPendingDelete(mobileDay)}
                 onRequestClose={() => setPendingClose(mobileDay)}
+                onRequestReopen={() => setPendingReopen(mobileDay)}
                 onSelect={handleSelect}
                 stacked
               />
@@ -262,6 +272,18 @@ export function CalendarView({
           }
         />
       )}
+
+      {pendingReopen && (
+        <ConfirmDialog
+          title="Znovu otvoriť tento deň?"
+          description={`${clinicLongDate(pendingReopen)} sa znovu sprístupní — voľné sloty bude opäť možné obsadiť podľa pravidiel uvoľňovania.`}
+          confirmLabel="Znovu otvoriť"
+          onConfirm={() => handleReopen(pendingReopen)}
+          onClose={() =>
+            pendingIso === pendingReopen ? undefined : setPendingReopen(null)
+          }
+        />
+      )}
     </div>
   );
 }
@@ -327,6 +349,7 @@ function DayColumn({
   onOpen,
   onRequestDelete,
   onRequestClose,
+  onRequestReopen,
   onSelect,
   stacked,
 }: {
@@ -337,16 +360,23 @@ function DayColumn({
   onOpen: () => void;
   onRequestDelete: () => void;
   onRequestClose: () => void;
+  onRequestReopen: () => void;
   onSelect: (slot: SlotDTO, dayIso: string) => void;
   stacked?: boolean;
 }) {
   const isWednesday = weekdayOf(iso) === 3;
+  const isWorkingDay = WORKING_WEEKDAYS.includes(weekdayOf(iso));
   const canDelete = canManage && day?.dayType === "MANUAL_WEDNESDAY";
   const canClose =
     canManage &&
     !!day &&
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status !== "CLOSED";
+  const canReopen =
+    canManage &&
+    !!day &&
+    day.dayType !== "MANUAL_WEDNESDAY" &&
+    day.status === "CLOSED";
   return (
     <section className="rounded-xl bg-white/60 ring-1 ring-slate-200">
       <header className="sticky top-0 flex items-center justify-between rounded-t-xl border-b border-slate-100 bg-white/90 px-3 py-2 backdrop-blur">
@@ -375,6 +405,17 @@ function DayColumn({
             <Ban className="h-4 w-4" />
           </button>
         )}
+        {canReopen && (
+          <button
+            type="button"
+            onClick={onRequestReopen}
+            aria-label="Znovu otvoriť deň"
+            title="Znovu otvoriť deň"
+            className="rounded-md p-1 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+        )}
       </header>
       <div
         className={`space-y-1.5 p-2 ${stacked ? "" : "max-h-[70vh] overflow-y-auto"}`}
@@ -383,6 +424,10 @@ function DayColumn({
           day.slots.map((slot) => (
             <SlotCard key={slot.id} slot={slot} onSelect={(s) => onSelect(s, iso)} />
           ))
+        ) : !isWorkingDay ? (
+          <div className="px-2 py-8 text-center">
+            <p className="text-sm text-slate-300">Ambulancia nepracuje</p>
+          </div>
         ) : (
           <div className="px-2 py-6 text-center">
             <p className="text-sm text-slate-400">
@@ -412,8 +457,8 @@ function DayColumn({
 
 function CalendarSkeleton() {
   return (
-    <div className="mt-4 grid gap-3 md:grid-cols-3" aria-label="Načítavam kalendár" aria-busy="true">
-      {[0, 1, 2].map((col) => (
+    <div className="mt-4 grid gap-2 md:grid-cols-7" aria-label="Načítavam kalendár" aria-busy="true">
+      {[0, 1, 2, 3, 4, 5, 6].map((col) => (
         <div key={col} className="rounded-xl bg-white/60 p-2 ring-1 ring-slate-200">
           <Skeleton className="mb-2 h-6 w-24" />
           <div className="space-y-1.5">
