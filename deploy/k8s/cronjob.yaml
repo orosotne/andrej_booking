@@ -1,0 +1,34 @@
+# Daily slot-release job (replaces Vercel Cron in the self-host path).
+# Calls the same authenticated endpoint the app exposes.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: andrej-booking-release
+  namespace: ambulance
+spec:
+  schedule: "0 2 * * *" # 02:00 daily
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: release
+              image: curlimages/curl:8.11.0
+              env:
+                - name: CRON_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: andrej-booking-env
+                      key: CRON_SECRET
+              command:
+                - sh
+                - -c
+                - >-
+                  curl -fsS -X GET
+                  -H "Authorization: Bearer $CRON_SECRET"
+                  http://andrej-booking.ambulance.svc.cluster.local/api/cron/release

@@ -1,0 +1,41 @@
+# Self-host stack: app + PostgreSQL. For on-prem deployments.
+# First run: `docker compose up -d db`, then init the schema once:
+#   docker compose run --rm app npx prisma db push && docker compose run --rm app npm run db:seed
+# (or point DATABASE_URL at a managed Postgres and skip the db service).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ambulance
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: ambulance
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ambulance"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      args:
+        DATABASE_URL: postgresql://ambulance:${DB_PASSWORD:-changeme}@db:5432/ambulance
+    environment:
+      DATABASE_URL: postgresql://ambulance:${DB_PASSWORD:-changeme}@db:5432/ambulance
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      CRON_SECRET: ${CRON_SECRET:?set CRON_SECRET in .env}
+      CLINIC_TIMEZONE: ${CLINIC_TIMEZONE:-Europe/Bratislava}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:

@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: andrej-booking
+  namespace: ambulance
+  labels:
+    app: andrej-booking
+spec:
+  replicas: 2 # HA: survive a node/pod failure
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0 # zero-downtime rollout
+  selector:
+    matchLabels:
+      app: andrej-booking
+  template:
+    metadata:
+      labels:
+        app: andrej-booking
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/orosotne/andrej-booking:latest # set by CI/CD per release tag
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: andrej-booking-env
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: andrej-booking
+  namespace: ambulance
+spec:
+  selector:
+    app: andrej-booking
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+# Keeps at least one pod available during voluntary disruptions (node drains).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: andrej-booking
+  namespace: ambulance
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: andrej-booking
