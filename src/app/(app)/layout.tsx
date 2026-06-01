@@ -58,19 +58,24 @@ export default async function AppLayout({
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-4">
-            <Link
-              href="/calendar"
-              aria-label="Ambulancia — domov"
-              className="flex items-center gap-1.5 font-semibold tracking-tight text-slate-900"
-            >
+            <span className="flex select-none items-center gap-1.5 font-semibold tracking-tight text-slate-900">
               <span className="grid h-6 w-6 place-items-center rounded-md bg-slate-900 text-xs font-bold text-white">
                 A
               </span>
               Ambulancia
-            </Link>
+            </span>
+            <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
             <nav className="flex items-center gap-4 text-sm" aria-label="Hlavná navigácia">
               <NavLink href="/calendar">Kalendár</NavLink>
               <NavLink href="/pacienti">Pacienti</NavLink>
+              {user.role === "ADMIN" && (
+                <>
+                  <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
+                  <NavLink href="/sablona">Šablóna</NavLink>
+                  <NavLink href="/nastavenia">Nastavenia</NavLink>
+                  <NavLink href="/audit">Audit</NavLink>
+                </>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
@@ -83,13 +88,6 @@ export default async function AppLayout({
                 · {ROLE_LABEL[user.role] ?? user.role}
               </span>
             </Link>
-            {user.role === "ADMIN" && (
-              <>
-                <NavLink href="/sablona">Šablóna</NavLink>
-                <NavLink href="/nastavenia">Nastavenia</NavLink>
-                <NavLink href="/audit">Audit</NavLink>
-              </>
-            )}
             <form
               action={async () => {
                 "use server";
