@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
-import { useToast } from "@/components/ui/Toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiGet, apiSend } from "@/lib/client";
 
 export interface PatientLite {
@@ -113,27 +113,24 @@ function CreatePatient({
   onCancel: () => void;
   onCreated: (p: PatientLite) => void;
 }) {
-  const { toast } = useToast();
+  const { busy, run } = useAsyncAction();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState(initialName);
   const [phone, setPhone] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    try {
-      const r = await apiSend<{ patient: PatientLite }>("/api/patients", "POST", {
-        firstName,
-        lastName,
-        phone: phone || undefined,
-      });
-      toast("Pacient vytvorený", "success");
-      onCreated(r.patient);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Chyba", "error");
-      setBusy(false);
-    }
+    run(
+      async () => {
+        const r = await apiSend<{ patient: PatientLite }>("/api/patients", "POST", {
+          firstName,
+          lastName,
+          phone: phone || undefined,
+        });
+        onCreated(r.patient);
+      },
+      { success: "Pacient vytvorený" },
+    );
   }
 
   return (

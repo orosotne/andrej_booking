@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useToast } from "@/components/ui/Toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiGet, apiSend } from "@/lib/client";
 
 interface Patient {
@@ -119,7 +119,7 @@ function PatientDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { toast } = useToast();
+  const { busy, run } = useAsyncAction();
   const [form, setForm] = useState({
     firstName: patient?.firstName ?? "",
     lastName: patient?.lastName ?? "",
@@ -129,14 +129,11 @@ function PatientDialog({
     externalPatientId: patient?.externalPatientId ?? "",
     note: patient?.note ?? "",
   });
-  const [busy, setBusy] = useState(false);
-
   const set = (k: keyof typeof form, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  async function save(e: React.FormEvent) {
+  function save(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     const payload = {
       firstName: form.firstName,
       lastName: form.lastName,
@@ -146,18 +143,13 @@ function PatientDialog({
       externalPatientId: form.externalPatientId || undefined,
       note: form.note || undefined,
     };
-    try {
-      if (patient) {
-        await apiSend(`/api/patients/${patient.id}`, "PATCH", payload);
-      } else {
-        await apiSend("/api/patients", "POST", payload);
-      }
-      toast(patient ? "Pacient upravený" : "Pacient vytvorený", "success");
-      onSaved();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Uloženie zlyhalo", "error");
-      setBusy(false);
-    }
+    run(
+      () =>
+        patient
+          ? apiSend(`/api/patients/${patient.id}`, "PATCH", payload)
+          : apiSend("/api/patients", "POST", payload),
+      { success: patient ? "Pacient upravený" : "Pacient vytvorený", onDone: onSaved },
+    );
   }
 
   return (

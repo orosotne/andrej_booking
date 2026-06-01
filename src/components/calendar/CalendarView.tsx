@@ -13,8 +13,7 @@ import {
 } from "lucide-react";
 import type { CalendarDayDTO, SlotDTO } from "@/lib/api-types";
 import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
-import { apiSend, ApiError } from "@/lib/client";
-import { useToast } from "@/components/ui/Toast";
+import { useDayActions } from "@/hooks/useDayActions";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -58,17 +57,14 @@ export function CalendarView({
     () => initialDay ?? todayIso(),
   );
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [opening, setOpening] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [pendingOverride, setPendingOverride] = useState<string | null>(null);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
-  const [closing, setClosing] = useState(false);
 
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
   const invalidate = useInvalidateCalendar();
-  const { toast } = useToast();
+  const { pendingIso, openDay, deleteDay, closeDay } = useDayActions();
 
   const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
 
@@ -103,55 +99,17 @@ export function CalendarView({
       setDialog({ type: "unlock", slot, dayIso });
   }
 
-  async function openOrGenerate(iso: string, overrideReason?: string) {
-    const isWednesday = weekdayOf(iso) === 3;
-    setOpening(iso);
-    try {
-      await apiSend(
-        `/api/calendar-days/${iso}/${isWednesday ? "open" : "generate"}`,
-        "POST",
-        overrideReason ? { overrideReason } : {},
-      );
-      await invalidate();
-      setPendingOverride(null);
-    } catch (e) {
-      // Another Wednesday is already open this month → offer an audited override.
-      if (e instanceof ApiError && e.code === "CONFLICT" && isWednesday && !overrideReason) {
-        setPendingOverride(iso);
-      } else {
-        toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
-      }
-    } finally {
-      setOpening(null);
-    }
+  async function handleOpen(iso: string, overrideReason?: string) {
+    const result = await openDay(iso, overrideReason);
+    if (result === "ok") setPendingOverride(null);
+    else if (result === "conflict" && weekdayOf(iso) === 3 && !overrideReason)
+      setPendingOverride(iso);
   }
-
-  async function deleteDay(iso: string) {
-    setDeleting(true);
-    try {
-      await apiSend(`/api/calendar-days/${iso}`, "DELETE");
-      await invalidate();
-      setPendingDelete(null);
-      toast("Deň zrušený", "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Zrušenie zlyhalo", "error");
-    } finally {
-      setDeleting(false);
-    }
+  async function handleDelete(iso: string) {
+    if ((await deleteDay(iso)) === "ok") setPendingDelete(null);
   }
-
-  async function closeDay(iso: string) {
-    setClosing(true);
-    try {
-      await apiSend(`/api/calendar-days/${iso}/close`, "POST", { force: true });
-      await invalidate();
-      setPendingClose(null);
-      toast("Deň zatvorený", "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Zatvorenie zlyhalo", "error");
-    } finally {
-      setClosing(false);
-    }
+  async function handleClose(iso: string) {
+    if ((await closeDay(iso)) === "ok") setPendingClose(null);
   }
 
   const close = () => setDialog(null);
@@ -194,8 +152,8 @@ export function CalendarView({
                 iso={iso}
                 day={dayByIso.get(iso)}
                 canManage={canManageDays}
-                opening={opening === iso}
-                onOpen={() => openOrGenerate(iso)}
+                opening={pendingIso === iso}
+                onOpen={() => handleOpen(iso)}
                 onRequestDelete={() => setPendingDelete(iso)}
                 onRequestClose={() => setPendingClose(iso)}
                 onSelect={handleSelect}
@@ -228,8 +186,8 @@ export function CalendarView({
                 iso={mobileDay}
                 day={dayByIso.get(mobileDay)}
                 canManage={canManageDays}
-                opening={opening === mobileDay}
-                onOpen={() => openOrGenerate(mobileDay)}
+                opening={pendingIso === mobileDay}
+                onOpen={() => handleOpen(mobileDay)}
                 onRequestDelete={() => setPendingDelete(mobileDay)}
                 onRequestClose={() => setPendingClose(mobileDay)}
                 onSelect={handleSelect}
@@ -273,8 +231,10 @@ export function CalendarView({
           description={`Zruší sa ${clinicLongDate(pendingDelete)} vrátane jeho voľných slotov. Deň s objednávkami nemožno zrušiť.`}
           confirmLabel="Zrušiť deň"
           tone="danger"
-          onConfirm={() => deleteDay(pendingDelete)}
-          onClose={() => (deleting ? undefined : setPendingDelete(null))}
+          onConfirm={() => handleDelete(pendingDelete)}
+          onClose={() =>
+            pendingIso === pendingDelete ? undefined : setPendingDelete(null)
+          }
         />
       )}
 
@@ -285,7 +245,7 @@ export function CalendarView({
           confirmLabel="Otvoriť stredu"
           requireReason
           reasonLabel="Dôvod výnimky"
-          onConfirm={(reason) => openOrGenerate(pendingOverride, reason)}
+          onConfirm={(reason) => handleOpen(pendingOverride, reason)}
           onClose={() => setPendingOverride(null)}
         />
       )}
@@ -296,8 +256,10 @@ export function CalendarView({
           description={`${clinicLongDate(pendingClose)} sa zablokuje — voľné sloty už nebude možné obsadiť. Existujúce objednávky zostanú zachované.`}
           confirmLabel="Zatvoriť deň"
           tone="danger"
-          onConfirm={() => closeDay(pendingClose)}
-          onClose={() => (closing ? undefined : setPendingClose(null))}
+          onConfirm={() => handleClose(pendingClose)}
+          onClose={() =>
+            pendingIso === pendingClose ? undefined : setPendingClose(null)
+          }
         />
       )}
     </div>

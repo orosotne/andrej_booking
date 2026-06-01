@@ -3,9 +3,8 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Lock, Plus, Loader2 } from "lucide-react";
 import type { CalendarDayDTO } from "@/lib/api-types";
-import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
-import { apiSend } from "@/lib/client";
-import { useToast } from "@/components/ui/Toast";
+import { useCalendar } from "@/hooks/useCalendar";
+import { useDayActions } from "@/hooks/useDayActions";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
@@ -47,7 +46,6 @@ export function MonthView({
   onPickDay: (iso: string) => void;
 }) {
   const [anchor, setAnchor] = useState(() => startOfMonth(todayIso()));
-  const [opening, setOpening] = useState<string | null>(null);
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
 
   const gridStart = startOfWeek(anchor);
@@ -57,8 +55,7 @@ export function MonthView({
   );
 
   const { data, isLoading } = useCalendar(gridStart, isoAddDays(gridStart, 41));
-  const invalidate = useInvalidateCalendar();
-  const { toast } = useToast();
+  const { pendingIso, openDay } = useDayActions();
 
   const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
 
@@ -74,22 +71,9 @@ export function MonthView({
   );
 
   async function performOpen(iso: string, overrideReason?: string) {
-    const isWednesday = weekdayOf(iso) === 3;
-    setOpening(iso);
-    try {
-      await apiSend(
-        `/api/calendar-days/${iso}/${isWednesday ? "open" : "generate"}`,
-        "POST",
-        overrideReason ? { overrideReason } : {},
-      );
-      await invalidate();
-      setPendingOpen(null);
-      toast(isWednesday ? "Streda otvorená" : "Deň vygenerovaný", "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
-    } finally {
-      setOpening(null);
-    }
+    const result = await openDay(iso, overrideReason);
+    if (result === "ok") setPendingOpen(null);
+    else if (result === "conflict") setPendingOpen(iso);
   }
 
   // A second Wednesday in the same month needs an audited override reason.
@@ -153,7 +137,7 @@ export function MonthView({
             inMonth={monthOf(iso) === monthOf(anchor)}
             day={dayByIso.get(iso)}
             canManage={canManageDays}
-            opening={opening === iso}
+            opening={pendingIso === iso}
             loading={isLoading}
             onOpen={() => requestOpen(iso)}
             onPick={() => onPickDay(iso)}

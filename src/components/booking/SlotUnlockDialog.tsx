@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { TextareaField } from "@/components/ui/Field";
-import { useToast } from "@/components/ui/Toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
@@ -21,22 +21,16 @@ export function SlotUnlockDialog({
   onClose: () => void;
   onUnlocked: () => void;
 }) {
-  const { toast } = useToast();
+  const { busy, run } = useAsyncAction();
   const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
   const meta = TYPE_META[slot.appointmentType];
 
-  async function unlock() {
+  function unlock() {
     if (!reason.trim()) return;
-    setBusy(true);
-    try {
-      await apiSend(`/api/slots/${slot.id}/unlock`, "POST", { reason });
-      toast("Slot odomknutý", "success");
-      onUnlocked();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Odomknutie zlyhalo", "error");
-      setBusy(false);
-    }
+    run(() => apiSend(`/api/slots/${slot.id}/unlock`, "POST", { reason }), {
+      success: "Slot odomknutý",
+      onDone: onUnlocked,
+    });
   }
 
   return (

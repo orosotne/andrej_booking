@@ -6,6 +6,7 @@ import { apiSend } from "@/lib/client";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 interface PolicyDTO {
   id: string;
@@ -29,16 +30,20 @@ export function SettingsForm({
   initialSettings: Record<string, unknown>;
   initialPolicies: PolicyDTO[];
 }) {
+  const { busy, run } = useAsyncAction();
+  const { toast } = useToast();
   const [settings, setSettings] = useState(initialSettings);
   const [policies, setPolicies] = useState(initialPolicies);
-  const [busy, setBusy] = useState(false);
   const [showPurge, setShowPurge] = useState(false);
-  const { toast } = useToast();
 
   async function purge(): Promise<void> {
-    const r = await apiSend<{ deleted: number }>("/api/retention/purge", "POST", {});
-    setShowPurge(false);
-    toast(`Vymazaných starých záznamov: ${r.deleted}`, "success");
+    try {
+      const r = await apiSend<{ deleted: number }>("/api/retention/purge", "POST", {});
+      setShowPurge(false);
+      toast(`Vymazaných starých záznamov: ${r.deleted}`, "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Purge zlyhal", "error");
+    }
   }
 
   const setSetting = (key: string, value: unknown) =>
@@ -46,25 +51,22 @@ export function SettingsForm({
   const setDays = (id: string, days: number) =>
     setPolicies((ps) => ps.map((p) => (p.id === id ? { ...p, daysBefore: days } : p)));
 
-  async function save() {
-    setBusy(true);
-    try {
-      await apiSend("/api/settings", "PATCH", settings);
-      await Promise.all(
-        policies
-          .filter((p) => p.releaseType === "DAYS_BEFORE")
-          .map((p) =>
-            apiSend(`/api/release-policies/${p.id}`, "PATCH", {
-              daysBefore: p.daysBefore,
-            }),
-          ),
-      );
-      toast("Nastavenia uložené", "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Uloženie zlyhalo", "error");
-    } finally {
-      setBusy(false);
-    }
+  function save() {
+    run(
+      async () => {
+        await apiSend("/api/settings", "PATCH", settings);
+        await Promise.all(
+          policies
+            .filter((p) => p.releaseType === "DAYS_BEFORE")
+            .map((p) =>
+              apiSend(`/api/release-policies/${p.id}`, "PATCH", {
+                daysBefore: p.daysBefore,
+              }),
+            ),
+        );
+      },
+      { success: "Nastavenia uložené" },
+    );
   }
 
   return (

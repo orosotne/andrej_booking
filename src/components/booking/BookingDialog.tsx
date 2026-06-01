@@ -5,7 +5,7 @@ import { Lock } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { TextareaField } from "@/components/ui/Field";
-import { useToast } from "@/components/ui/Toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { PatientSearch, type PatientLite } from "./PatientSearch";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
@@ -25,39 +25,29 @@ export function BookingDialog({
   onClose: () => void;
   onBooked: () => void;
 }) {
-  const { toast } = useToast();
+  const { busy, run } = useAsyncAction();
   const [patient, setPatient] = useState<PatientLite | null>(null);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
   const meta = TYPE_META[slot.appointmentType];
 
-  async function confirm() {
+  function confirm() {
     if (!patient) return;
-    setBusy(true);
-    try {
-      await apiSend(`/api/slots/${slot.id}/book`, "POST", {
-        patientId: patient.id,
-        appointmentType: slot.appointmentType,
-        note: note || undefined,
-      });
-      toast(`Objednané: ${patient.lastName} ${patient.firstName}`, "success");
-      onBooked();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Objednanie zlyhalo", "error");
-      setBusy(false);
-    }
+    run(
+      () =>
+        apiSend(`/api/slots/${slot.id}/book`, "POST", {
+          patientId: patient.id,
+          appointmentType: slot.appointmentType,
+          note: note || undefined,
+        }),
+      { success: `Objednané: ${patient.lastName} ${patient.firstName}`, onDone: onBooked },
+    );
   }
 
-  async function lock() {
-    setBusy(true);
-    try {
-      await apiSend(`/api/slots/${slot.id}/lock`, "POST", {});
-      toast("Slot zamknutý", "success");
-      onBooked();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Zamknutie zlyhalo", "error");
-      setBusy(false);
-    }
+  function lock() {
+    run(() => apiSend(`/api/slots/${slot.id}/lock`, "POST", {}), {
+      success: "Slot zamknutý",
+      onDone: onBooked,
+    });
   }
 
   return (

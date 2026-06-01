@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useToast } from "@/components/ui/Toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { CalendarClock } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
@@ -38,28 +38,18 @@ export function AppointmentActions({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const { toast } = useToast();
+  const { busy, run: runAction } = useAsyncAction();
   const appointment = slot.appointment;
   const [mode, setMode] = useState<Mode>("view");
   const [reason, setReason] = useState("");
   const [noteText, setNoteText] = useState(appointment?.note ?? "");
-  const [busy, setBusy] = useState(false);
   const meta = TYPE_META[slot.appointmentType];
 
   if (!appointment) return null;
   const apptId = appointment.id;
 
-  async function run(fn: () => Promise<unknown>, successMsg: string) {
-    setBusy(true);
-    try {
-      await fn();
-      toast(successMsg, "success");
-      onChanged();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
-      setBusy(false);
-    }
-  }
+  const run = (fn: () => Promise<unknown>, successMsg: string) =>
+    runAction(fn, { success: successMsg, onDone: onChanged });
 
   return (
     <Modal

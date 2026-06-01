@@ -4,58 +4,46 @@
 import { useState } from "react";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { useToast } from "@/components/ui/Toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiSend } from "@/lib/client";
 
 export function TwoFactorSetup({ initiallyEnabled }: { initiallyEnabled: boolean }) {
-  const { toast } = useToast();
+  const { busy, run } = useAsyncAction();
   const [enabled, setEnabled] = useState(initiallyEnabled);
   const [qr, setQr] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  async function startSetup() {
-    setBusy(true);
-    try {
+  function startSetup() {
+    run(async () => {
       const r = await apiSend<{ qr: string; secret: string }>("/api/2fa/setup", "POST");
       setQr(r.qr);
       setSecret(r.secret);
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Chyba", "error");
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
-  async function enable() {
-    setBusy(true);
-    try {
-      await apiSend("/api/2fa/enable", "POST", { code });
-      setEnabled(true);
-      setQr(null);
-      setSecret(null);
-      setCode("");
-      toast("Dvojfaktorové overenie zapnuté", "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Chyba", "error");
-    } finally {
-      setBusy(false);
-    }
+  function enable() {
+    run(
+      async () => {
+        await apiSend("/api/2fa/enable", "POST", { code });
+        setEnabled(true);
+        setQr(null);
+        setSecret(null);
+        setCode("");
+      },
+      { success: "Dvojfaktorové overenie zapnuté" },
+    );
   }
 
-  async function disable() {
-    setBusy(true);
-    try {
-      await apiSend("/api/2fa/disable", "POST", { code });
-      setEnabled(false);
-      setCode("");
-      toast("Dvojfaktorové overenie vypnuté", "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Chyba", "error");
-    } finally {
-      setBusy(false);
-    }
+  function disable() {
+    run(
+      async () => {
+        await apiSend("/api/2fa/disable", "POST", { code });
+        setEnabled(false);
+        setCode("");
+      },
+      { success: "Dvojfaktorové overenie vypnuté" },
+    );
   }
 
   return (
