@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import logo from "@/assets/logo-02.png";
 import { auth, signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db";
 import { NavLink } from "@/components/layout/NavLink";
@@ -58,12 +60,19 @@ export default async function AppLayout({
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-4">
-            <span className="flex select-none items-center gap-1.5 font-semibold tracking-tight text-slate-900">
-              <span className="grid h-6 w-6 place-items-center rounded-md bg-slate-900 text-xs font-bold text-white">
-                A
-              </span>
-              Ambulancia
-            </span>
+            <Link
+              href="/calendar"
+              className="flex select-none items-center"
+              aria-label="Kardiologická ambulancia"
+            >
+              <Image
+                src={logo}
+                alt="Kardiologická ambulancia"
+                width={134}
+                height={32}
+                priority
+              />
+            </Link>
             <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
             <nav className="flex items-center gap-4 text-sm" aria-label="Hlavná navigácia">
               <NavLink href="/calendar">Kalendár</NavLink>
