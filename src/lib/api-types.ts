@@ -41,3 +41,12 @@ export interface CalendarDayDTO {
 export interface CalendarResponse {
   days: CalendarDayDTO[];
 }
+
+// Free / booked / locked slot tally. Used both as the /api/calendar/stats
+// response and as the return shape of the client-side countSlots() helper, so
+// the in-view counters and the year total speak the same language.
+export interface SlotCountsDTO {
+  available: number;
+  booked: number;
+  locked: number;
+}

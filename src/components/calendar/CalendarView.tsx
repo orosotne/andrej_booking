@@ -37,10 +37,12 @@ import {
   WORKING_WEEKDAYS,
   buildDayMap,
   nextWorkingDay,
+  countSlots,
 } from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 import { holidayName } from "@/lib/holidays-sk";
 import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
+import { SlotTally } from "./SlotTally";
 
 type Dialog =
   | { type: "book"; slot: SlotDTO; dayIso: string }
@@ -190,6 +192,18 @@ export function CalendarView({
     ? clinicLongDate(selectedDay)
     : `${clinicLongDate(weekStart)} – ${clinicLongDate(weekEnd)}`;
 
+  // Free/booked tally under the legend. The day view, when it's today, counts
+  // only slots that haven't started yet ("ešte voľných"); the week view sums the
+  // three working columns without the time filter.
+  const isTodaySelected = isDay && selectedDay === todayIso();
+  const tallySlots = isDay
+    ? (dayByIso.get(selectedDay)?.slots ?? [])
+    : weekIsos.flatMap((iso) => dayByIso.get(iso)?.slots ?? []);
+  const tallyCounts = countSlots(
+    tallySlots,
+    isTodaySelected ? new Date().toISOString() : undefined,
+  );
+
   return (
     <>
       <div className="no-print">
@@ -207,6 +221,16 @@ export function CalendarView({
       />
 
       <Legend />
+
+      {!isLoading && !isError && tallySlots.length > 0 && (
+        <div className="mt-3">
+          <SlotTally
+            counts={tallyCounts}
+            label={isDay ? (isTodaySelected ? "Dnes" : undefined) : "Tento týždeň"}
+            freeWord={isTodaySelected ? "ešte voľných" : "voľných"}
+          />
+        </div>
+      )}
 
       {isLoading && <CalendarSkeleton />}
       {isError && (

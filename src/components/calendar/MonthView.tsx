@@ -11,7 +11,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { CalendarDayDTO } from "@/lib/api-types";
-import { useCalendar } from "@/hooks/useCalendar";
+import { useCalendar, useCalendarStats } from "@/hooks/useCalendar";
 import { useDayActions } from "@/hooks/useDayActions";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -27,9 +27,10 @@ import {
   clinicLongDate,
   dayOfMonth,
 } from "@/lib/format";
-import { weekdayOf, WORKING_WEEKDAYS, buildDayMap } from "@/lib/calendar-ui";
+import { weekdayOf, WORKING_WEEKDAYS, buildDayMap, countSlots } from "@/lib/calendar-ui";
 import { holidayName } from "@/lib/holidays-sk";
 import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
+import { SlotTally } from "./SlotTally";
 
 // Ambulancia pracuje len v stredu/štvrtok/piatok — ostatné dni sa nezobrazujú.
 const WEEKDAY_HEADERS = ["St", "Št", "Pi"];
@@ -95,6 +96,23 @@ export function MonthView({
       ).length,
     [data, anchor],
   );
+
+  // Totals above the grid: this month (from the loaded grid data) and the whole
+  // year (one tiny aggregate query). Year "voľné" is naturally small — far-future
+  // slots are still LOCKED — so booked is the headline number.
+  const monthCounts = useMemo(
+    () =>
+      countSlots(
+        (data?.days ?? [])
+          .filter((d) => monthOf(d.date) === monthOf(anchor))
+          .flatMap((d) => d.slots),
+      ),
+    [data, anchor],
+  );
+  const monthHasSlots =
+    monthCounts.available + monthCounts.booked + monthCounts.locked > 0;
+  const year = anchor.slice(0, 4);
+  const yearStats = useCalendarStats(`${year}-01-01`, `${year}-12-31`);
 
   async function performOpen(
     iso: string,
@@ -174,6 +192,18 @@ export function MonthView({
             <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        {monthHasSlots && <SlotTally counts={monthCounts} label="Tento mesiac" />}
+        <span className="text-sm text-slate-500">
+          Za rok {year}:{" "}
+          <span className="font-semibold text-slate-700">
+            {yearStats.data ? yearStats.data.booked : "…"}
+          </span>{" "}
+          obsadených
+          {yearStats.data ? ` (${yearStats.data.available} voľných)` : ""}
+        </span>
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-1 text-center text-xs font-medium uppercase tracking-wide text-slate-400">

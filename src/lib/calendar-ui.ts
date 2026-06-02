@@ -1,4 +1,4 @@
-import type { CalendarDayDTO } from "./api-types";
+import type { CalendarDayDTO, SlotDTO, SlotCountsDTO } from "./api-types";
 
 /** Clinic working weekdays (JS getUTCDay): Wed, Thu, Fri. */
 export const WORKING_WEEKDAYS: readonly number[] = [3, 4, 5];
@@ -29,4 +29,25 @@ export function buildDayMap(
   const map = new Map<string, CalendarDayDTO>();
   days?.forEach((d) => map.set(d.date, d));
   return map;
+}
+
+/**
+ * Tally slots into free / booked / locked buckets. BLOCKED, CANCELLED and
+ * COMPLETED are intentionally ignored — they're neither free nor occupied.
+ * When `nowIso` is passed (an ISO instant, e.g. new Date().toISOString()), an
+ * AVAILABLE slot counts as free only if it hasn't started yet (startAt > now);
+ * that's the "ešte voľných dnes" countdown for the day view. Comparing the two
+ * fixed-format UTC ISO strings lexically is equivalent to comparing instants.
+ */
+export function countSlots(slots: SlotDTO[], nowIso?: string): SlotCountsDTO {
+  let available = 0;
+  let booked = 0;
+  let locked = 0;
+  for (const s of slots) {
+    if (s.status === "AVAILABLE") {
+      if (nowIso === undefined || s.startAt > nowIso) available++;
+    } else if (s.status === "BOOKED") booked++;
+    else if (s.status === "LOCKED") locked++;
+  }
+  return { available, booked, locked };
 }
