@@ -116,6 +116,8 @@ function CreatePatient({
   const { busy, run } = useAsyncAction();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState(initialName);
+  const [birthYear, setBirthYear] = useState("");
+  const [nationalId, setNationalId] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
 
@@ -126,6 +128,8 @@ function CreatePatient({
         const r = await apiSend<{ patient: PatientLite }>("/api/patients", "POST", {
           firstName,
           lastName,
+          birthYear: Number(birthYear),
+          nationalId: nationalId || undefined,
           phone,
           note: note || undefined,
         });
@@ -140,6 +144,26 @@ function CreatePatient({
       <div className="grid grid-cols-2 gap-3">
         <Field label="Meno" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
         <Field label="Priezvisko" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Rok narodenia"
+          required
+          type="number"
+          inputMode="numeric"
+          min={1900}
+          max={new Date().getFullYear()}
+          placeholder="napr. 1985"
+          value={birthYear}
+          onChange={(e) => setBirthYear(e.target.value)}
+        />
+        <Field
+          label="Rodné číslo"
+          hint="nepovinné"
+          inputMode="numeric"
+          value={nationalId}
+          onChange={(e) => setNationalId(e.target.value)}
+        />
       </div>
       <Field
         label="Telefónne číslo"
@@ -162,7 +186,7 @@ function CreatePatient({
           type="submit"
           fullWidth
           loading={busy}
-          disabled={!firstName || !lastName || !phone}
+          disabled={!firstName || !lastName || !phone || !birthYear}
         >
           Vytvoriť a vybrať
         </Button>
