@@ -17,6 +17,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma db push && tsx prisma/seed.ts",
     "db:bootstrap": "tsx prisma/bootstrap.ts",
+    "db:reset-slots": "tsx prisma/reset-slot-config.ts",
     "user:create": "tsx prisma/create-user.ts",
     "user:reset": "tsx prisma/reset-password.ts",
     "user:list": "tsx prisma/list-users.ts",
