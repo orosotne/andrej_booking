@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/release",
-      "schedule": "0 2 * * *"
+      "schedule": "0 7 * * *"
     }
   ],
   "regions": ["fra1"]

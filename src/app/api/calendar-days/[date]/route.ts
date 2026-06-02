@@ -5,6 +5,7 @@ import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
 import { NotFoundError, ConflictError } from "@/lib/errors";
 import { dateOnly } from "@/lib/calendar-date";
+import { isoDate } from "@/lib/validation";
 
 // Removes a calendar day and its slots (cascade). Used to undo a manually
 // opened day. Refuses if the day has any appointment history — those days
@@ -16,6 +17,7 @@ export async function DELETE(
   try {
     const user = await requireRole(DOCTOR_ADMIN);
     const { date } = await ctx.params;
+    isoDate.parse(date);
     const target = dateOnly(date);
 
     const day = await prisma.calendarDay.findUnique({ where: { date: target } });

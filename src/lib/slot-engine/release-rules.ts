@@ -4,9 +4,12 @@ import type {
   SlotStatusLit,
 } from "./types";
 
-// release_at is normalized to 06:00 UTC on the computed day. The exact hour is
-// not semantically important (it is only a threshold the daily cron compares
-// against now()); fixing it keeps this function pure and timezone-free.
+// release_at is normalized to 06:00 UTC on the computed day. This hour IS a
+// contract: the daily release cron (vercel.json) must run strictly AFTER it,
+// otherwise a slot whose release_at falls on day D is only picked up by the
+// next day's run and opens one day late. Cron is set to 07:00 UTC to clear
+// this threshold with a margin. Keeping the hour fixed in UTC also keeps this
+// function pure and timezone-free.
 function atSixUtc(d: Date): Date {
   return new Date(
     Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 6, 0, 0),

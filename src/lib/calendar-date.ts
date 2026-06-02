@@ -64,7 +64,11 @@ export function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** True if the ISO date is strictly before today (UTC). */
-export function isPastIsoDate(iso: string, now: Date = new Date()): boolean {
-  return iso < now.toISOString().slice(0, 10);
+/**
+ * True if `iso` is strictly before `today`. The caller supplies today's date
+ * (use todayIso() from lib/format — it is clinic-local), keeping this a pure
+ * string comparison and the "what day is it now" decision in a single place.
+ */
+export function isPastIsoDate(iso: string, today: string): boolean {
+  return iso < today;
 }

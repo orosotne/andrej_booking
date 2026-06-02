@@ -6,6 +6,7 @@ import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
 import { NotFoundError, ConflictError } from "@/lib/errors";
 import { dateOnly } from "@/lib/calendar-date";
+import { isoDate } from "@/lib/validation";
 
 export async function POST(
   req: Request,
@@ -16,6 +17,7 @@ export async function POST(
     // incl. nurses; still gated by the shared unlock password below.
     const user = await requireRole(ALL_STAFF);
     const { date } = await ctx.params;
+    isoDate.parse(date);
     const body = (await req.json().catch(() => ({}))) as {
       force?: boolean;
       reason?: string;

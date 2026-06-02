@@ -5,6 +5,7 @@ import { reopenDay } from "@/lib/slot-engine/generate";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
+import { isoDate } from "@/lib/validation";
 
 export async function POST(
   req: Request,
@@ -15,6 +16,7 @@ export async function POST(
     // still gated by the shared unlock password below.
     const user = await requireRole(ALL_STAFF);
     const { date } = await ctx.params;
+    isoDate.parse(date);
     const body = (await req.json().catch(() => ({}))) as {
       reason?: string;
       password?: string;

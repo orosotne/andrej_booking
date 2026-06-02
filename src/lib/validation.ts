@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const isoDate = z
+export const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Dátum musí byť vo formáte YYYY-MM-DD");
 
@@ -74,17 +74,20 @@ export const unlockSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-export const appointmentStatus = z.enum([
+// PATCH may only set "presence" outcomes. CANCELLED and RESCHEDULED are omitted
+// on purpose: they must also free or move the underlying slot atomically, which
+// is exactly what the dedicated /cancel and /reschedule endpoints do. Accepting
+// them here would flip appointment.status while leaving the slot BOOKED
+// (orphaned slot). The full status set lives in the Prisma AppointmentStatus enum.
+export const patchableAppointmentStatus = z.enum([
   "SCHEDULED",
   "ARRIVED",
   "NO_SHOW",
-  "CANCELLED",
-  "RESCHEDULED",
   "COMPLETED",
 ]);
 
 export const updateAppointmentSchema = z.object({
-  status: appointmentStatus.optional(),
+  status: patchableAppointmentStatus.optional(),
   note: z.string().max(2000).optional(),
 });
 

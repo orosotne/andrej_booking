@@ -14,6 +14,15 @@ export function jsonError(e: unknown): NextResponse {
       { status: 400 },
     );
   }
+  // Prisma unique-constraint violation → 409 (duck-typed by .code so this file
+  // stays decoupled from the generated Prisma client). E.g. a race that slips
+  // past the booking lock hits the appointments_active_slot_uq partial index.
+  if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2002") {
+    return NextResponse.json(
+      { error: "Tento termín je už obsadený.", code: "CONFLICT" },
+      { status: 409 },
+    );
+  }
   console.error("Unhandled API error:", e);
   return NextResponse.json(
     { error: "Vnútorná chyba servera", code: "INTERNAL" },

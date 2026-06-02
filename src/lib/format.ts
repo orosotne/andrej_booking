@@ -53,8 +53,19 @@ export function startOfWeek(isoDate: string): string {
   return isoAddDays(isoDate, diff);
 }
 
+// en-CA renders as YYYY-MM-DD; with the clinic timeZone this gives the local
+// clinic date rather than the UTC date (which lags by a day in the early-morning
+// hours, since Bratislava is ahead of UTC).
+const clinicIsoDateFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: CLINIC_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Today's date as YYYY-MM-DD in clinic time (Europe/Bratislava), not UTC. */
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return clinicIsoDateFmt.format(new Date());
 }
 
 export function startOfMonth(isoDate: string): string {

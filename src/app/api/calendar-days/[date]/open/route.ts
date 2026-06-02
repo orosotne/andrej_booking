@@ -6,7 +6,8 @@ import { holidayName } from "@/lib/holidays-sk";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
-import { openDaySchema } from "@/lib/validation";
+import { isoDate, openDaySchema } from "@/lib/validation";
+import { todayIso } from "@/lib/format";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import {
   dateOnly,
@@ -23,7 +24,8 @@ export async function POST(
   try {
     const user = await requireRole(DOCTOR_ADMIN);
     const { date } = await ctx.params;
-    if (isPastIsoDate(date)) {
+    isoDate.parse(date);
+    if (isPastIsoDate(date, todayIso())) {
       throw new ValidationError("Nemožno otvoriť deň v minulosti.");
     }
     const body = openDaySchema.parse(await req.json().catch(() => ({})));
