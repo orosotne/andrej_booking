@@ -34,8 +34,8 @@ export const SLOT_MINUTES = 30;
 // Each BlockDef becomes one SlotRule row; generate.ts expands it into AppointmentSlots.
 //
 // Day shape — v otvorených dňoch sú všetky sloty voľné 14 mesiacov popredu,
-// OKREM 7:00, 11:30 a 12:00, ktoré ostanú zamknuté až do svojho okna:
-//   7:00        PRE_HOSPITAL (predhospitalizačné) — otvorí sa 6 dní predtým
+// OKREM 7:00, 7:30, 11:30 a 12:00, ktoré ostanú zamknuté až do svojho okna:
+//   7:00, 7:30  PRE_HOSPITAL (predhospitalizačné) — otvoria sa 6 dní predtým
 //   8:00, 8:30  Porada — manual only (locked, grey)
 //   9:00–11:00  Dispenzár — voľné hneď (14 mesiacov popredu), 30-min sloty
 //   11:30       Dispenzár — otvorí sa 20 dní predtým
@@ -46,6 +46,14 @@ export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
   {
     start: "07:00",
     end: "07:30",
+    type: "PRE_HOSPITAL",
+    colorKey: "pink",
+    policyKey: "PRE_HOSPITAL_6D",
+    bookable: true,
+  },
+  {
+    start: "07:30",
+    end: "08:00",
     type: "PRE_HOSPITAL",
     colorKey: "pink",
     policyKey: "PRE_HOSPITAL_6D",

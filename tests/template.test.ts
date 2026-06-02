@@ -4,8 +4,8 @@ import { buildDayTemplate } from "@/lib/slot-engine/template";
 describe("buildDayTemplate (v2 layout)", () => {
   const slots = buildDayTemplate();
 
-  it("produces 17 slots — 1 PRE_HOSPITAL + 2 Porada + 7 Dispenzár + 2 ECHO oddelenie + 5 ECHO", () => {
-    expect(slots).toHaveLength(17);
+  it("produces 18 slots — 2 PRE_HOSPITAL + 2 Porada + 7 Dispenzár + 2 ECHO oddelenie + 5 ECHO", () => {
+    expect(slots).toHaveLength(18);
   });
 
   it("starts at 07:00 and ends at 15:20", () => {
@@ -46,11 +46,13 @@ describe("buildDayTemplate (v2 layout)", () => {
     expect(reserve).toHaveLength(0);
   });
 
-  it("PRE_HOSPITAL is a single slot at 07:00–07:30", () => {
+  it("PRE_HOSPITAL is two slots: 07:00–07:30 and 07:30–08:00", () => {
     const ph = slots.filter((s) => s.type === "PRE_HOSPITAL");
-    expect(ph).toHaveLength(1);
-    expect(ph[0].start).toBe("07:00");
+    expect(ph).toHaveLength(2);
+    expect(ph.map((s) => s.start)).toEqual(["07:00", "07:30"]);
     expect(ph[0].end).toBe("07:30");
+    expect(ph[1].end).toBe("08:00");
+    expect(ph.every((s) => s.bookable)).toBe(true);
   });
 
   it("DISPENSARY block: 9:00–12:30 → 7 slots (last is 12:00–12:30)", () => {
