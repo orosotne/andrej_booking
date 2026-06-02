@@ -32,7 +32,12 @@ import {
   clinicDayChip,
   clinicLongDate,
 } from "@/lib/format";
-import { weekdayOf, WORKING_WEEKDAYS, buildDayMap } from "@/lib/calendar-ui";
+import {
+  weekdayOf,
+  WORKING_WEEKDAYS,
+  buildDayMap,
+  nextWorkingDay,
+} from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 
 type Dialog =
@@ -157,11 +162,11 @@ export function CalendarView({
     setWeekStart(startOfWeek(iso));
   }
   function handlePrev() {
-    if (isDay) goToDay(isoAddDays(selectedDay, -1));
+    if (isDay) goToDay(nextWorkingDay(selectedDay, -1));
     else setWeekStart(isoAddDays(weekStart, -7));
   }
   function handleNext() {
-    if (isDay) goToDay(isoAddDays(selectedDay, 1));
+    if (isDay) goToDay(nextWorkingDay(selectedDay, 1));
     else setWeekStart(isoAddDays(weekStart, 7));
   }
   function handleToday() {
