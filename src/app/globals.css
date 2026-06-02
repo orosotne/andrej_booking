@@ -85,20 +85,35 @@ body {
   }
 }
 
-/* ─── Print styles: clean, ink-cheap layout of the active calendar view ─── */
+/* ─── Print / "Export do PDF" ───────────────────────────────────────────────
+   The single print button triggers window.print(); the dedicated <CalendarPrint>
+   table (one layout for day/week/month) is hidden on screen and revealed below.
+   Export config: A4 portrait, 14 mm margins, app sans font, repeating header. */
+.calendar-print {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
 @media print {
-  /* Hide global app chrome (header, nav, footer) and any element opted out. */
-  body > div > header,
+  /* Hide the app header and anything opted out (toolbar + live calendar UI). */
+  header,
   .no-print {
     display: none !important;
   }
-  /* Strip surface colors so the calendar prints on plain paper. */
+  /* Plain paper: strip surfaces, shadows, rings and animations. */
   body,
   main {
-    background: white !important;
-    color: black !important;
+    background: #fff !important;
+    color: #000 !important;
   }
-  /* Drop shadows, rings, and animations for print. */
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
   *,
   *::before,
   *::after {
@@ -107,26 +122,78 @@ body {
     animation: none !important;
     transition: none !important;
   }
-  /* Constrain page padding so the whole grid fits on the sheet. */
-  main {
-    padding: 0 !important;
-    max-width: none !important;
+
+  /* Reveal the print-only export. */
+  .calendar-print {
+    display: block !important;
+    font-size: 11px;
+    color: #000;
   }
-  /* Expand any 70vh scrolling slot column so the whole day prints. */
-  .print-day [class*="max-h-"] {
-    max-height: none !important;
-    overflow: visible !important;
+  .calendar-print .print-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
   }
-  /* Avoid page breaks inside a slot card or a day cell. */
-  .print-day section,
-  .print-month [class*="grid-cols-7"] > * {
+  .calendar-print .print-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .calendar-print .print-period {
+    margin-top: 2px;
+    font-size: 12px;
+  }
+  .calendar-print .print-meta {
+    text-align: right;
+    font-size: 10px;
+    color: #333;
+    white-space: nowrap;
+  }
+  .calendar-print .print-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  /* Repeat the column headers at the top of every printed page. */
+  .calendar-print thead {
+    display: table-header-group;
+  }
+  .calendar-print th,
+  .calendar-print td {
+    border: 1px solid #94a3b8;
+    padding: 3px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .calendar-print thead th {
+    background: #f1f5f9;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  /* Per-day grouping band inside week/month exports. */
+  .calendar-print .print-day-head th {
+    background: #e2e8f0;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .calendar-print .print-time {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Keep a row (and a day's heading) from splitting across pages. */
+  .calendar-print tr {
     break-inside: avoid;
   }
-  /* Force black borders where the screen used CSS vars. */
-  .print-day section,
-  .print-day button[disabled],
-  .print-day button {
-    border-color: #000 !important;
+  .calendar-print .print-empty {
+    padding: 24px 0;
+    text-align: center;
+    color: #555;
   }
 }
 

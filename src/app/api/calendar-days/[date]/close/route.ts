@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
+import { requireRole, ALL_STAFF } from "@/lib/auth/rbac";
 import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
@@ -12,7 +12,9 @@ export async function POST(
   ctx: { params: Promise<{ date: string }> },
 ) {
   try {
-    const user = await requireRole(DOCTOR_ADMIN);
+    // Closing a day (vacation / non-working) is allowed for any staff member,
+    // incl. nurses; still gated by the shared unlock password below.
+    const user = await requireRole(ALL_STAFF);
     const { date } = await ctx.params;
     const body = (await req.json().catch(() => ({}))) as {
       force?: boolean;

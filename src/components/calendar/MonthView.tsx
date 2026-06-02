@@ -29,6 +29,7 @@ import {
 } from "@/lib/format";
 import { weekdayOf, WORKING_WEEKDAYS, buildDayMap } from "@/lib/calendar-ui";
 import { holidayName } from "@/lib/holidays-sk";
+import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
 
 // Ambulancia pracuje len v stredu/štvrtok/piatok — ostatné dni sa nezobrazujú.
 const WEEKDAY_HEADERS = ["St", "Št", "Pi"];
@@ -51,9 +52,11 @@ function summarize(day: CalendarDayDTO) {
 
 export function MonthView({
   canManageDays,
+  canManageClosures,
   onPickDay,
 }: {
   canManageDays: boolean;
+  canManageClosures: boolean;
   onPickDay: (iso: string) => void;
 }) {
   const [anchor, setAnchor] = useState(() => startOfMonth(todayIso()));
@@ -128,8 +131,17 @@ export function MonthView({
     }
   }
 
+  // PDF/print export: this month's working days that carry slots, as a table.
+  const printGroups: PrintGroup[] = cells
+    .filter(
+      (iso) =>
+        monthOf(iso) === monthOf(anchor) && WORKING_WEEKDAYS.includes(weekdayOf(iso)),
+    )
+    .map((iso) => ({ iso, day: dayByIso.get(iso) }));
+
   return (
-    <div>
+    <>
+      <div className="no-print">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold capitalize text-slate-900">
           {clinicMonthLabel(anchor)}
@@ -180,6 +192,7 @@ export function MonthView({
             inMonth={monthOf(iso) === monthOf(anchor)}
             day={dayByIso.get(iso)}
             canManage={canManageDays}
+            canManageClosures={canManageClosures}
             opening={pendingIso === iso}
             loading={isLoading}
             onOpen={() => requestOpen(iso)}
@@ -260,7 +273,9 @@ export function MonthView({
           }
         />
       )}
-    </div>
+      </div>
+      <CalendarPrint period="month" periodLabel={clinicMonthLabel(anchor)} groups={printGroups} />
+    </>
   );
 }
 
@@ -269,6 +284,7 @@ function DayCell({
   inMonth,
   day,
   canManage,
+  canManageClosures,
   opening,
   loading,
   onOpen,
@@ -280,6 +296,7 @@ function DayCell({
   inMonth: boolean;
   day: CalendarDayDTO | undefined;
   canManage: boolean;
+  canManageClosures: boolean;
   opening: boolean;
   loading: boolean;
   onOpen: () => void;
@@ -295,12 +312,12 @@ function DayCell({
   // Mirror the week/day view: a generated day (not a manual Wednesday) can be
   // closed for holidays/vacation; a CLOSED one can be reopened.
   const canClose =
-    canManage &&
+    canManageClosures &&
     !!day &&
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status !== "CLOSED";
   const canReopen =
-    canManage &&
+    canManageClosures &&
     !!day &&
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status === "CLOSED";

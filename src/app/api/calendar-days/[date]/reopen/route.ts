@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
+import { requireRole, ALL_STAFF } from "@/lib/auth/rbac";
 import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { reopenDay } from "@/lib/slot-engine/generate";
 import { prisma } from "@/lib/db";
@@ -11,7 +11,9 @@ export async function POST(
   ctx: { params: Promise<{ date: string }> },
 ) {
   try {
-    const user = await requireRole(DOCTOR_ADMIN);
+    // Reopening a closed day is allowed for any staff member, incl. nurses;
+    // still gated by the shared unlock password below.
+    const user = await requireRole(ALL_STAFF);
     const { date } = await ctx.params;
     const body = (await req.json().catch(() => ({}))) as {
       reason?: string;

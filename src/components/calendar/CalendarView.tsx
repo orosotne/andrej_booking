@@ -40,6 +40,7 @@ import {
 } from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 import { holidayName } from "@/lib/holidays-sk";
+import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
 
 type Dialog =
   | { type: "book"; slot: SlotDTO; dayIso: string }
@@ -50,12 +51,14 @@ type Dialog =
 export function CalendarView({
   isAdmin,
   canManageDays,
+  canManageClosures,
   mode = "week",
   initialWeekStart,
   initialDay,
 }: {
   isAdmin: boolean;
   canManageDays: boolean;
+  canManageClosures: boolean;
   mode?: "week" | "day";
   initialWeekStart?: string;
   initialDay?: string;
@@ -179,8 +182,17 @@ export function CalendarView({
     }
   }
 
+  // PDF/print export (day or week): the same slots the view loaded, as a table.
+  const printGroups: PrintGroup[] = isDay
+    ? [{ iso: selectedDay, day: dayByIso.get(selectedDay) }]
+    : weekIsos.map((iso) => ({ iso, day: dayByIso.get(iso) }));
+  const printLabel = isDay
+    ? clinicLongDate(selectedDay)
+    : `${clinicLongDate(weekStart)} – ${clinicLongDate(weekEnd)}`;
+
   return (
-    <div>
+    <>
+      <div className="no-print">
       <Header
         subtitle={
           isDay
@@ -211,6 +223,7 @@ export function CalendarView({
             iso={selectedDay}
             day={dayByIso.get(selectedDay)}
             canManage={canManageDays}
+            canManageClosures={canManageClosures}
             opening={pendingIso === selectedDay}
             onOpen={() => handleOpen(selectedDay)}
             onRequestDelete={() => setPendingDelete(selectedDay)}
@@ -232,6 +245,7 @@ export function CalendarView({
                 iso={iso}
                 day={dayByIso.get(iso)}
                 canManage={canManageDays}
+                canManageClosures={canManageClosures}
                 opening={pendingIso === iso}
                 onOpen={() => handleOpen(iso)}
                 onRequestDelete={() => setPendingDelete(iso)}
@@ -267,6 +281,7 @@ export function CalendarView({
                 iso={mobileDay}
                 day={dayByIso.get(mobileDay)}
                 canManage={canManageDays}
+                canManageClosures={canManageClosures}
                 opening={pendingIso === mobileDay}
                 onOpen={() => handleOpen(mobileDay)}
                 onRequestDelete={() => setPendingDelete(mobileDay)}
@@ -390,7 +405,9 @@ export function CalendarView({
           }
         />
       )}
-    </div>
+      </div>
+      <CalendarPrint period={mode} periodLabel={printLabel} groups={printGroups} />
+    </>
   );
 }
 
@@ -451,6 +468,7 @@ function DayColumn({
   iso,
   day,
   canManage,
+  canManageClosures,
   opening,
   onOpen,
   onRequestDelete,
@@ -462,6 +480,7 @@ function DayColumn({
   iso: string;
   day: CalendarDayDTO | undefined;
   canManage: boolean;
+  canManageClosures: boolean;
   opening: boolean;
   onOpen: () => void;
   onRequestDelete: () => void;
@@ -476,12 +495,12 @@ function DayColumn({
   const holiday = isWorkingDay ? holidayName(iso) : null;
   const canDelete = canManage && day?.dayType === "MANUAL_WEDNESDAY";
   const canClose =
-    canManage &&
+    canManageClosures &&
     !!day &&
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status !== "CLOSED";
   const canReopen =
-    canManage &&
+    canManageClosures &&
     !!day &&
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status === "CLOSED";
