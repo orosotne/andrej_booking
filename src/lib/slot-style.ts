@@ -5,7 +5,7 @@ export const TYPE_META: Record<
   { label: string; bg: string; border: string }
 > = {
   PRE_HOSPITAL: {
-    label: "Predhospitalizačné",
+    label: "Akútne",
     bg: "var(--slot-prehospital)",
     border: "var(--slot-prehospital-bd)",
   },

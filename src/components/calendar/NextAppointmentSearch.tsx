@@ -29,7 +29,7 @@ const CATEGORIES: { key: NextType; label: string; color: string }[] = [
   },
   {
     key: "PRE_HOSPITAL",
-    label: "Predhospitalizačné",
+    label: "Akútne",
     color: "var(--slot-prehospital-bd)",
   },
   {

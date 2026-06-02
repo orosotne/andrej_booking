@@ -44,7 +44,7 @@ const DAY_NAMES: Record<number, string> = {
 };
 
 const TYPE_OPTIONS = [
-  { value: "PRE_HOSPITAL", label: "Predhospitalizačné" },
+  { value: "PRE_HOSPITAL", label: "Akútne" },
   { value: "CONSULTATION_BLOCKED", label: "Poradňa (blok)" },
   { value: "DISPENSARY", label: "Dispenzárne" },
   { value: "ECHO", label: "ECHO" },
