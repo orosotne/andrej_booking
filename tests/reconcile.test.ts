@@ -1,0 +1,137 @@
+import { describe, it, expect } from "vitest";
+import {
+  expandTemplateRules,
+  diffDaySlots,
+  type RuleForExpansion,
+  type DesiredSlot,
+  type ExistingSlot,
+} from "@/lib/slot-engine/reconcile";
+import { dateOnly } from "@/lib/calendar-date";
+
+const thursday = dateOnly("2026-07-02"); // a normal (non-last) Thursday
+const now = dateOnly("2026-06-01");
+
+function rule(p: Partial<RuleForExpansion>): RuleForExpansion {
+  return {
+    id: "r",
+    startTime: "09:00",
+    endTime: "09:30",
+    slotDurationMinutes: 30,
+    appointmentType: "DISPENSARY",
+    color: "white",
+    releasePolicy: { releaseType: "IMMEDIATE", daysBefore: null },
+    ...p,
+  };
+}
+
+describe("expandTemplateRules", () => {
+  it("expands a block into sub-slots of the rule duration", () => {
+    const slots = expandTemplateRules(
+      [rule({ startTime: "09:00", endTime: "11:00", slotDurationMinutes: 30 })],
+      thursday,
+      now,
+    );
+    expect(slots).toHaveLength(4); // 9:00, 9:30, 10:00, 10:30
+    expect(slots.every((s) => s.appointmentType === "DISPENSARY")).toBe(true);
+  });
+
+  it("IMMEDIATE slots open right away (AVAILABLE)", () => {
+    const [s] = expandTemplateRules(
+      [rule({ startTime: "07:00", endTime: "07:30" })],
+      thursday,
+      now,
+    );
+    expect(s.status).toBe("AVAILABLE");
+  });
+
+  it("DAYS_BEFORE slots whose window hasn't opened yet are LOCKED", () => {
+    const [s] = expandTemplateRules(
+      [
+        rule({
+          startTime: "11:30",
+          endTime: "12:00",
+          releasePolicy: { releaseType: "DAYS_BEFORE", daysBefore: 6 },
+        }),
+      ],
+      thursday,
+      now,
+    );
+    // 6 days before 2026-07-02 = 2026-06-26, still after now (2026-06-01) → LOCKED
+    expect(s.status).toBe("LOCKED");
+    expect(s.releaseAt?.toISOString().slice(0, 10)).toBe("2026-06-26");
+  });
+
+  it("blocked types stay BLOCKED regardless of policy", () => {
+    const slots = expandTemplateRules(
+      [
+        rule({
+          startTime: "08:00",
+          endTime: "09:00",
+          appointmentType: "CONSULTATION_BLOCKED",
+          color: "grey",
+          releasePolicy: null,
+        }),
+      ],
+      thursday,
+      now,
+    );
+    expect(slots).toHaveLength(2);
+    expect(slots.every((s) => s.status === "BLOCKED")).toBe(true);
+  });
+});
+
+describe("diffDaySlots", () => {
+  const at = (iso: string) => new Date(iso);
+  const desiredAt = (startAt: Date): DesiredSlot => ({
+    startAt,
+    endAt: new Date(startAt.getTime() + 30 * 60_000),
+    appointmentType: "DISPENSARY",
+    status: "AVAILABLE",
+    releaseAt: new Date(0),
+    color: "white",
+    ruleId: "r",
+  });
+
+  it("adds slots present in the template but missing from the day", () => {
+    const desired = [desiredAt(at("2026-07-02T05:00:00Z")), desiredAt(at("2026-07-02T07:00:00Z"))];
+    const existing: ExistingSlot[] = [
+      { id: "x", startAt: at("2026-07-02T07:00:00Z"), hasActiveAppointment: false },
+    ];
+    const diff = diffDaySlots(desired, existing);
+    expect(diff.toCreate.map((s) => s.startAt.toISOString())).toEqual([
+      "2026-07-02T05:00:00.000Z",
+    ]);
+    expect(diff.toDeleteIds).toEqual([]);
+  });
+
+  it("removes unbooked slots no longer in the template", () => {
+    const desired = [desiredAt(at("2026-07-02T05:00:00Z"))];
+    const existing: ExistingSlot[] = [
+      { id: "keep", startAt: at("2026-07-02T05:00:00Z"), hasActiveAppointment: false },
+      { id: "drop", startAt: at("2026-07-02T09:00:00Z"), hasActiveAppointment: false },
+    ];
+    const diff = diffDaySlots(desired, existing);
+    expect(diff.toDeleteIds).toEqual(["drop"]);
+    expect(diff.toCreate).toEqual([]);
+  });
+
+  it("never deletes a booked slot, even when dropped from the template", () => {
+    const existing: ExistingSlot[] = [
+      { id: "booked", startAt: at("2026-07-02T09:00:00Z"), hasActiveAppointment: true },
+    ];
+    const diff = diffDaySlots([], existing);
+    expect(diff.toDeleteIds).toEqual([]);
+    expect(diff.keptBooked).toBe(1);
+  });
+
+  it("leaves matched slots untouched", () => {
+    const start = at("2026-07-02T05:00:00Z");
+    const diff = diffDaySlots(
+      [desiredAt(start)],
+      [{ id: "m", startAt: start, hasActiveAppointment: false }],
+    );
+    expect(diff.toCreate).toEqual([]);
+    expect(diff.toDeleteIds).toEqual([]);
+    expect(diff.keptBooked).toBe(0);
+  });
+});

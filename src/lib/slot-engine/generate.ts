@@ -7,54 +7,9 @@ import {
   WEEKDAY,
   type DefaultDayType,
 } from "@/lib/calendar-date";
-import { wallClockToUtc } from "@/lib/clinic-time";
 import { NotFoundError, ConflictError } from "@/lib/errors";
-import {
-  computeReleaseAt,
-  initialSlotStatus,
-  partitionReopenSlots,
-} from "./release-rules";
-import { hhmmToMin, minToHhmm, SLOT_MINUTES } from "./template";
-import type { ReleasePolicyInput } from "./types";
-
-interface PolicyRow {
-  releaseType: string;
-  daysBefore: number | null;
-}
-
-/** Maps a DB ReleasePolicy row to the pure engine's policy input. */
-function toPolicyInput(policy: PolicyRow | null): ReleasePolicyInput {
-  if (!policy) return { type: "MANUAL_ONLY" }; // no policy → stay locked (safe default)
-  switch (policy.releaseType) {
-    case "IMMEDIATE":
-      return { type: "IMMEDIATE" };
-    case "DAYS_BEFORE":
-      return { type: "DAYS_BEFORE", daysBefore: policy.daysBefore ?? 0 };
-    case "LAST_FRIDAY_30_DAYS_BEFORE":
-      return { type: "LAST_FRIDAY_30_DAYS_BEFORE" };
-    case "MANUAL_ONLY":
-    default:
-      return { type: "MANUAL_ONLY" };
-  }
-}
-
-/**
- * Expands a rule's [startTime, endTime] block into sub-slots of the rule's
- * configured duration (default 30 min). The rule itself is the smallest unit
- * for irregular ECHO timings — each non-uniform slot is its own SlotRule row.
- */
-function expandRule(
-  startTime: string,
-  endTime: string,
-  durationMinutes: number,
-): { start: string; end: string }[] {
-  const dur = durationMinutes > 0 ? durationMinutes : SLOT_MINUTES;
-  const out: { start: string; end: string }[] = [];
-  for (let m = hhmmToMin(startTime); m + dur <= hhmmToMin(endTime); m += dur) {
-    out.push({ start: minToHhmm(m), end: minToHhmm(m + dur) });
-  }
-  return out;
-}
+import { partitionReopenSlots } from "./release-rules";
+import { expandTemplateRules } from "./reconcile";
 
 export interface GenerateDayOptions {
   /** Overrides the computed day type (e.g. MANUAL_WEDNESDAY when opening a Wednesday). */
@@ -77,7 +32,6 @@ export async function generateDay(
   const date = typeof dateInput === "string" ? dateOnly(dateInput) : dateInput;
   const now = opts.now ?? new Date();
   const dow = date.getUTCDay();
-  const lastFri = isLastFridayOfMonth(date);
   const dayType = opts.dayType ?? defaultDayType(date);
 
   return prisma.$transaction(async (tx) => {
@@ -120,29 +74,10 @@ export async function generateDay(
       },
     });
 
-    const data = template.slotRules.flatMap((rule) => {
-      const isLocked =
-        rule.appointmentType === "CONSULTATION_BLOCKED" ||
-        rule.appointmentType === "ECHO_DEPARTMENT_BLOCKED";
-      const policyInput: ReleasePolicyInput =
-        lastFri && !isLocked
-          ? { type: "LAST_FRIDAY_30_DAYS_BEFORE" }
-          : toPolicyInput(rule.releasePolicy);
-
-      return expandRule(rule.startTime, rule.endTime, rule.slotDurationMinutes).map((s) => {
-        const releaseAt = computeReleaseAt(date, policyInput, lastFri);
-        return {
-          calendarDayId: calendarDay.id,
-          startAt: wallClockToUtc(date, s.start),
-          endAt: wallClockToUtc(date, s.end),
-          appointmentType: rule.appointmentType,
-          status: initialSlotStatus(rule.appointmentType, releaseAt, now),
-          releaseAt,
-          color: rule.color,
-          ruleId: rule.id,
-        };
-      });
-    });
+    const data = expandTemplateRules(template.slotRules, date, now).map((s) => ({
+      ...s,
+      calendarDayId: calendarDay.id,
+    }));
 
     await tx.appointmentSlot.createMany({ data });
 

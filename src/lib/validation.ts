@@ -133,3 +133,9 @@ export const slotRuleUpdateSchema = z.object({
   releasePolicyId: z.string().nullable().optional(),
   priority: z.number().int().min(0).max(999).optional(),
 });
+
+// Re-apply a template to its already-generated future days. dryRun previews the
+// change (no writes); without it the sync is performed.
+export const templateApplySchema = z.object({
+  dryRun: z.boolean().optional().default(false),
+});

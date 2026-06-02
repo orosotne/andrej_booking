@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, CalendarSync } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
@@ -24,6 +24,13 @@ interface TemplateDTO {
 interface PolicyLite {
   id: string;
   name: string;
+}
+interface SyncReport {
+  dryRun: boolean;
+  days: number;
+  created: number;
+  deleted: number;
+  keptBooked: number;
 }
 
 const DAY_NAMES: Record<number, string> = {
@@ -104,8 +111,10 @@ export function TemplateEditor({
     <div className="max-w-3xl">
       <h1 className="text-lg font-semibold text-slate-900">Šablóna dňa</h1>
       <p className="mt-0.5 text-sm text-slate-500">
-        Bloky určujú, ako sa generuje deň. Zmeny platia pre <strong>novo
-        generované dni</strong> — existujúce dni sa nemenia.
+        Bloky určujú, ako sa generuje deň. Nové dni sa generujú podľa šablóny
+        automaticky. Pre už vytvorené (budúce) dni použi tlačidlo{" "}
+        <strong>{'„Použiť na nadchádzajúce dni"'}</strong> — pridá nové sloty a
+        odoberie zrušené, rezervované termíny sa nikdy nezmažú.
       </p>
 
       {templates.map((t) => (
@@ -114,7 +123,9 @@ export function TemplateEditor({
             {DAY_NAMES[t.dayOfWeek] ?? t.name}
           </h2>
           <div className="space-y-2">
-            {t.rules.map((r) => (
+            {[...t.rules]
+              .sort((a, b) => a.startTime.localeCompare(b.startTime))
+              .map((r) => (
               <RuleRow
                 key={r.id}
                 rule={r}
@@ -131,6 +142,7 @@ export function TemplateEditor({
             <Plus className="h-4 w-4" />
             Pridať blok
           </Button>
+          <ApplyToFutureDays templateId={t.id} />
         </section>
       ))}
     </div>
@@ -240,6 +252,98 @@ function RuleRow({
           className="px-2 text-slate-400 hover:text-red-600"
         >
           <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Re-applies the template to its already-generated future days. Shows a dry-run
+// preview first, then performs the change only on confirmation.
+function ApplyToFutureDays({ templateId }: { templateId: string }) {
+  const { toast } = useToast();
+  const [preview, setPreview] = useState<SyncReport | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function loadPreview() {
+    setBusy(true);
+    try {
+      const { report } = await apiSend<{ report: SyncReport }>(
+        `/api/templates/${templateId}/apply`,
+        "POST",
+        { dryRun: true },
+      );
+      setPreview(report);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Chyba", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmApply() {
+    setBusy(true);
+    try {
+      const { report } = await apiSend<{ report: SyncReport }>(
+        `/api/templates/${templateId}/apply`,
+        "POST",
+        { dryRun: false },
+      );
+      toast(
+        `Hotovo — pridaných ${report.created}, odobraných ${report.deleted}.`,
+        "success",
+      );
+      setPreview(null);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Chyba", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!preview) {
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        className="mt-2 ml-2"
+        loading={busy}
+        onClick={loadPreview}
+      >
+        <CalendarSync className="h-4 w-4" />
+        Použiť na nadchádzajúce dni
+      </Button>
+    );
+  }
+
+  const noChanges = preview.created === 0 && preview.deleted === 0;
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      {noChanges ? (
+        <p className="text-slate-600">
+          Žiadne zmeny — {preview.days} budúcich dní už zodpovedá šablóne.
+        </p>
+      ) : (
+        <p className="text-slate-700">
+          V <strong>{preview.days}</strong> budúcich dňoch: pridá{" "}
+          <strong>{preview.created}</strong> slotov, odoberie{" "}
+          <strong>{preview.deleted}</strong>
+          {preview.keptBooked > 0 && (
+            <>
+              , ponechá <strong>{preview.keptBooked}</strong> rezervovaných
+            </>
+          )}
+          .
+        </p>
+      )}
+      <div className="mt-2 flex gap-2">
+        {!noChanges && (
+          <Button size="sm" loading={busy} onClick={confirmApply}>
+            Potvrdiť a použiť
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPreview(null)}>
+          Zrušiť
         </Button>
       </div>
     </div>
