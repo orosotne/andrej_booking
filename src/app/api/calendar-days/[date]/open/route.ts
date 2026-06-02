@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
 import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { generateDay } from "@/lib/slot-engine/generate";
+import { holidayName } from "@/lib/holidays-sk";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
@@ -30,9 +31,10 @@ export async function POST(
     const isWednesday = target.getUTCDay() === WEEKDAY.WED;
     const isLastFri =
       target.getUTCDay() === WEEKDAY.FRI && isLastFridayOfMonth(target);
+    const isHoliday = holidayName(date) !== null;
 
-    // Password gate: streda + posledný piatok v mesiaci.
-    if (isWednesday || isLastFri) {
+    // Password gate: streda + posledný piatok v mesiaci + sviatok.
+    if (isWednesday || isLastFri || isHoliday) {
       assertUnlockPassword(
         body.password,
         "Nesprávne heslo na otvorenie tohto dňa.",

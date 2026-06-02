@@ -39,6 +39,7 @@ import {
   nextWorkingDay,
 } from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
+import { holidayName } from "@/lib/holidays-sk";
 
 type Dialog =
   | { type: "book"; slot: SlotDTO; dayIso: string }
@@ -324,9 +325,16 @@ export function CalendarView({
           title={
             weekdayOf(pendingPassword) === 3
               ? "Otvoriť stredu"
-              : "Otvoriť posledný piatok v mesiaci"
+              : weekdayOf(pendingPassword) === 5 &&
+                  isLastFridayOfMonth(dateOnly(pendingPassword))
+                ? "Otvoriť posledný piatok v mesiaci"
+                : "Otvoriť deň"
           }
-          description="Tento deň je chránený. Zadajte heslo pre otvorenie."
+          description={
+            holidayName(pendingPassword)
+              ? `Tento deň je sviatok (${holidayName(pendingPassword)}). Otvorenie je výnimočné — zadajte heslo.`
+              : "Tento deň je chránený. Zadajte heslo pre otvorenie."
+          }
           confirmLabel="Otvoriť deň"
           requirePassword
           passwordLabel="Heslo"
@@ -465,6 +473,7 @@ function DayColumn({
   const isWednesday = weekdayOf(iso) === 3;
   const isLastFriday = weekdayOf(iso) === 5 && isLastFridayOfMonth(dateOnly(iso));
   const isWorkingDay = WORKING_WEEKDAYS.includes(weekdayOf(iso));
+  const holiday = isWorkingDay ? holidayName(iso) : null;
   const canDelete = canManage && day?.dayType === "MANUAL_WEDNESDAY";
   const canClose =
     canManage &&
@@ -520,21 +529,33 @@ function DayColumn({
         className={`space-y-1.5 p-2 ${stacked ? "" : "max-h-[70vh] overflow-y-auto"}`}
       >
         {day && day.slots.length > 0 ? (
-          day.slots.map((slot) => (
-            <SlotCard key={slot.id} slot={slot} onSelect={(s) => onSelect(s, iso)} />
-          ))
+          <>
+            {day.status === "CLOSED" && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-sm font-medium text-amber-800">
+                <Ban className="h-4 w-4 shrink-0" />
+                <span>{holiday ? `Sviatok: ${holiday}` : (day.note ?? "Zatvorené")}</span>
+              </div>
+            )}
+            {day.slots.map((slot) => (
+              <SlotCard key={slot.id} slot={slot} onSelect={(s) => onSelect(s, iso)} />
+            ))}
+          </>
         ) : !isWorkingDay ? (
           <div className="px-2 py-8 text-center">
             <p className="text-sm text-slate-300">Ambulancia nepracuje</p>
           </div>
         ) : (
           <div className="px-2 py-6 text-center">
-            <p className="text-sm text-slate-400">
-              {isWednesday
-                ? "Streda — zatvorená"
-                : isLastFriday
-                  ? "Posledný piatok — zatvorený"
-                  : "Zatiaľ negenerované"}
+            <p
+              className={`text-sm ${holiday ? "font-medium text-amber-700" : "text-slate-400"}`}
+            >
+              {holiday
+                ? `Sviatok: ${holiday}`
+                : isWednesday
+                  ? "Streda — zatvorená"
+                  : isLastFriday
+                    ? "Posledný piatok — zatvorený"
+                    : "Zatiaľ negenerované"}
             </p>
             {canManage && (
               <button
@@ -548,11 +569,13 @@ function DayColumn({
                 ) : (
                   <Plus className="h-4 w-4" />
                 )}
-                {isWednesday
-                  ? "Otvoriť ambulanciu"
-                  : isLastFriday
-                    ? "Otvoriť posledný piatok"
-                    : "Generovať deň"}
+                {holiday
+                  ? "Otvoriť deň (sviatok)"
+                  : isWednesday
+                    ? "Otvoriť ambulanciu"
+                    : isLastFriday
+                      ? "Otvoriť posledný piatok"
+                      : "Generovať deň"}
               </button>
             )}
           </div>
@@ -581,7 +604,7 @@ function CalendarSkeleton() {
 
 function Legend() {
   const items = [
-    { label: "Predhospitalizačné", color: "var(--slot-prehospital)", bd: "var(--slot-prehospital-bd)" },
+    { label: "Akútne", color: "var(--slot-prehospital)", bd: "var(--slot-prehospital-bd)" },
     { label: "Porada", color: "var(--slot-blocked)", bd: "var(--slot-blocked-bd)" },
     { label: "Dispenzárne", color: "var(--slot-dispensary)", bd: "var(--slot-dispensary-bd)" },
     { label: "ECHO", color: "var(--slot-echo)", bd: "var(--slot-echo-bd)" },

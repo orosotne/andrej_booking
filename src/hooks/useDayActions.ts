@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useInvalidateCalendar } from "@/hooks/useCalendar";
 import { weekdayOf } from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
+import { holidayName } from "@/lib/holidays-sk";
 
 export type DayActionResult = "ok" | "conflict" | "error";
 
@@ -44,11 +45,15 @@ export function useDayActions() {
     }
   }
 
-  /** True iff opening this day requires the WEDNESDAY_UNLOCK_PASSWORD. */
+  /**
+   * True iff opening this day requires the WEDNESDAY_UNLOCK_PASSWORD: Wednesdays,
+   * the last Friday of the month, and public holidays (opened only exceptionally).
+   */
   function requiresPassword(iso: string): boolean {
     const dow = weekdayOf(iso);
     if (dow === 3) return true;
     if (dow === 5 && isLastFridayOfMonth(dateOnly(iso))) return true;
+    if (holidayName(iso)) return true;
     return false;
   }
 

@@ -28,6 +28,7 @@ import {
   dayOfMonth,
 } from "@/lib/format";
 import { weekdayOf, WORKING_WEEKDAYS, buildDayMap } from "@/lib/calendar-ui";
+import { holidayName } from "@/lib/holidays-sk";
 
 // Ambulancia pracuje len v stredu/štvrtok/piatok — ostatné dni sa nezobrazujú.
 const WEEKDAY_HEADERS = ["St", "Št", "Pi"];
@@ -194,9 +195,16 @@ export function MonthView({
           title={
             weekdayOf(pendingPassword) === 3
               ? "Otvoriť stredu"
-              : "Otvoriť posledný piatok v mesiaci"
+              : weekdayOf(pendingPassword) === 5 &&
+                  isLastFridayOfMonth(dateOnly(pendingPassword))
+                ? "Otvoriť posledný piatok v mesiaci"
+                : "Otvoriť deň"
           }
-          description="Tento deň je chránený. Zadajte heslo pre otvorenie."
+          description={
+            holidayName(pendingPassword)
+              ? `Tento deň je sviatok (${holidayName(pendingPassword)}). Otvorenie je výnimočné — zadajte heslo.`
+              : "Tento deň je chránený. Zadajte heslo pre otvorenie."
+          }
           confirmLabel="Otvoriť deň"
           requirePassword
           passwordLabel="Heslo"
@@ -283,6 +291,7 @@ function DayCell({
   const isWorking = WORKING_WEEKDAYS.includes(dow);
   const isToday = iso === todayIso();
   const lastFriday = dow === 5 && isLastFridayOfMonth(dateOnly(iso));
+  const holiday = isWorking ? holidayName(iso) : null;
   // Mirror the week/day view: a generated day (not a manual Wednesday) can be
   // closed for holidays/vacation; a CLOSED one can be reopened.
   const canClose =
@@ -380,10 +389,21 @@ function DayCell({
     );
   }
 
-  // Working day, not generated yet.
+  // Working day, not generated yet (incl. holidays — shown but openable only under password).
   return (
-    <div className={`${base} border-dashed border-slate-200`}>
-      <DayNumber iso={iso} isToday={isToday} />
+    <div
+      className={`${base} border-dashed ${holiday ? "border-amber-200 bg-amber-50/40" : "border-slate-200"}`}
+    >
+      <DayNumber iso={iso} isToday={isToday} muted={!!holiday} />
+      {holiday && (
+        <p
+          className="mt-1 flex items-center gap-0.5 text-[10px] font-medium leading-tight text-amber-700"
+          title={`Sviatok: ${holiday}`}
+        >
+          <Ban className="h-3 w-3 shrink-0" />
+          <span className="line-clamp-2 break-words">{holiday}</span>
+        </p>
+      )}
       {loading ? null : canManage ? (
         <button
           type="button"
@@ -396,9 +416,9 @@ function DayCell({
           ) : (
             <Plus className="h-3 w-3" />
           )}
-          {dow === 3 || lastFriday ? "Otvoriť" : "Generovať"}
+          {holiday || dow === 3 || lastFriday ? "Otvoriť" : "Generovať"}
         </button>
-      ) : (
+      ) : holiday ? null : (
         <p className="mt-1 text-[10px] text-slate-300">
           {dow === 3 || lastFriday ? "zatvorená" : "—"}
         </p>
