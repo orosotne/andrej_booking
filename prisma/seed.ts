@@ -35,15 +35,15 @@ async function seedRulesAndTemplates() {
   if ((await prisma.scheduleTemplate.count()) > 0) return;
 
   // Per-slot-time release rules (v2 layout). V otvorených dňoch sú všetky sloty
-  // voľné 14 mesiacov popredu (IMMEDIATE), okrem 7:30, 11:30 a 12:00:
-  //   PRE_HOSPITAL_6D  → 7:30 opens 6 days before
+  // voľné 14 mesiacov popredu (IMMEDIATE), okrem 7:00, 11:30 a 12:00:
+  //   PRE_HOSPITAL_6D  → 7:00 opens 6 days before
   //   IMMEDIATE        → 9:00–11:30 dispenzár + všetky ECHO sloty (voľné hneď)
   //   DISPENSARY_20D   → 11:30 opens 20 days before
   //   DISPENSARY_13D   → 12:00 opens 13 days before
   //   BLOCKED          → manual only (Porada + ECHO oddelenie)
   const policies = {
     PRE_HOSPITAL_6D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:30 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
+      data: { name: "Predhospitalizačné 7:00 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
     }),
     IMMEDIATE: await prisma.releasePolicy.create({
       data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
@@ -71,7 +71,7 @@ async function seedRulesAndTemplates() {
       data: {
         name: day.name,
         dayOfWeek: day.dayOfWeek,
-        startTime: "07:30",
+        startTime: "07:00",
         endTime: "15:20",
         slotDurationMinutes: 30,
       },

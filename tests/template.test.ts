@@ -8,8 +8,8 @@ describe("buildDayTemplate (v2 layout)", () => {
     expect(slots).toHaveLength(17);
   });
 
-  it("starts at 07:30 and ends at 15:20", () => {
-    expect(slots[0].start).toBe("07:30");
+  it("starts at 07:00 and ends at 15:20", () => {
+    expect(slots[0].start).toBe("07:00");
     expect(slots[slots.length - 1].end).toBe("15:20");
   });
 
@@ -46,10 +46,11 @@ describe("buildDayTemplate (v2 layout)", () => {
     expect(reserve).toHaveLength(0);
   });
 
-  it("PRE_HOSPITAL is a single slot at 07:30", () => {
+  it("PRE_HOSPITAL is a single slot at 07:00–07:30", () => {
     const ph = slots.filter((s) => s.type === "PRE_HOSPITAL");
     expect(ph).toHaveLength(1);
-    expect(ph[0].start).toBe("07:30");
+    expect(ph[0].start).toBe("07:00");
+    expect(ph[0].end).toBe("07:30");
   });
 
   it("DISPENSARY block: 9:00–12:30 → 7 slots (last is 12:00–12:30)", () => {

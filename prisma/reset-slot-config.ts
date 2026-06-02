@@ -19,7 +19,7 @@ import { WEEKDAY } from "@/lib/calendar-date";
 //   CONFIRM_RESET=1 npx tsx prisma/reset-slot-config.ts
 //
 // Release windows (v2, corrected): in opened days all slots are free 14 months
-// ahead EXCEPT 7:30 (6 days before), 11:30 (20 days before), 12:00 (13 days
+// ahead EXCEPT 7:00 (6 days before), 11:30 (20 days before), 12:00 (13 days
 // before). Porada + ECHO oddelenie stay manually blocked.
 
 async function main() {
@@ -56,7 +56,7 @@ async function main() {
   console.log("→ recreating v2 release policies");
   const policies = {
     PRE_HOSPITAL_6D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:30 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
+      data: { name: "Predhospitalizačné 7:00 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
     }),
     IMMEDIATE: await prisma.releasePolicy.create({
       data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
@@ -83,7 +83,7 @@ async function main() {
       data: {
         name: day.name,
         dayOfWeek: day.dayOfWeek,
-        startTime: "07:30",
+        startTime: "07:00",
         endTime: "15:20",
         slotDurationMinutes: 30,
       },

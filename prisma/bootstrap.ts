@@ -53,7 +53,7 @@ async function seedReleasePoliciesAndTemplates() {
 
   const policies = {
     PRE_HOSPITAL_6D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:30 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
+      data: { name: "Predhospitalizačné 7:00 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
     }),
     IMMEDIATE: await prisma.releasePolicy.create({
       data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
@@ -80,7 +80,7 @@ async function seedReleasePoliciesAndTemplates() {
       data: {
         name: day.name,
         dayOfWeek: day.dayOfWeek,
-        startTime: "07:30",
+        startTime: "07:00",
         endTime: "15:20",
         slotDurationMinutes: 30,
       },
