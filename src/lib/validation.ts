@@ -26,6 +26,20 @@ export const calendarRangeSchema = z.object({
   to: isoDate,
 });
 
+// Hromadné zatvorenie rozsahu dní (dovolenka). Chránené rovnakým heslom ako
+// zatvorenie jedného dňa; dôvod je nepovinný (audit).
+export const closeRangeSchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    password: z.string().min(1, "Heslo je povinné").max(200),
+    reason: z.string().max(500).optional(),
+  })
+  .refine((v) => v.from <= v.to, {
+    message: "Dátum „od“ musí byť skôr alebo rovnaký ako „do“.",
+    path: ["to"],
+  });
+
 export const bookSlotSchema = z
   .object({
     patientId: z.string().min(1),
