@@ -33,12 +33,14 @@ export async function GET(req: Request) {
           id: p.id,
           priezvisko: p.lastName,
           meno: p.firstName,
+          rok_narodenia: p.birthYear ?? "",
+          rodne_cislo: p.nationalId ?? "",
           datum_narodenia: p.dateOfBirth?.toISOString().slice(0, 10) ?? "",
           telefon: p.phone,
           email: p.email,
           interne_cislo: p.externalPatientId,
         })),
-        ["id", "priezvisko", "meno", "datum_narodenia", "telefon", "email", "interne_cislo"],
+        ["id", "priezvisko", "meno", "rok_narodenia", "rodne_cislo", "datum_narodenia", "telefon", "email", "interne_cislo"],
       );
       filename = "pacienti.csv";
     } else {

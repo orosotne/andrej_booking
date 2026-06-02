@@ -37,6 +37,8 @@ export async function POST(req: Request) {
       data: {
         firstName: data.firstName,
         lastName: data.lastName,
+        birthYear: data.birthYear,
+        nationalId: data.nationalId || null,
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
         phone: data.phone || null,
         email: data.email || null,

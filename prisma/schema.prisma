@@ -105,6 +105,8 @@ model Patient {
   id                String    @id @default(cuid())
   firstName         String    @map("first_name")
   lastName          String    @map("last_name")
+  birthYear         Int?      @map("birth_year")
+  nationalId        String?   @map("national_id")
   dateOfBirth       DateTime? @map("date_of_birth") @db.Date
   phone             String?
   email             String?

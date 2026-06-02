@@ -39,12 +39,13 @@ const CATEGORIES: { key: NextType; label: string; color: string }[] = [
   },
 ];
 
+// months=0 → najbližší voľný termín (od zajtra, nie dnes);
+// 3/6/11 → prvý voľný termín o aspoň toľko mesiacov.
 const WINDOWS: { months: number; label: string }[] = [
-  { months: 1, label: "do 1 mes." },
-  { months: 3, label: "do 3 mes." },
-  { months: 6, label: "do 6 mes." },
-  { months: 9, label: "do 9 mes." },
-  { months: 12, label: "do 12 mes." },
+  { months: 0, label: "Najbližší" },
+  { months: 3, label: "o 3 mes." },
+  { months: 6, label: "o 6 mes." },
+  { months: 11, label: "o 11 mes." },
 ];
 
 interface ResultKey {
@@ -114,7 +115,7 @@ export function NextAppointmentSearch({
                     {cat.label}
                   </h3>
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+                <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                   {WINDOWS.map((w) => {
                     return (
                       <button

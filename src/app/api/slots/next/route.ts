@@ -3,19 +3,24 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/rbac";
 import { jsonError } from "@/lib/api";
+import { dateOnly, toIsoDate } from "@/lib/calendar-date";
 import type { AppointmentTypeLit } from "@/lib/slot-engine/types";
 
 const querySchema = z.object({
   type: z.enum(["DISPENSARY", "ECHO", "PRE_HOSPITAL"]),
-  months: z.coerce.number().int().refine((n) => [1, 3, 6, 9, 12].includes(n), {
-    message: "months musí byť 1, 3, 6, 9 alebo 12",
+  // 0 = "najbližší termín" (od zajtra ďalej, nie dnes);
+  // 3/6/11 = prvý voľný termín o N mesiacov a neskôr.
+  months: z.coerce.number().int().refine((n) => [0, 3, 6, 11].includes(n), {
+    message: "months musí byť 0, 3, 6 alebo 11",
   }),
 });
 
 /**
- * Returns the earliest AVAILABLE slot of `type` within `months` from today,
- * or null if no such slot is open in the window. Used by the "Najbližší
- * termín" picker in the calendar header.
+ * Returns the earliest AVAILABLE slot of `type` for the requested horizon, or
+ * null if none is open. months=0 → najbližší termín, ale NIE dnes (od zajtra
+ * ďalej). months=N → prvý voľný termín o aspoň N mesiacov (nie "do N mesiacov",
+ * inak by to vždy bol zajtrajšok). Closed days are excluded. Used by the
+ * "Najbližší termín" picker in the calendar header.
  */
 export async function GET(req: Request) {
   try {
@@ -27,16 +32,28 @@ export async function GET(req: Request) {
     });
 
     const now = new Date();
-    const end = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months, now.getUTCDate()),
-    );
+    // Najbližší (months=0): vylúč dnešok cez calendarDay.date > dnes (@db.Date je
+    // polnoc UTC, takže to znamená „od zajtra ďalej“). Horizont (N>0): prvý slot,
+    // ktorý začína aspoň N mesiacov od dnes (bez horného ohraničenia).
+    const calendarDayFilter =
+      months === 0
+        ? { status: { not: "CLOSED" as const }, date: { gt: dateOnly(toIsoDate(now)) } }
+        : { status: { not: "CLOSED" as const } };
+    const startAt =
+      months === 0
+        ? undefined
+        : {
+            gte: new Date(
+              Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months, now.getUTCDate()),
+            ),
+          };
 
     const slot = await prisma.appointmentSlot.findFirst({
       where: {
         status: "AVAILABLE",
         appointmentType: type as AppointmentTypeLit,
-        startAt: { gte: now, lte: end },
-        calendarDay: { status: { not: "CLOSED" } },
+        calendarDay: calendarDayFilter,
+        ...(startAt ? { startAt } : {}),
       },
       orderBy: { startAt: "asc" },
       include: {

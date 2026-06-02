@@ -13,6 +13,8 @@ interface Patient {
   id: string;
   firstName: string;
   lastName: string;
+  birthYear: number | null;
+  nationalId: string | null;
   dateOfBirth: string | null;
   phone: string | null;
   email: string | null;
@@ -124,6 +126,8 @@ function PatientDialog({
   const [form, setForm] = useState({
     firstName: patient?.firstName ?? "",
     lastName: patient?.lastName ?? "",
+    birthYear: patient?.birthYear ? String(patient.birthYear) : "",
+    nationalId: patient?.nationalId ?? "",
     phone: patient?.phone ?? "",
     note: patient?.note ?? "",
   });
@@ -135,6 +139,8 @@ function PatientDialog({
     const payload = {
       firstName: form.firstName,
       lastName: form.lastName,
+      birthYear: Number(form.birthYear),
+      nationalId: form.nationalId || undefined,
       phone: form.phone,
       note: form.note || undefined,
     };
@@ -163,6 +169,26 @@ function PatientDialog({
           <Field label="Meno" required value={form.firstName} onChange={(e) => set("firstName", e.target.value)} />
           <Field label="Priezvisko" required value={form.lastName} onChange={(e) => set("lastName", e.target.value)} />
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label="Rok narodenia"
+            required
+            type="number"
+            inputMode="numeric"
+            min={1900}
+            max={new Date().getFullYear()}
+            placeholder="napr. 1985"
+            value={form.birthYear}
+            onChange={(e) => set("birthYear", e.target.value)}
+          />
+          <Field
+            label="Rodné číslo"
+            hint="nepovinné"
+            inputMode="numeric"
+            value={form.nationalId}
+            onChange={(e) => set("nationalId", e.target.value)}
+          />
+        </div>
         <Field
           label="Telefónne číslo"
           required
@@ -180,7 +206,7 @@ function PatientDialog({
           type="submit"
           fullWidth
           loading={busy}
-          disabled={!form.firstName || !form.lastName || !form.phone}
+          disabled={!form.firstName || !form.lastName || !form.birthYear || !form.phone}
         >
           Uložiť
         </Button>

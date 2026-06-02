@@ -53,7 +53,7 @@ async function seedReleasePoliciesAndTemplates() {
 
   const policies = {
     PRE_HOSPITAL_6D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:00 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
+      data: { name: "Predhospitalizačné 7:30 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
     }),
     IMMEDIATE: await prisma.releasePolicy.create({
       data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
@@ -63,6 +63,9 @@ async function seedReleasePoliciesAndTemplates() {
     }),
     DISPENSARY_13D: await prisma.releasePolicy.create({
       data: { name: "Dispenzár 12:00 (13 dní)", releaseType: "DAYS_BEFORE", daysBefore: 13 },
+    }),
+    ECHO_20D: await prisma.releasePolicy.create({
+      data: { name: "ECHO 15:00 (20 dní)", releaseType: "DAYS_BEFORE", daysBefore: 20 },
     }),
     BLOCKED: await prisma.releasePolicy.create({
       data: { name: "Blokované (Porada / ECHO oddelenie)", releaseType: "MANUAL_ONLY" },

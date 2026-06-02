@@ -75,6 +75,13 @@ export const patientCreateSchema = z.object({
   firstName: z.string().min(1, "Meno je povinné"),
   lastName: z.string().min(1, "Priezvisko je povinné"),
   phone: z.string().min(1, "Telefónne číslo je povinné").max(40),
+  birthYear: z.coerce
+    .number({ message: "Rok narodenia je povinný" })
+    .int("Rok narodenia musí byť celé číslo")
+    .min(1900, "Neplatný rok narodenia")
+    .max(new Date().getFullYear(), "Rok narodenia nemôže byť v budúcnosti"),
+  // Rodné číslo je citlivý údaj — dobrovoľné, formát nevynucujeme.
+  nationalId: z.string().max(20).optional().or(z.literal("")),
   dateOfBirth: isoDate.optional(),
   email: z.string().email("Neplatný e-mail").optional().or(z.literal("")),
   externalPatientId: z.string().max(60).optional(),

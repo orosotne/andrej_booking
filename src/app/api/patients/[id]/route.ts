@@ -23,6 +23,9 @@ export async function PATCH(
       data: {
         firstName: data.firstName,
         lastName: data.lastName,
+        birthYear: data.birthYear,
+        nationalId:
+          data.nationalId === undefined ? undefined : data.nationalId || null,
         dateOfBirth:
           data.dateOfBirth === undefined
             ? undefined
