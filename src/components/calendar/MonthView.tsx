@@ -266,12 +266,7 @@ function DayCell({
   return (
     <div className={`${base} border-dashed border-slate-200`}>
       <DayNumber iso={iso} isToday={isToday} />
-      {lastFriday ? (
-        <p className="mt-1 flex items-center gap-0.5 text-[10px] text-amber-600">
-          <Lock className="h-3 w-3" />
-          {isoAddDays(iso, -30).slice(5)}
-        </p>
-      ) : loading ? null : canManage ? (
+      {loading ? null : canManage ? (
         <button
           type="button"
           onClick={onOpen}
@@ -283,11 +278,11 @@ function DayCell({
           ) : (
             <Plus className="h-3 w-3" />
           )}
-          {dow === 3 ? "Otvoriť" : "Generovať"}
+          {dow === 3 || lastFriday ? "Otvoriť" : "Generovať"}
         </button>
       ) : (
         <p className="mt-1 text-[10px] text-slate-300">
-          {dow === 3 ? "zatvorená" : "—"}
+          {dow === 3 || lastFriday ? "zatvorená" : "—"}
         </p>
       )}
     </div>

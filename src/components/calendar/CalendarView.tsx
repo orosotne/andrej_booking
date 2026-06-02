@@ -33,6 +33,7 @@ import {
   clinicLongDate,
 } from "@/lib/format";
 import { weekdayOf, WORKING_WEEKDAYS, buildDayMap } from "@/lib/calendar-ui";
+import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 
 type Dialog =
   | { type: "book"; slot: SlotDTO; dayIso: string }
@@ -453,6 +454,7 @@ function DayColumn({
   stacked?: boolean;
 }) {
   const isWednesday = weekdayOf(iso) === 3;
+  const isLastFriday = weekdayOf(iso) === 5 && isLastFridayOfMonth(dateOnly(iso));
   const isWorkingDay = WORKING_WEEKDAYS.includes(weekdayOf(iso));
   const canDelete = canManage && day?.dayType === "MANUAL_WEDNESDAY";
   const canClose =
@@ -519,7 +521,11 @@ function DayColumn({
         ) : (
           <div className="px-2 py-6 text-center">
             <p className="text-sm text-slate-400">
-              {isWednesday ? "Streda — zatvorená" : "Zatiaľ negenerované"}
+              {isWednesday
+                ? "Streda — zatvorená"
+                : isLastFriday
+                  ? "Posledný piatok — zatvorený"
+                  : "Zatiaľ negenerované"}
             </p>
             {canManage && (
               <button
@@ -533,7 +539,11 @@ function DayColumn({
                 ) : (
                   <Plus className="h-4 w-4" />
                 )}
-                {isWednesday ? "Otvoriť ambulanciu" : "Generovať deň"}
+                {isWednesday
+                  ? "Otvoriť ambulanciu"
+                  : isLastFriday
+                    ? "Otvoriť posledný piatok"
+                    : "Generovať deň"}
               </button>
             )}
           </div>
