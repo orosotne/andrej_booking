@@ -5,6 +5,7 @@ import logo from "@/assets/logo-02.png";
 import { auth, signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db";
 import { NavLink } from "@/components/layout/NavLink";
+import { AdminMenu } from "@/components/layout/AdminMenu";
 import { TwoFactorSetup } from "@/components/admin/TwoFactorSetup";
 import { ROLE_LABEL } from "@/lib/auth/roles";
 
@@ -80,9 +81,7 @@ export default async function AppLayout({
               {user.role === "ADMIN" && (
                 <>
                   <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
-                  <NavLink href="/sablona">Šablóna</NavLink>
-                  <NavLink href="/nastavenia">Nastavenia</NavLink>
-                  <NavLink href="/audit">Audit</NavLink>
+                  <AdminMenu />
                 </>
               )}
             </nav>

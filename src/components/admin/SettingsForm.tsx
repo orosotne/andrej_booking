@@ -7,6 +7,16 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { TYPE_META } from "@/lib/slot-style";
+
+// The slot types shown in the calendar (same set the old in-calendar legend used).
+const LEGEND_TYPES = [
+  "PRE_HOSPITAL",
+  "CONSULTATION_BLOCKED",
+  "DISPENSARY",
+  "ECHO",
+  "ECHO_DEPARTMENT_BLOCKED",
+] as const;
 
 interface PolicyDTO {
   id: string;
@@ -167,6 +177,27 @@ export function SettingsForm({
         >
           Spustiť retenčný purge
         </Button>
+      </Section>
+
+      <Section title="Význam farieb v kalendári">
+        <p className="mb-3 text-sm text-slate-500">
+          Farby v kalendári označujú typ slotu. Legenda sa už v kalendári
+          nezobrazuje — význam jednotlivých farieb nájdete tu.
+        </p>
+        <ul className="space-y-1.5">
+          {LEGEND_TYPES.map((t) => (
+            <li key={t} className="flex items-center gap-2 text-sm text-slate-700">
+              <span
+                className="inline-block h-3.5 w-3.5 shrink-0 rounded border"
+                style={{
+                  backgroundColor: TYPE_META[t].bg,
+                  borderColor: TYPE_META[t].border,
+                }}
+              />
+              {TYPE_META[t].label}
+            </li>
+          ))}
+        </ul>
       </Section>
 
       <div className="mt-5">

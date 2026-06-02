@@ -220,8 +220,6 @@ export function CalendarView({
         onToday={handleToday}
       />
 
-      <Legend />
-
       {!isLoading && !isError && tallySlots.length > 0 && (
         <div className="mt-3">
           <SlotTally
@@ -640,29 +638,6 @@ function CalendarSkeleton() {
             ))}
           </div>
         </div>
-      ))}
-    </div>
-  );
-}
-
-function Legend() {
-  const items = [
-    { label: "Akútne", color: "var(--slot-prehospital)", bd: "var(--slot-prehospital-bd)" },
-    { label: "Porada", color: "var(--slot-blocked)", bd: "var(--slot-blocked-bd)" },
-    { label: "Dispenzárne", color: "var(--slot-dispensary)", bd: "var(--slot-dispensary-bd)" },
-    { label: "ECHO", color: "var(--slot-echo)", bd: "var(--slot-echo-bd)" },
-    { label: "ECHO oddelenie", color: "var(--slot-echo-dept)", bd: "var(--slot-echo-dept-bd)" },
-  ];
-  return (
-    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">
-      {items.map((it) => (
-        <span key={it.label} className="inline-flex items-center gap-1.5">
-          <span
-            className="inline-block h-3 w-3 rounded border"
-            style={{ backgroundColor: it.color, borderColor: it.bd }}
-          />
-          {it.label}
-        </span>
       ))}
     </div>
   );
