@@ -52,20 +52,17 @@ async function seedReleasePoliciesAndTemplates() {
   }
 
   const policies = {
-    PRE_HOSPITAL_9D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:30 (9 dní)", releaseType: "DAYS_BEFORE", daysBefore: 9 },
+    PRE_HOSPITAL_6D: await prisma.releasePolicy.create({
+      data: { name: "Predhospitalizačné 7:30 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
     }),
-    DISPENSARY: await prisma.releasePolicy.create({
-      data: { name: "Dispenzárne (6 týždňov)", releaseType: "DAYS_BEFORE", daysBefore: 42 },
+    IMMEDIATE: await prisma.releasePolicy.create({
+      data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
     }),
-    DISPENSARY_23D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 11:30 (23 dní)", releaseType: "DAYS_BEFORE", daysBefore: 23 },
+    DISPENSARY_20D: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 11:30 (20 dní)", releaseType: "DAYS_BEFORE", daysBefore: 20 },
     }),
-    DISPENSARY_16D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 12:00 (16 dní)", releaseType: "DAYS_BEFORE", daysBefore: 16 },
-    }),
-    ECHO: await prisma.releasePolicy.create({
-      data: { name: "ECHO (4 týždne)", releaseType: "DAYS_BEFORE", daysBefore: 28 },
+    DISPENSARY_13D: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 12:00 (13 dní)", releaseType: "DAYS_BEFORE", daysBefore: 13 },
     }),
     BLOCKED: await prisma.releasePolicy.create({
       data: { name: "Blokované (Porada / ECHO oddelenie)", releaseType: "MANUAL_ONLY" },
