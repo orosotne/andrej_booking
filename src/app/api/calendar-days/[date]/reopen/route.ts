@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
+import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { reopenDay } from "@/lib/slot-engine/generate";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
@@ -12,7 +13,12 @@ export async function POST(
   try {
     const user = await requireRole(DOCTOR_ADMIN);
     const { date } = await ctx.params;
-    const body = (await req.json().catch(() => ({}))) as { reason?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      reason?: string;
+      password?: string;
+    };
+    // Znovuotvorenie zatvoreného dňa je chránené heslom.
+    assertUnlockPassword(body.password, "Nesprávne heslo na znovuotvorenie dňa.");
 
     const day = await reopenDay(date);
 

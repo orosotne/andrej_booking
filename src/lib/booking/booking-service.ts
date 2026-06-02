@@ -256,11 +256,14 @@ export async function updateAppointment(input: UpdateAppointmentInput) {
 
 export interface UnlockInput {
   slotId: string;
-  reason: string;
+  reason?: string;
   ctx: AuditContext;
 }
 
-/** Admin override: opens a still-locked/protected slot, with an audited reason. */
+/**
+ * Admin override: opens a still-locked/protected slot. Gated by the unlock
+ * password at the route layer; the reason is optional and kept only for audit.
+ */
 export async function unlockSlot(input: UnlockInput) {
   return prisma.$transaction(async (tx) => {
     const slot = await tx.appointmentSlot.findUnique({
@@ -273,7 +276,7 @@ export async function unlockSlot(input: UnlockInput) {
 
     const updated = await tx.appointmentSlot.update({
       where: { id: slot.id },
-      data: { status: "AVAILABLE", lockedReason: input.reason },
+      data: { status: "AVAILABLE", lockedReason: input.reason ?? null },
     });
     await recordAudit(tx, {
       entityType: "slot",
@@ -281,7 +284,7 @@ export async function unlockSlot(input: UnlockInput) {
       action: "unlock",
       before: slot,
       after: updated,
-      reason: input.reason,
+      reason: input.reason ?? null,
       ctx: input.ctx,
     });
     return updated;

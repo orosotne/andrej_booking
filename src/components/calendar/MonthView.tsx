@@ -106,11 +106,11 @@ export function MonthView({
     }
   }
 
-  async function handleClose(iso: string) {
-    if ((await closeDay(iso)) === "ok") setPendingClose(null);
+  async function handleClose(iso: string, password?: string) {
+    if ((await closeDay(iso, password)) === "ok") setPendingClose(null);
   }
-  async function handleReopen(iso: string) {
-    if ((await reopenDay(iso)) === "ok") setPendingReopen(null);
+  async function handleReopen(iso: string, password?: string) {
+    if ((await reopenDay(iso, password)) === "ok") setPendingReopen(null);
   }
 
   // Wed + last-Fri require password; 2nd Wed of month also needs audited reason.
@@ -230,7 +230,9 @@ export function MonthView({
           description={`${clinicLongDate(pendingClose)} sa zablokuje (napr. sviatok alebo dovolenka) — voľné sloty už nebude možné obsadiť a deň sa nebude ponúkať ako najbližší termín. Existujúce objednávky zostanú zachované.`}
           confirmLabel="Zatvoriť deň"
           tone="danger"
-          onConfirm={() => handleClose(pendingClose)}
+          requirePassword
+          passwordLabel="Heslo"
+          onConfirm={({ password }) => handleClose(pendingClose, password)}
           onClose={() =>
             pendingIso === pendingClose ? undefined : setPendingClose(null)
           }
@@ -242,7 +244,9 @@ export function MonthView({
           title="Znovu otvoriť tento deň?"
           description={`${clinicLongDate(pendingReopen)} sa znovu sprístupní — voľné sloty bude opäť možné obsadiť podľa pravidiel uvoľňovania.`}
           confirmLabel="Znovu otvoriť"
-          onConfirm={() => handleReopen(pendingReopen)}
+          requirePassword
+          passwordLabel="Heslo"
+          onConfirm={({ password }) => handleReopen(pendingReopen, password)}
           onClose={() =>
             pendingIso === pendingReopen ? undefined : setPendingReopen(null)
           }

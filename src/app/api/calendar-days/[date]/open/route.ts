@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
+import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { generateDay } from "@/lib/slot-engine/generate";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
@@ -14,13 +14,6 @@ import {
   WEEKDAY,
   isPastIsoDate,
 } from "@/lib/calendar-date";
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
 
 export async function POST(
   req: Request,
@@ -40,16 +33,10 @@ export async function POST(
 
     // Password gate: streda + posledný piatok v mesiaci.
     if (isWednesday || isLastFri) {
-      const expected = process.env.WEDNESDAY_UNLOCK_PASSWORD;
-      if (!expected) {
-        throw new ValidationError(
-          "Server nie je nakonfigurovaný (chýba WEDNESDAY_UNLOCK_PASSWORD).",
-        );
-      }
-      const provided = body.password ?? "";
-      if (!provided || !constantTimeEqual(provided, expected)) {
-        throw new ValidationError("Nesprávne heslo na otvorenie tohto dňa.");
-      }
+      assertUnlockPassword(
+        body.password,
+        "Nesprávne heslo na otvorenie tohto dňa.",
+      );
     }
 
     // Warn if another Wednesday in the same month is already open this month.

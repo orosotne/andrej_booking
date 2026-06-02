@@ -136,11 +136,11 @@ export function CalendarView({
   async function handleDelete(iso: string) {
     if ((await deleteDay(iso)) === "ok") setPendingDelete(null);
   }
-  async function handleClose(iso: string) {
-    if ((await closeDay(iso)) === "ok") setPendingClose(null);
+  async function handleClose(iso: string, password?: string) {
+    if ((await closeDay(iso, password)) === "ok") setPendingClose(null);
   }
-  async function handleReopen(iso: string) {
-    if ((await reopenDay(iso)) === "ok") setPendingReopen(null);
+  async function handleReopen(iso: string, password?: string) {
+    if ((await reopenDay(iso, password)) === "ok") setPendingReopen(null);
   }
 
   const close = () => setDialog(null);
@@ -355,7 +355,9 @@ export function CalendarView({
           description={`${clinicLongDate(pendingClose)} sa zablokuje — voľné sloty už nebude možné obsadiť. Existujúce objednávky zostanú zachované.`}
           confirmLabel="Zatvoriť deň"
           tone="danger"
-          onConfirm={() => handleClose(pendingClose)}
+          requirePassword
+          passwordLabel="Heslo"
+          onConfirm={({ password }) => handleClose(pendingClose, password)}
           onClose={() =>
             pendingIso === pendingClose ? undefined : setPendingClose(null)
           }
@@ -367,7 +369,9 @@ export function CalendarView({
           title="Znovu otvoriť tento deň?"
           description={`${clinicLongDate(pendingReopen)} sa znovu sprístupní — voľné sloty bude opäť možné obsadiť podľa pravidiel uvoľňovania.`}
           confirmLabel="Znovu otvoriť"
-          onConfirm={() => handleReopen(pendingReopen)}
+          requirePassword
+          passwordLabel="Heslo"
+          onConfirm={({ password }) => handleReopen(pendingReopen, password)}
           onClose={() =>
             pendingIso === pendingReopen ? undefined : setPendingReopen(null)
           }

@@ -37,6 +37,8 @@ export function BookingDialog({
   const [category, setCategory] = useState<PatientCategoryLit | null>(null);
   const [categoryReason, setCategoryReason] = useState("");
   const [note, setNote] = useState("");
+  const [lockMode, setLockMode] = useState(false);
+  const [lockPassword, setLockPassword] = useState("");
   const meta = TYPE_META[slot.appointmentType];
 
   const categoryFits = category
@@ -68,10 +70,15 @@ export function BookingDialog({
   }
 
   function lock() {
-    run(() => apiSend(`/api/slots/${slot.id}/lock`, "POST", {}), {
-      success: "Slot zamknutý",
-      onDone: onBooked,
-    });
+    if (!lockPassword) return;
+    run(
+      () =>
+        apiSend(`/api/slots/${slot.id}/lock`, "POST", { password: lockPassword }),
+      {
+        success: "Slot zamknutý",
+        onDone: onBooked,
+      },
+    );
   }
 
   return (
@@ -85,10 +92,49 @@ export function BookingDialog({
           <PatientSearch onSelect={setPatient} />
           {isAdmin && (
             <div className="border-t border-slate-100 pt-3">
-              <Button variant="outline" fullWidth loading={busy} onClick={lock}>
-                <Lock className="h-4 w-4" />
-                Zamknúť slot (chrániť kapacitu)
-              </Button>
+              {lockMode ? (
+                <div className="space-y-2">
+                  <Field
+                    label="Heslo na zamknutie slotu"
+                    type="password"
+                    required
+                    autoFocus
+                    value={lockPassword}
+                    onChange={(e) => setLockPassword(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      fullWidth
+                      onClick={() => {
+                        setLockMode(false);
+                        setLockPassword("");
+                      }}
+                    >
+                      Zrušiť
+                    </Button>
+                    <Button
+                      variant="primary"
+                      fullWidth
+                      loading={busy}
+                      disabled={!lockPassword}
+                      onClick={lock}
+                    >
+                      <Lock className="h-4 w-4" />
+                      Zamknúť slot
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  fullWidth
+                  onClick={() => setLockMode(true)}
+                >
+                  <Lock className="h-4 w-4" />
+                  Zamknúť slot (chrániť kapacitu)
+                </Button>
+              )}
             </div>
           )}
         </div>

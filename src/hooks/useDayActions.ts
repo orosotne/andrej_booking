@@ -72,18 +72,22 @@ export function useDayActions() {
     return call(iso, () => apiSend(`/api/calendar-days/${iso}`, "DELETE"), "Deň zrušený");
   }
 
-  function closeDay(iso: string) {
+  function closeDay(iso: string, password?: string) {
     return call(
       iso,
-      () => apiSend(`/api/calendar-days/${iso}/close`, "POST", { force: true }),
+      () =>
+        apiSend(`/api/calendar-days/${iso}/close`, "POST", {
+          force: true,
+          password,
+        }),
       "Deň zatvorený",
     );
   }
 
-  function reopenDay(iso: string) {
+  function reopenDay(iso: string, password?: string) {
     return call(
       iso,
-      () => apiSend(`/api/calendar-days/${iso}/reopen`, "POST"),
+      () => apiSend(`/api/calendar-days/${iso}/reopen`, "POST", { password }),
       "Deň znovu otvorený",
     );
   }

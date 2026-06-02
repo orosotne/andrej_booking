@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
+import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditContext, jsonError } from "@/lib/api";
@@ -16,7 +17,10 @@ export async function POST(
     const body = (await req.json().catch(() => ({}))) as {
       force?: boolean;
       reason?: string;
+      password?: string;
     };
+    // Zatvorenie celého dňa je chránené heslom.
+    assertUnlockPassword(body.password, "Nesprávne heslo na zatvorenie dňa.");
     const target = dateOnly(date);
 
     const day = await prisma.calendarDay.findUnique({

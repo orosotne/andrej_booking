@@ -53,8 +53,11 @@ export const rescheduleSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+// Odomknutie zamknutého slotu je chránené heslom (rovnaké ako pri otváraní
+// stredy/posledného piatka). Dôvod je nepovinný, slúži len pre audit.
 export const unlockSchema = z.object({
-  reason: z.string().min(1, "Dôvod odomknutia je povinný").max(500),
+  password: z.string().min(1, "Heslo je povinné").max(200),
+  reason: z.string().max(500).optional(),
 });
 
 export const appointmentStatus = z.enum([

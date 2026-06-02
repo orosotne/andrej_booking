@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { TextareaField } from "@/components/ui/Field";
+import { Field, TextareaField } from "@/components/ui/Field";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
@@ -22,15 +22,23 @@ export function SlotUnlockDialog({
   onUnlocked: () => void;
 }) {
   const { busy, run } = useAsyncAction();
+  const [password, setPassword] = useState("");
   const [reason, setReason] = useState("");
   const meta = TYPE_META[slot.appointmentType];
 
   function unlock() {
-    if (!reason.trim()) return;
-    run(() => apiSend(`/api/slots/${slot.id}/unlock`, "POST", { reason }), {
-      success: "Slot odomknutý",
-      onDone: onUnlocked,
-    });
+    if (!password) return;
+    run(
+      () =>
+        apiSend(`/api/slots/${slot.id}/unlock`, "POST", {
+          password,
+          reason: reason.trim() || undefined,
+        }),
+      {
+        success: "Slot odomknutý",
+        onDone: onUnlocked,
+      },
+    );
   }
 
   return (
@@ -43,11 +51,18 @@ export function SlotUnlockDialog({
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
           Tento slot je zamknutý a štandardne sa otvorí{" "}
           {slot.releaseAt ? clinicDayChip(slot.releaseAt.slice(0, 10)) : "manuálne"}.
-          Odomknutie je auditované.
+          Odomknúť ho možno len heslom. Odomknutie je auditované.
         </p>
-        <TextareaField
-          label="Dôvod odomknutia"
+        <Field
+          label="Heslo"
+          type="password"
           required
+          autoFocus
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <TextareaField
+          label="Dôvod odomknutia (nepovinné)"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={3}
@@ -56,7 +71,7 @@ export function SlotUnlockDialog({
           variant="primary"
           fullWidth
           loading={busy}
-          disabled={!reason.trim()}
+          disabled={!password}
           onClick={unlock}
           className="bg-amber-500 hover:bg-amber-600"
         >
