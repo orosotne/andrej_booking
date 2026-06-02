@@ -18,10 +18,11 @@ export async function releaseDueSlots(now: Date = new Date()): Promise<number> {
   return result.count;
 }
 
-/** Runs the full daily maintenance: generate ahead, then release due slots. */
+/** Runs the full daily maintenance: generate ahead, close holidays, then release due slots. */
 export async function runDailyMaintenance(now: Date = new Date()) {
-  const { generateForward } = await import("./generate");
+  const { generateForward, closeHolidaysForward } = await import("./generate");
   const generated = await generateForward({ now, months: 14 });
+  const holidaysClosed = await closeHolidaysForward({ now, months: 14 });
   const released = await releaseDueSlots(now);
-  return { generated, released };
+  return { generated, holidaysClosed, released };
 }

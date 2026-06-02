@@ -327,9 +327,14 @@ function DayCell({
           <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
             {closed ? (
               <>
-                <p className="flex items-center gap-0.5 font-medium text-amber-700">
-                  <Ban className="h-3 w-3" />
-                  Zatvorené
+                <p
+                  className="flex items-center gap-0.5 font-medium text-amber-700"
+                  title={day.note ?? "Zatvorené"}
+                >
+                  <Ban className="h-3 w-3 shrink-0" />
+                  <span className="line-clamp-2 break-words">
+                    {day.note?.replace(/^Sviatok:\s*/, "") ?? "Zatvorené"}
+                  </span>
                 </p>
                 {s.booked > 0 && <p className="text-slate-500">{s.booked} obj.</p>}
               </>
