@@ -54,17 +54,19 @@ export function countSlots(slots: SlotDTO[], nowIso?: string): SlotCountsDTO {
 
 /**
  * Break down AVAILABLE slots by their appointment kind (akútne / dispenzárne /
- * echo). Mirrors countSlots() — when `nowIso` is passed, slots that have
+ * echo / iné). Mirrors countSlots() — when `nowIso` is passed, slots that have
  * already started are excluded, so day-view "ešte voľných" matches.
- * PRE_HOSPITAL and ACUTE_RESERVE both roll up under "akútne".
+ * PRE_HOSPITAL and ACUTE_RESERVE both roll up under "akútne"; bookable CUSTOM
+ * slots roll up under "iné". The four buckets always sum to countSlots().available.
  */
 export function availByType(
   slots: SlotDTO[],
   nowIso?: string,
-): { akut: number; disp: number; echo: number } {
+): { akut: number; disp: number; echo: number; custom: number } {
   let akut = 0;
   let disp = 0;
   let echo = 0;
+  let custom = 0;
   for (const s of slots) {
     if (s.status !== "AVAILABLE") continue;
     if (nowIso !== undefined && s.startAt <= nowIso) continue;
@@ -72,6 +74,7 @@ export function availByType(
       akut++;
     else if (s.appointmentType === "DISPENSARY") disp++;
     else if (s.appointmentType === "ECHO") echo++;
+    else custom++;
   }
-  return { akut, disp, echo };
+  return { akut, disp, echo, custom };
 }

@@ -48,10 +48,10 @@ export function SlotAvailByType({
   counts,
   label = "Z toho voľných",
 }: {
-  counts: { akut: number; disp: number; echo: number };
+  counts: { akut: number; disp: number; echo: number; custom: number };
   label?: string;
 }) {
-  if (counts.akut + counts.disp + counts.echo === 0) return null;
+  if (counts.akut + counts.disp + counts.echo + counts.custom === 0) return null;
   return (
     <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
       <span className="font-medium text-slate-500">{label}:</span>
@@ -69,6 +69,15 @@ export function SlotAvailByType({
         <span className="font-semibold text-blue-700">{counts.echo}</span>{" "}
         <span className="text-slate-500">ECHO</span>
       </span>
+      {counts.custom > 0 && (
+        <>
+          <span aria-hidden className="text-slate-300">·</span>
+          <span>
+            <span className="font-semibold text-slate-700">{counts.custom}</span>{" "}
+            <span className="text-slate-500">iné</span>
+          </span>
+        </>
+      )}
     </div>
   );
 }
