@@ -46,8 +46,10 @@ export function AppointmentActions({
   const appointment = slot.appointment;
   const [mode, setMode] = useState<Mode>("view");
   const [reason, setReason] = useState("");
-  const [savedNote, setSavedNote] = useState(appointment?.note ?? "");
-  const [noteText, setNoteText] = useState(appointment?.note ?? "");
+  // The note is the patient-level note (single source of truth, shared with the
+  // Pacient page) — not a per-appointment note.
+  const [savedNote, setSavedNote] = useState(appointment?.patient.note ?? "");
+  const [noteText, setNoteText] = useState(appointment?.patient.note ?? "");
   const [status, setStatus] = useState(appointment?.status ?? "SCHEDULED");
   const [statusOpen, setStatusOpen] = useState(false);
   const [options, setOptions] = useState<RescheduleOption[] | null>(null);
@@ -293,7 +295,10 @@ export function AppointmentActions({
               loading={busy}
               onClick={() =>
                 runAction(
-                  () => apiSend(`/api/appointments/${apptId}`, "PATCH", { note: noteText }),
+                  () =>
+                    apiSend(`/api/patients/${appointment.patient.id}`, "PATCH", {
+                      note: noteText,
+                    }),
                   {
                     success: "Poznámka uložená",
                     onDone: () => {

@@ -13,10 +13,10 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ params }) => {
   const patient = await prisma.patient.findUnique({ where: { id } });
   if (!patient) throw new NotFoundError("Pacient neexistuje.");
 
-  // The next still-scheduled appointment from now on — used by the patient
-  // detail view to show where the patient is booked. Past, cancelled,
-  // rescheduled or no-show appointments are not "upcoming".
-  const upcoming = await prisma.appointment.findFirst({
+  // All still-scheduled appointments from now on — the patient detail lists each
+  // one (with a cancel action) and lets staff book further visits. Past,
+  // cancelled, rescheduled or no-show appointments are not "upcoming".
+  const upcomingList = await prisma.appointment.findMany({
     where: {
       patientId: id,
       status: "SCHEDULED",
@@ -58,15 +58,13 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ params }) => {
 
   return NextResponse.json({
     patient,
-    upcoming: upcoming
-      ? {
-          id: upcoming.id,
-          startAt: upcoming.slot.startAt.toISOString(),
-          endAt: upcoming.slot.endAt.toISOString(),
-          appointmentType: upcoming.slot.appointmentType,
-          date: upcoming.slot.calendarDay.date.toISOString().slice(0, 10),
-        }
-      : null,
+    upcomingList: upcomingList.map((a) => ({
+      id: a.id,
+      startAt: a.slot.startAt.toISOString(),
+      endAt: a.slot.endAt.toISOString(),
+      appointmentType: a.slot.appointmentType,
+      date: a.slot.calendarDay.date.toISOString().slice(0, 10),
+    })),
     lastVisit: lastVisit
       ? {
           date: lastVisit.slot.calendarDay.date.toISOString().slice(0, 10),
@@ -101,7 +99,7 @@ export const PATCH = defineRoute(
                 : null,
           email: body.email,
           externalPatientId: body.externalPatientId,
-          note: body.note,
+          note: body.note === undefined ? undefined : body.note || null,
         },
       });
       await recordAudit(tx, {

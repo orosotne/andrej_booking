@@ -46,7 +46,13 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
             where: { status: { in: ACTIVE_APPOINTMENT_STATUSES } },
             include: {
               patient: {
-                select: { id: true, firstName: true, lastName: true, phone: true },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  phone: true,
+                  note: true,
+                },
               },
             },
           },

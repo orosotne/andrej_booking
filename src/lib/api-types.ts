@@ -8,6 +8,7 @@ export interface PatientLiteDTO {
   firstName: string;
   lastName: string;
   phone: string | null;
+  note: string | null;
 }
 
 export interface AppointmentLiteDTO {

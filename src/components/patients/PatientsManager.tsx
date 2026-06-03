@@ -172,7 +172,7 @@ function PatientDialog({
         () =>
           apiSend(`/api/patients/${patient.id}`, "PATCH", {
             nationalId: form.nationalId || undefined,
-            note: form.note || undefined,
+            note: form.note,
           }),
         { success: "Pacient upravený", onDone: onSaved },
       );
@@ -339,6 +339,35 @@ const HORIZONS: ReadonlyArray<{
 
 type BookType = (typeof BOOK_TYPES)[number]["type"];
 
+// Monday-based week start (clinic weeks run Mon–Sun) as a millisecond key.
+function weekStartMs(isoDate: string): number {
+  const d = new Date(`${isoDate}T00:00:00`);
+  const dow = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dow);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+// If the candidate date collides with an existing appointment at the tightest
+// granularity (day → week → month), describe it; otherwise null (no warning).
+function bookingConflict(
+  candidateDate: string,
+  existing: UpcomingDTO[],
+): { scope: "deň" | "týždeň" | "mesiac"; dates: string[] } | null {
+  const sameDay = existing.filter((a) => a.date === candidateDate);
+  if (sameDay.length)
+    return { scope: "deň", dates: sameDay.map((a) => a.date) };
+  const cw = weekStartMs(candidateDate);
+  const sameWeek = existing.filter((a) => weekStartMs(a.date) === cw);
+  if (sameWeek.length)
+    return { scope: "týždeň", dates: sameWeek.map((a) => a.date) };
+  const cm = candidateDate.slice(0, 7);
+  const sameMonth = existing.filter((a) => a.date.slice(0, 7) === cm);
+  if (sameMonth.length)
+    return { scope: "mesiac", dates: sameMonth.map((a) => a.date) };
+  return null;
+}
+
 interface UpcomingDTO {
   id: string;
   startAt: string;
@@ -371,20 +400,29 @@ function PatientAppointment({ patientId }: { patientId: string }) {
     slot: NextSlot | null;
   } | null>(null);
   const [lookupBusy, setLookupBusy] = useState(false);
+  // Holds a candidate awaiting confirmation when it collides with an existing
+  // appointment in the same day/week/month — booking is allowed, just warned.
+  const [pendingBook, setPendingBook] = useState<{
+    slot: NextSlot;
+    category: PatientCategoryLit;
+    scope: "deň" | "týždeň" | "mesiac";
+    dates: string[];
+  } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["patient-upcoming", patientId],
     queryFn: () =>
-      apiGet<{ upcoming: UpcomingDTO | null; lastVisit: LastVisitDTO | null }>(
+      apiGet<{ upcomingList: UpcomingDTO[]; lastVisit: LastVisitDTO | null }>(
         `/api/patients/${patientId}`,
       ),
   });
-  const upcoming = data?.upcoming ?? null;
+  const upcomingList = data?.upcomingList ?? [];
   const lastVisit = data?.lastVisit ?? null;
 
   async function lookupSlot(h: { months: number; maxMonths?: number }) {
     setLookupBusy(true);
     setLookup(null);
+    setPendingBook(null);
     try {
       const r = await apiGet<{ slot: NextSlot | null }>(
         `/api/slots/next?type=${type}&months=${h.months}${
@@ -399,7 +437,7 @@ function PatientAppointment({ patientId }: { patientId: string }) {
     }
   }
 
-  function book(slot: NextSlot, category: PatientCategoryLit) {
+  function doBook(slot: NextSlot, category: PatientCategoryLit) {
     run(
       () =>
         apiSend(`/api/slots/${slot.id}/book`, "POST", {
@@ -411,11 +449,33 @@ function PatientAppointment({ patientId }: { patientId: string }) {
         success: "Pacient objednaný",
         onDone: () => {
           setLookup(null);
+          setPendingBook(null);
           qc.invalidateQueries({ queryKey: ["patient-upcoming", patientId] });
           qc.invalidateQueries({ queryKey: ["calendar"] });
         },
       },
     );
+  }
+
+  // Warn (but don't block) when the patient already has a termín in the same
+  // day/week/month as the candidate; confirmation proceeds with the booking.
+  function book(slot: NextSlot, category: PatientCategoryLit) {
+    const conflict = bookingConflict(slot.date, upcomingList);
+    if (conflict) {
+      setPendingBook({ slot, category, ...conflict });
+      return;
+    }
+    doBook(slot, category);
+  }
+
+  function cancelTermin(id: string, reason: string) {
+    run(() => apiSend(`/api/appointments/${id}/cancel`, "POST", { reason }), {
+      success: "Termín zrušený",
+      onDone: () => {
+        qc.invalidateQueries({ queryKey: ["patient-upcoming", patientId] });
+        qc.invalidateQueries({ queryKey: ["calendar"] });
+      },
+    });
   }
 
   if (isLoading) {
@@ -445,27 +505,6 @@ function PatientAppointment({ patientId }: { patientId: string }) {
     </p>
   );
 
-  if (upcoming) {
-    return (
-      <>
-        {lastVisitLine}
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-            Objednaný termín
-          </p>
-          <p className="mt-0.5 text-sm font-medium text-slate-900">
-            {clinicLongDate(upcoming.date)}
-          </p>
-          <p className="text-sm text-slate-600">
-            {clinicTime(upcoming.startAt)}–{clinicTime(upcoming.endAt)} ·{" "}
-            {TYPE_META[upcoming.appointmentType as AppointmentTypeLit]?.label ??
-              upcoming.appointmentType}
-          </p>
-        </div>
-      </>
-    );
-  }
-
   const category = BOOK_TYPES.find((t) => t.type === type)?.category ?? "AKUTNE";
   const candidate = lookup && !lookupBusy ? lookup.slot : null;
   const noneFound = lookup !== null && !lookupBusy && lookup.slot === null;
@@ -473,9 +512,21 @@ function PatientAppointment({ patientId }: { patientId: string }) {
   return (
     <>
       {lastVisitLine}
+
+      {upcomingList.map((appt) => (
+        <UpcomingTermin
+          key={appt.id}
+          appt={appt}
+          busy={busy}
+          onCancel={(reason) => cancelTermin(appt.id, reason)}
+        />
+      ))}
+
       <div className="mb-4 rounded-lg border border-slate-200 bg-white px-3 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Nie je objednaný — rýchle objednanie
+          {upcomingList.length > 0
+            ? "Pridať ďalší termín"
+            : "Nie je objednaný — rýchle objednanie"}
         </p>
 
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -486,6 +537,7 @@ function PatientAppointment({ patientId }: { patientId: string }) {
               onClick={() => {
                 setType(t.type);
                 setLookup(null);
+                setPendingBook(null);
               }}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                 type === t.type
@@ -539,6 +591,42 @@ function PatientAppointment({ patientId }: { patientId: string }) {
           </div>
         )}
 
+        {pendingBook && (
+          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+            <p className="text-sm font-medium text-amber-800">
+              Pacient už má termín v rovnaký {pendingBook.scope}:
+            </p>
+            <ul className="mt-1 list-disc pl-5 text-sm text-amber-700">
+              {pendingBook.dates.map((d) => (
+                <li key={d}>{clinicLongDate(d)}</li>
+              ))}
+            </ul>
+            <p className="mt-1 text-xs text-amber-700">
+              Naozaj objednať ďalší termín na {clinicDayChip(pendingBook.slot.date)}{" "}
+              {clinicTime(pendingBook.slot.startAt)}?
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                fullWidth
+                disabled={busy}
+                onClick={() => setPendingBook(null)}
+              >
+                Späť
+              </Button>
+              <Button
+                size="sm"
+                fullWidth
+                loading={busy}
+                onClick={() => doBook(pendingBook.slot, pendingBook.category)}
+              >
+                Objednať aj tak
+              </Button>
+            </div>
+          </div>
+        )}
+
         {noneFound && (
           <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
             {lookup?.maxMonths !== undefined
@@ -548,5 +636,83 @@ function PatientAppointment({ patientId }: { patientId: string }) {
         )}
       </div>
     </>
+  );
+}
+
+function UpcomingTermin({
+  appt,
+  busy,
+  onCancel,
+}: {
+  appt: UpcomingDTO;
+  busy: boolean;
+  onCancel: (reason: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Objednaný termín
+          </p>
+          <p className="mt-0.5 text-sm font-medium text-slate-900">
+            {clinicLongDate(appt.date)}
+          </p>
+          <p className="text-sm text-slate-600">
+            {clinicTime(appt.startAt)}–{clinicTime(appt.endAt)} ·{" "}
+            {TYPE_META[appt.appointmentType as AppointmentTypeLit]?.label ??
+              appt.appointmentType}
+          </p>
+        </div>
+        {!confirming && (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="shrink-0 rounded-md px-2 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50"
+          >
+            Zrušiť termín
+          </button>
+        )}
+      </div>
+
+      {confirming && (
+        <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
+          <TextareaField
+            label="Dôvod zrušenia"
+            required
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              fullWidth
+              disabled={busy}
+              onClick={() => {
+                setConfirming(false);
+                setReason("");
+              }}
+            >
+              Späť
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              fullWidth
+              loading={busy}
+              disabled={!reason.trim()}
+              onClick={() => onCancel(reason.trim())}
+            >
+              Zrušiť termín
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
