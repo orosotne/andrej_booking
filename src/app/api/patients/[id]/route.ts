@@ -83,12 +83,13 @@ export const PATCH = defineRoute(
       const before = await tx.patient.findUnique({ where: { id } });
       if (!before) throw new NotFoundError("Pacient neexistuje.");
 
-      // Identity fields (name, surname, birth year, phone) are immutable once the
-      // patient exists — ignore them here even if a request includes them. Only
-      // the national ID, date of birth, email, external ID and note can change.
       const updated = await tx.patient.update({
         where: { id },
         data: {
+          firstName: body.firstName,
+          lastName: body.lastName,
+          birthYear: body.birthYear,
+          phone: body.phone,
           nationalId:
             body.nationalId === undefined ? undefined : body.nationalId || null,
           dateOfBirth:

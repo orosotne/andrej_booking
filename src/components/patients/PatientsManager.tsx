@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Search, UserPlus, Users, Loader2 } from "lucide-react";
+import { Search, UserPlus, Users, Loader2, Pencil } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
@@ -40,22 +40,32 @@ interface Patient {
 type Editing = Patient | "new" | null;
 
 export function PatientsManager() {
+  const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Editing>(null);
 
-  const load = useCallback(async (q: string) => {
-    setLoading(true);
-    try {
-      const r = await apiGet<{ patients: Patient[] }>(
-        `/api/patients?search=${encodeURIComponent(q)}`,
-      );
-      setPatients(r.patients);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (q: string) => {
+      setLoading(true);
+      try {
+        const r = await apiGet<{ patients: Patient[] }>(
+          `/api/patients?search=${encodeURIComponent(q)}`,
+        );
+        setPatients(r.patients);
+      } catch (e) {
+        // Without this the empty list would masquerade as "no patients found".
+        toast(
+          e instanceof Error ? e.message : "Načítanie pacientov zlyhalo",
+          "error",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [toast],
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => load(query.trim()), 200);
@@ -150,8 +160,10 @@ function PatientDialog({
   onSaved: () => void;
 }) {
   const { busy, run } = useAsyncAction();
-  // Identity fields are frozen once a patient exists; only national ID + note stay editable.
-  const locked = patient !== null;
+  // For an existing patient, identity fields (name, surname, birth year, phone)
+  // start read-only behind an explicit "Upraviť" toggle to prevent accidental edits.
+  const [editingIdentity, setEditingIdentity] = useState(false);
+  const locked = patient !== null && !editingIdentity;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState({
     firstName: patient?.firstName ?? "",
@@ -171,6 +183,12 @@ function PatientDialog({
       run(
         () =>
           apiSend(`/api/patients/${patient.id}`, "PATCH", {
+            ...(editingIdentity && {
+              firstName: form.firstName,
+              lastName: form.lastName,
+              birthYear: Number(form.birthYear),
+              phone: form.phone,
+            }),
             nationalId: form.nationalId || undefined,
             note: form.note,
           }),
@@ -202,13 +220,27 @@ function PatientDialog({
   }
 
   return (
-    <Modal title={patient ? "Upraviť pacienta" : "Nový pacient"} onClose={onClose}>
+    <Modal title={patient ? "Detail o pacientovi" : "Nový pacient"} onClose={onClose}>
       {patient && <PatientAppointment patientId={patient.id} />}
       <form onSubmit={save} className="space-y-3">
-        {locked && (
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-            Identifikačné údaje (meno, priezvisko, rok narodenia, telefón) sa po
-            vytvorení nedajú meniť. Upraviť možno rodné číslo a poznámku.
+        {patient && locked && (
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+            <p className="text-xs text-slate-500">
+              Identifikačné údaje sú zamknuté proti náhodnej zmene.
+            </p>
+            <button
+              type="button"
+              onClick={() => setEditingIdentity(true)}
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Upraviť
+            </button>
+          </div>
+        )}
+        {patient && editingIdentity && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Úprava identifikačných údajov je odomknutá.
           </p>
         )}
         <div className="grid grid-cols-2 gap-3">
