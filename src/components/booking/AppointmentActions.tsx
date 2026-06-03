@@ -180,7 +180,14 @@ export function AppointmentActions({
             <Button
               variant={status === "ARRIVED" ? "success" : "secondary"}
               size="sm"
-              disabled={busy}
+              disabled={busy || status === "NO_SHOW"}
+              title={
+                status === "NO_SHOW"
+                  ? "Najprv zrušte stav „Neprišiel“"
+                  : status === "ARRIVED"
+                    ? "Zrušiť stav „Prišiel“"
+                    : undefined
+              }
               onClick={() => changeStatus("ARRIVED")}
             >
               Prišiel
@@ -188,7 +195,14 @@ export function AppointmentActions({
             <Button
               variant={status === "NO_SHOW" ? "danger" : "secondary"}
               size="sm"
-              disabled={busy}
+              disabled={busy || status === "ARRIVED"}
+              title={
+                status === "ARRIVED"
+                  ? "Najprv zrušte stav „Prišiel“"
+                  : status === "NO_SHOW"
+                    ? "Zrušiť stav „Neprišiel“"
+                    : undefined
+              }
               onClick={() => changeStatus("NO_SHOW")}
             >
               Neprišiel

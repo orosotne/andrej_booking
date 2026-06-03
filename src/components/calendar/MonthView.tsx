@@ -45,6 +45,9 @@ function summarize(day: CalendarDayDTO) {
   let available = 0;
   let booked = 0;
   let locked = 0;
+  let arrived = 0;
+  let noShow = 0;
+  let completed = 0;
   // Available slots split by the three bookable kinds (akútne / dispenzárne /
   // echo) so a month cell shows what's still free per type, not just a total.
   let akut = 0;
@@ -57,14 +60,27 @@ function summarize(day: CalendarDayDTO) {
         akut++;
       else if (s.appointmentType === "DISPENSARY") disp++;
       else if (s.appointmentType === "ECHO") echo++;
-    } else if (s.status === "BOOKED") booked++;
-    else if (s.status === "LOCKED") locked++;
+    } else if (s.status === "BOOKED") {
+      booked++;
+      if (s.appointment?.status === "ARRIVED") arrived++;
+      else if (s.appointment?.status === "NO_SHOW") noShow++;
+      else if (s.appointment?.status === "COMPLETED") completed++;
+    } else if (s.status === "LOCKED") locked++;
   }
   const earliestLocked = day.slots
     .filter((s) => s.status === "LOCKED" && s.releaseAt)
     .map((s) => s.releaseAt!.slice(0, 10))
     .sort()[0];
-  return { available, booked, locked, earliestLocked, avail: { akut, disp, echo } };
+  return {
+    available,
+    booked,
+    locked,
+    arrived,
+    noShow,
+    completed,
+    earliestLocked,
+    avail: { akut, disp, echo },
+  };
 }
 
 export function MonthView({
@@ -430,7 +446,35 @@ function DayCell({
                     )}
                   </div>
                 )}
-                {s.booked > 0 && <p className="text-slate-600">{s.booked} obj.</p>}
+                {s.booked > 0 && (
+                  <p className="flex flex-wrap items-center gap-x-1 text-slate-600">
+                    <span>{s.booked} obj.</span>
+                    {s.completed > 0 && (
+                      <span
+                        className="text-emerald-800"
+                        title={`${s.completed} × vybavený`}
+                      >
+                        {s.completed}✓✓
+                      </span>
+                    )}
+                    {s.arrived > 0 && (
+                      <span
+                        className="text-emerald-700"
+                        title={`${s.arrived} × prišiel`}
+                      >
+                        {s.arrived}✓
+                      </span>
+                    )}
+                    {s.noShow > 0 && (
+                      <span
+                        className="text-orange-700"
+                        title={`${s.noShow} × neprišiel`}
+                      >
+                        {s.noShow}✗
+                      </span>
+                    )}
+                  </p>
+                )}
                 {s.locked > 0 && (
                   <p className="flex items-center gap-0.5 text-slate-400">
                     <Lock className="h-3 w-3" />

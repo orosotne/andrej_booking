@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Check, User, Ban, Clock3 } from "lucide-react";
+import { Lock, Check, CheckCheck, User, Ban, Clock3, AlertTriangle } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
 import { TYPE_META } from "@/lib/slot-style";
 import { clinicTime, clinicDayChip } from "@/lib/format";
@@ -57,13 +57,32 @@ export function SlotCard({
         >
           {clinicTime(slot.startAt)}
         </span>
-        <StatusIcon status={slot.status} darkBg={isEchoDept} />
+        <StatusIcon
+          status={slot.status}
+          appointmentStatus={slot.appointment?.status}
+          darkBg={isEchoDept}
+        />
       </div>
 
       <div className="mt-1 leading-tight">
         {slot.status === "BOOKED" && slot.appointment ? (
-          <p className="truncate text-sm font-semibold text-slate-900">
-            {slot.appointment.patient.lastName} {slot.appointment.patient.firstName}
+          <p
+            className={`flex items-center gap-1 truncate text-sm font-semibold ${
+              slot.appointment.status === "COMPLETED"
+                ? "text-emerald-700 line-through"
+                : slot.appointment.status === "ARRIVED"
+                  ? "text-slate-500 line-through"
+                  : slot.appointment.status === "NO_SHOW"
+                    ? "italic text-orange-700"
+                    : "text-slate-900"
+            }`}
+          >
+            {slot.appointment.status === "NO_SHOW" && (
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            )}
+            <span className="truncate">
+              {slot.appointment.patient.lastName} {slot.appointment.patient.firstName}
+            </span>
           </p>
         ) : isEchoDept ? (
           <p className="text-xs font-semibold uppercase tracking-wide">
@@ -104,9 +123,11 @@ export function SlotCard({
 
 function StatusIcon({
   status,
+  appointmentStatus,
   darkBg,
 }: {
   status: SlotDTO["status"];
+  appointmentStatus?: string;
   darkBg?: boolean;
 }) {
   const cls = "h-3.5 w-3.5";
@@ -117,6 +138,12 @@ function StatusIcon({
     case "AVAILABLE":
       return <Clock3 className={`${cls} text-emerald-600`} aria-label="Voľné" />;
     case "BOOKED":
+      if (appointmentStatus === "COMPLETED")
+        return <CheckCheck className={`${cls} text-emerald-700`} aria-label="Vybavený" />;
+      if (appointmentStatus === "ARRIVED")
+        return <Check className={`${cls} text-emerald-600`} aria-label="Prišiel" />;
+      if (appointmentStatus === "NO_SHOW")
+        return <AlertTriangle className={`${cls} text-orange-600`} aria-label="Neprišiel" />;
       return <User className={`${cls} text-slate-700`} aria-label="Obsadené" />;
     case "BLOCKED":
       return <Ban className={`${cls} ${darkBg ? "text-white/80" : "text-slate-400"}`} aria-label="Blokované" />;
