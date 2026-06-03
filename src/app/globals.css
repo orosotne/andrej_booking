@@ -167,9 +167,13 @@ body {
        Poznámka overflow past the right page margin and get clipped. */
     table-layout: fixed;
   }
-  .calendar-print col.col-cas { width: 16%; }
-  .calendar-print col.col-pacient { width: 54%; }
-  .calendar-print col.col-telefon { width: 30%; }
+  .calendar-print col.col-cas { width: 12%; }
+  .calendar-print col.col-typ { width: 11%; }
+  .calendar-print col.col-stav { width: 11%; }
+  .calendar-print col.col-pacient { width: 18%; }
+  .calendar-print col.col-telefon { width: 13%; }
+  .calendar-print col.col-ucast { width: 11%; }
+  .calendar-print col.col-poznamka { width: 24%; }
   /* Repeat the column headers at the top of every printed page. */
   .calendar-print thead {
     display: table-header-group;
@@ -190,6 +194,14 @@ body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
+  }
+  /* Per-day grouping band inside week/month exports. */
+  .calendar-print .print-day-head th {
+    background: #e2e8f0;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
   }
   .calendar-print .print-time {
     white-space: nowrap;

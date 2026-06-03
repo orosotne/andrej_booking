@@ -45,6 +45,7 @@ import {
 } from "@/lib/calendar-ui";
 import { TYPE_META } from "@/lib/slot-style";
 import { holidayName } from "@/lib/holidays-sk";
+import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
 import { SlotTally, SlotAvailByType } from "./SlotTally";
 
 type AttendanceEntry = {
@@ -232,6 +233,14 @@ export function MonthView({
       performOpen(iso);
     }
   }
+
+  // PDF/print export: this month's working days that carry slots, as a table.
+  const printGroups: PrintGroup[] = cells
+    .filter(
+      (iso) =>
+        monthOf(iso) === monthOf(anchor) && WORKING_WEEKDAYS.includes(weekdayOf(iso)),
+    )
+    .map((iso) => ({ iso, day: dayByIso.get(iso) }));
 
   return (
     <>
@@ -429,6 +438,7 @@ export function MonthView({
         />
       )}
       </div>
+      <CalendarPrint period="month" periodLabel={clinicMonthLabel(anchor)} groups={printGroups} />
     </>
   );
 }
