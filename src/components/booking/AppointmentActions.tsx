@@ -8,7 +8,7 @@ import { Field, TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
-import { CalendarClock, Loader2, Printer } from "lucide-react";
+import { AlertTriangle, CalendarClock, Loader2, Printer } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
@@ -38,7 +38,7 @@ function statusNeedsPassword(current: string, target: string) {
 
 function statusRowClass(status: string) {
   if (status === "ARRIVED") return "border-green-200 bg-green-50 text-green-800";
-  if (status === "NO_SHOW") return "border-red-200 bg-red-50 text-red-700";
+  if (status === "NO_SHOW") return "border-orange-200 bg-orange-50 text-orange-800";
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
@@ -148,10 +148,13 @@ export function AppointmentActions({
           <div
             className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${statusRowClass(status)}`}
           >
-            <span
-              className={`text-sm font-medium ${status === "NO_SHOW" ? "line-through" : ""}`}
-            >
-              {appointment.patient.lastName} {appointment.patient.firstName}
+            <span className="flex items-center gap-2 text-sm font-medium">
+              {status === "NO_SHOW" && (
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              )}
+              <span className={status === "ARRIVED" ? "line-through" : ""}>
+                {appointment.patient.lastName} {appointment.patient.firstName}
+              </span>
             </span>
             <span className="text-xs font-semibold uppercase tracking-wide">
               {STATUS_LABEL[status] ?? status}
@@ -192,19 +195,23 @@ export function AppointmentActions({
             </Button>
           </div>
 
-          <div className="flex gap-2 border-t border-slate-100 pt-3">
-            <Button variant="outline" fullWidth onClick={openReschedule}>
-              Presunúť
-            </Button>
-            <Button
-              variant="secondary"
-              fullWidth
-              className="border-red-200 bg-red-50 text-red-700 ring-0 hover:bg-red-100"
-              onClick={() => setMode("cancel")}
-            >
-              Zrušiť
-            </Button>
-          </div>
+          {status !== "ARRIVED" && (
+            <div className="flex gap-2 border-t border-slate-100 pt-3">
+              <Button variant="outline" fullWidth onClick={openReschedule}>
+                Presunúť
+              </Button>
+              {status !== "NO_SHOW" && (
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  className="border-red-200 bg-red-50 text-red-700 ring-0 hover:bg-red-100"
+                  onClick={() => setMode("cancel")}
+                >
+                  Zrušiť
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -361,23 +368,28 @@ export function AppointmentActions({
         createPortal(
           <section className="appointment-slip-print" aria-hidden="true">
             <p className="slip-title">Termín vyšetrenia</p>
-            <p className="slip-name">
-              {appointment.patient.lastName} {appointment.patient.firstName}
-            </p>
-            <p className="slip-row">
-              <span className="slip-label">Dátum</span>
-              <span className="slip-value">{clinicLongDate(dayIso)}</span>
-            </p>
-            <p className="slip-row">
-              <span className="slip-label">Čas</span>
-              <span className="slip-value">
-                {clinicTime(slot.startAt)}–{clinicTime(slot.endAt)}
-              </span>
-            </p>
-            <p className="slip-row">
-              <span className="slip-label">Typ</span>
-              <span className="slip-value">{meta.label}</span>
-            </p>
+            <table className="slip-table">
+              <thead>
+                <tr>
+                  <th scope="col">Pacient</th>
+                  <th scope="col">Dátum</th>
+                  <th scope="col">Čas</th>
+                  <th scope="col">Typ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="slip-name">
+                    {appointment.patient.lastName} {appointment.patient.firstName}
+                  </td>
+                  <td>{clinicLongDate(dayIso)}</td>
+                  <td className="slip-time">
+                    {clinicTime(slot.startAt)}–{clinicTime(slot.endAt)}
+                  </td>
+                  <td>{meta.label}</td>
+                </tr>
+              </tbody>
+            </table>
           </section>,
           document.body,
         )}
