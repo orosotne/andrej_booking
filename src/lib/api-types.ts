@@ -50,3 +50,15 @@ export interface SlotCountsDTO {
   booked: number;
   locked: number;
 }
+
+// Admin user-management DTO. Never carries passwordHash or totpSecret.
+export interface AdminUserDTO {
+  id: string;
+  name: string;
+  email: string;
+  role: "ADMIN" | "DOCTOR" | "NURSE";
+  isActive: boolean;
+  expiresAt: string | null; // YYYY-MM-DD, or null for a permanent account
+  twoFactorEnabled: boolean;
+  createdAt: string; // ISO instant
+}

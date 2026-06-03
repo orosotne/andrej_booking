@@ -169,3 +169,29 @@ export const slotRuleUpdateSchema = z.object({
 export const templateApplySchema = z.object({
   dryRun: z.boolean().optional().default(false),
 });
+
+// --- User management (admin-only) ---
+
+export const roleEnum = z.enum(["ADMIN", "DOCTOR", "NURSE"]);
+
+export const userCreateSchema = z.object({
+  name: z.string().min(1, "Meno je povinné").max(120),
+  email: z.string().email("Neplatný e-mail"),
+  role: roleEnum,
+  // Optional expiry for temporary stand-in accounts (stored as end of that day).
+  expiresAt: isoDate.optional(),
+});
+
+export const userUpdateSchema = z.object({
+  name: z.string().min(1, "Meno je povinné").max(120).optional(),
+  role: roleEnum.optional(),
+  isActive: z.boolean().optional(),
+  // null explicitly clears the expiry (turns a temporary account permanent).
+  expiresAt: isoDate.nullable().optional(),
+});
+
+// Reset a user's password. Omit `password` to have the server generate a
+// readable passphrase; pass one to set it explicitly.
+export const userPasswordSchema = z.object({
+  password: z.string().min(8, "Heslo musí mať aspoň 8 znakov").max(200).optional(),
+});

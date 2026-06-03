@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 const ITEMS = [
   { href: "/sablona", label: "Šablóna" },
   { href: "/nastavenia", label: "Nastavenia" },
+  { href: "/pouzivatelia", label: "Používatelia" },
   { href: "/audit", label: "Audit" },
 ];
 

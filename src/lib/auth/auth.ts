@@ -27,6 +27,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
         if (!user || !user.isActive || !user.passwordHash) return null;
 
+        // Temporary stand-in accounts expire: once expiresAt passes, login is
+        // refused even though the row still exists (kept for the audit trail).
+        if (user.expiresAt && user.expiresAt <= new Date()) return null;
+
         // Too many recent failures — reject without even checking the password.
         if (isLocked(user)) return null;
 
