@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { NavLink } from "@/components/layout/NavLink";
 import { AdminMenu } from "@/components/layout/AdminMenu";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { MobileQuickNav } from "@/components/layout/MobileQuickNav";
 import { TwoFactorSetup } from "@/components/admin/TwoFactorSetup";
 import { ROLE_LABEL } from "@/lib/auth/roles";
 
@@ -125,6 +126,7 @@ export default async function AppLayout({
           </div>
         </div>
       </header>
+      <MobileQuickNav />
       <main className="mx-auto max-w-6xl px-4 py-5">{children}</main>
     </div>
   );
