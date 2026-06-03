@@ -8,11 +8,18 @@ import { TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
-import { AlertTriangle, CalendarClock, Loader2, Printer } from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarDays, Loader2, Printer } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META, apptStatusLabel } from "@/lib/slot-style";
 import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
+import { SlotPickerCalendar } from "@/components/patients/SlotPickerCalendar";
+
+// Appointment kinds the calendar slot picker / /api/slots/available support.
+const PICKER_TYPES = ["DISPENSARY", "ECHO", "PRE_HOSPITAL"] as const;
+type PickerType = (typeof PICKER_TYPES)[number];
+const asPickerType = (t: string): PickerType | null =>
+  (PICKER_TYPES as readonly string[]).includes(t) ? (t as PickerType) : null;
 
 // Grace window (min) after slot start before "Neprišiel" (no-show) can be set.
 const NO_SHOW_GRACE_MIN = 10;
@@ -53,8 +60,10 @@ export function AppointmentActions({
   const [status, setStatus] = useState(appointment?.status ?? "SCHEDULED");
   const [statusOpen, setStatusOpen] = useState(false);
   const [options, setOptions] = useState<RescheduleOption[] | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const meta = TYPE_META[slot.appointmentType];
+  const pickerType = asPickerType(slot.appointmentType);
 
   // Attendance unlocks by time: "Prišiel" from start + 1 min, "Neprišiel" only
   // after a grace window (a late patient may still walk in). Timer re-renders at each gate.
@@ -110,6 +119,20 @@ export function AppointmentActions({
       setOptions([]);
       toast(e instanceof Error ? e.message : "Načítanie termínov zlyhalo", "error");
     }
+  }
+
+  function doReschedule(newSlotId: string) {
+    runAction(
+      () =>
+        apiSend(`/api/appointments/${apptId}/reschedule`, "POST", { newSlotId }),
+      {
+        success: "Objednávka presunutá",
+        onDone: () => {
+          onChanged();
+          onClose();
+        },
+      },
+    );
   }
 
   // Print a single-appointment slip for the patient. The slip lives in a portal
@@ -338,15 +361,7 @@ export function AppointmentActions({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() =>
-                      runAction(
-                        () =>
-                          apiSend(`/api/appointments/${apptId}/reschedule`, "POST", {
-                            newSlotId: opt.slot.id,
-                          }),
-                        { success: "Objednávka presunutá", onDone: () => { onChanged(); onClose(); } },
-                      )
-                    }
+                    onClick={() => doReschedule(opt.slot.id)}
                     className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"
                   >
                     <span className="font-medium text-slate-800">
@@ -360,12 +375,33 @@ export function AppointmentActions({
               ))}
             </ul>
           )}
+          {pickerType && (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+            >
+              <CalendarDays className="h-4 w-4" />
+              Vybrať z kalendára
+            </button>
+          )}
           <Button variant="outline" fullWidth onClick={() => setMode("view")}>
             Späť
           </Button>
         </div>
       )}
     </Modal>
+      {pickerOpen && pickerType && (
+        <SlotPickerCalendar
+          type={pickerType}
+          typeLabel={meta.label}
+          onPick={(picked) => {
+            setPickerOpen(false);
+            doReschedule(picked.id);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
       {typeof document !== "undefined" &&
         createPortal(
           <section className="appointment-slip-print" aria-hidden="true">
