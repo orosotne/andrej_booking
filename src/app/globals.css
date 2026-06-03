@@ -168,12 +168,12 @@ body {
     table-layout: fixed;
   }
   .calendar-print col.col-cas { width: 15%; }
-  .calendar-print col.col-typ { width: 12%; }
+  .calendar-print col.col-typ { width: 15%; }
   .calendar-print col.col-stav { width: 11%; }
-  .calendar-print col.col-pacient { width: 14%; }
+  .calendar-print col.col-pacient { width: 11%; }
   .calendar-print col.col-telefon { width: 17%; }
-  .calendar-print col.col-ucast { width: 12%; }
-  .calendar-print col.col-poznamka { width: 19%; }
+  .calendar-print col.col-ucast { width: 11%; }
+  .calendar-print col.col-poznamka { width: 20%; }
   /* Repeat the column headers at the top of every printed page. */
   .calendar-print thead {
     display: table-header-group;
@@ -184,12 +184,12 @@ body {
     padding: 3px 6px;
     text-align: left;
     vertical-align: top;
-    /* Wrap at word boundaries; only hyphenate a single word when it genuinely
-       cannot fit, so labels like "Dispenzárne" or "Objednaný" stay intact
-       instead of breaking mid-word as `anywhere` did. */
+    /* Wrap only at spaces; never hyphenate, so labels like "Dispenzárne" or
+       "Objednaný" stay on one line. The columns are wide enough to hold them;
+       break-word stays as a last-resort guard against an unbroken overflow. */
     overflow-wrap: break-word;
     word-break: normal;
-    hyphens: auto;
+    hyphens: none;
   }
   .calendar-print thead th {
     background: #f1f5f9;
