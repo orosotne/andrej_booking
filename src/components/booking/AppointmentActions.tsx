@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { TextareaField } from "@/components/ui/Field";
+import { Field, TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { CalendarClock } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
+import { CalendarClock, Loader2 } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
-import { apiSend } from "@/lib/client";
+import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
 import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
 
@@ -17,39 +18,98 @@ export interface RescheduleOption {
   dayIso: string;
 }
 
-type Mode = "view" | "cancel" | "reschedule" | "note";
+type Mode = "view" | "cancel" | "reschedule" | "note" | "statusPassword";
 
-const STATUS_ACTIONS: { value: string; label: string }[] = [
-  { value: "ARRIVED", label: "Prišiel" },
-  { value: "NO_SHOW", label: "Neprišiel" },
-  { value: "COMPLETED", label: "Vybavené" },
-];
+const STATUS_LABEL: Record<string, string> = {
+  SCHEDULED: "Objednaný",
+  ARRIVED: "Prišiel",
+  NO_SHOW: "Neprišiel",
+  CANCELLED: "Zrušený",
+  RESCHEDULED: "Presunutý",
+  COMPLETED: "Vybavený",
+};
+
+// Setting NO_SHOW or leaving it again is gated by the same unlock password as
+// opening Wednesday/Friday — enforced server-side, mirrored here for the UX.
+function statusNeedsPassword(current: string, target: string) {
+  return target === "NO_SHOW" || current === "NO_SHOW";
+}
+
+function statusRowClass(status: string) {
+  if (status === "ARRIVED") return "border-green-200 bg-green-50 text-green-800";
+  if (status === "NO_SHOW") return "border-red-200 bg-red-50 text-red-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
 
 export function AppointmentActions({
   slot,
   dayIso,
-  rescheduleOptions,
   onClose,
   onChanged,
 }: {
   slot: SlotDTO;
   dayIso: string;
-  rescheduleOptions: RescheduleOption[];
   onClose: () => void;
   onChanged: () => void;
 }) {
   const { busy, run: runAction } = useAsyncAction();
+  const { toast } = useToast();
   const appointment = slot.appointment;
   const [mode, setMode] = useState<Mode>("view");
   const [reason, setReason] = useState("");
+  const [savedNote, setSavedNote] = useState(appointment?.note ?? "");
   const [noteText, setNoteText] = useState(appointment?.note ?? "");
+  const [status, setStatus] = useState(appointment?.status ?? "SCHEDULED");
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [options, setOptions] = useState<RescheduleOption[] | null>(null);
   const meta = TYPE_META[slot.appointmentType];
 
   if (!appointment) return null;
   const apptId = appointment.id;
 
-  const run = (fn: () => Promise<unknown>, successMsg: string) =>
-    runAction(fn, { success: successMsg, onDone: onChanged });
+  // Status changes keep the modal open: update the local status, refresh the
+  // calendar in the background, and stay on the view so the new colour shows.
+  function submitStatus(target: string, pw?: string) {
+    runAction(
+      () => apiSend(`/api/appointments/${apptId}`, "PATCH", { status: target, password: pw }),
+      {
+        success: `Stav: ${STATUS_LABEL[target] ?? target}`,
+        onDone: () => {
+          setStatus(target);
+          setPendingStatus(null);
+          setPassword("");
+          setMode("view");
+          onChanged();
+        },
+      },
+    );
+  }
+
+  function changeStatus(clicked: "ARRIVED" | "NO_SHOW") {
+    const target = status === clicked ? "SCHEDULED" : clicked;
+    if (statusNeedsPassword(status, target)) {
+      setPendingStatus(target);
+      setPassword("");
+      setMode("statusPassword");
+    } else {
+      submitStatus(target);
+    }
+  }
+
+  async function openReschedule() {
+    setMode("reschedule");
+    setOptions(null);
+    try {
+      const res = await apiGet<{ options: RescheduleOption[] }>(
+        `/api/appointments/${apptId}/reschedule-options`,
+      );
+      setOptions(res.options);
+    } catch (e) {
+      setOptions([]);
+      toast(e instanceof Error ? e.message : "Načítanie termínov zlyhalo", "error");
+    }
+  }
 
   return (
     <Modal
@@ -62,42 +122,56 @@ export function AppointmentActions({
           {appointment.patient.phone && (
             <p className="text-sm text-slate-600">📞 {appointment.patient.phone}</p>
           )}
+
+          <div
+            className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${statusRowClass(status)}`}
+          >
+            <span
+              className={`text-sm font-medium ${status === "NO_SHOW" ? "line-through" : ""}`}
+            >
+              {appointment.patient.lastName} {appointment.patient.firstName}
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-wide">
+              {STATUS_LABEL[status] ?? status}
+            </span>
+          </div>
+
           <button
             type="button"
-            onClick={() => setMode("note")}
+            onClick={() => {
+              setNoteText(savedNote);
+              setMode("note");
+            }}
             className="w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-sm transition hover:bg-slate-100"
           >
-            {appointment.note ? (
-              <span className="text-slate-700">{appointment.note}</span>
+            {savedNote ? (
+              <span className="text-slate-700">{savedNote}</span>
             ) : (
               <span className="text-slate-400">+ Pridať poznámku</span>
             )}
           </button>
-          <p className="text-xs uppercase tracking-wide text-slate-400">
-            Stav: {appointment.status}
-          </p>
 
-          <div className="grid grid-cols-3 gap-2">
-            {STATUS_ACTIONS.map((a) => (
-              <Button
-                key={a.value}
-                variant="secondary"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  run(
-                    () => apiSend(`/api/appointments/${apptId}`, "PATCH", { status: a.value }),
-                    `Stav: ${a.label}`,
-                  )
-                }
-              >
-                {a.label}
-              </Button>
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant={status === "ARRIVED" ? "success" : "secondary"}
+              size="sm"
+              disabled={busy}
+              onClick={() => changeStatus("ARRIVED")}
+            >
+              Prišiel
+            </Button>
+            <Button
+              variant={status === "NO_SHOW" ? "danger" : "secondary"}
+              size="sm"
+              disabled={busy}
+              onClick={() => changeStatus("NO_SHOW")}
+            >
+              Neprišiel
+            </Button>
           </div>
 
           <div className="flex gap-2 border-t border-slate-100 pt-3">
-            <Button variant="outline" fullWidth onClick={() => setMode("reschedule")}>
+            <Button variant="outline" fullWidth onClick={openReschedule}>
               Presunúť
             </Button>
             <Button
@@ -107,6 +181,39 @@ export function AppointmentActions({
               onClick={() => setMode("cancel")}
             >
               Zrušiť
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {mode === "statusPassword" && (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Zmena stavu „Neprišiel“ je chránená heslom (rovnakým ako pri otváraní
+            stredy a piatka). Zadajte ho pre potvrdenie.
+          </p>
+          <Field
+            label="Heslo"
+            type="password"
+            autoComplete="one-time-code"
+            required
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button variant="outline" fullWidth onClick={() => setMode("view")}>
+              Späť
+            </Button>
+            <Button
+              fullWidth
+              loading={busy}
+              disabled={!password.trim()}
+              onClick={() =>
+                pendingStatus && submitStatus(pendingStatus, password.trim())
+              }
+            >
+              Potvrdiť
             </Button>
           </div>
         </div>
@@ -131,9 +238,9 @@ export function AppointmentActions({
               loading={busy}
               disabled={!reason.trim()}
               onClick={() =>
-                run(
+                runAction(
                   () => apiSend(`/api/appointments/${apptId}/cancel`, "POST", { reason }),
-                  "Objednávka zrušená",
+                  { success: "Objednávka zrušená", onDone: () => { onChanged(); onClose(); } },
                 )
               }
             >
@@ -159,9 +266,16 @@ export function AppointmentActions({
               fullWidth
               loading={busy}
               onClick={() =>
-                run(
+                runAction(
                   () => apiSend(`/api/appointments/${apptId}`, "PATCH", { note: noteText }),
-                  "Poznámka uložená",
+                  {
+                    success: "Poznámka uložená",
+                    onDone: () => {
+                      setSavedNote(noteText);
+                      setMode("view");
+                      onChanged();
+                    },
+                  },
                 )
               }
             >
@@ -174,28 +288,32 @@ export function AppointmentActions({
       {mode === "reschedule" && (
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
-            Vyberte voľný slot rovnakého typu ({meta.label}):
+            Najbližšie voľné termíny rovnakého typu ({meta.label}):
           </p>
-          {rescheduleOptions.length === 0 ? (
+          {options === null ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            </div>
+          ) : options.length === 0 ? (
             <EmptyState
               icon={CalendarClock}
-              title="Žiadny voľný slot"
-              description="V zobrazenom rozsahu nie je voľný slot tohto typu."
+              title="Žiadny voľný termín"
+              description="Pre tento typ nie je odteraz dopredu žiadny voľný slot."
             />
           ) : (
-            <ul className="max-h-60 space-y-1 overflow-y-auto">
-              {rescheduleOptions.map((opt) => (
+            <ul className="space-y-1">
+              {options.map((opt) => (
                 <li key={opt.slot.id}>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() =>
-                      run(
+                      runAction(
                         () =>
                           apiSend(`/api/appointments/${apptId}/reschedule`, "POST", {
                             newSlotId: opt.slot.id,
                           }),
-                        "Objednávka presunutá",
+                        { success: "Objednávka presunutá", onDone: () => { onChanged(); onClose(); } },
                       )
                     }
                     className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"

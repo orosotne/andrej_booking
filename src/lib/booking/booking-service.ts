@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { recordAudit, type AuditContext } from "@/lib/audit/audit";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
+import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import type {
   AppointmentTypeLit,
   PatientCategoryLit,
@@ -196,6 +197,8 @@ export async function rescheduleAppointment(input: RescheduleInput) {
         appointmentType: newSlot.appointmentType,
         status: "SCHEDULED",
         note: appointment.note,
+        patientCategory: appointment.patientCategory,
+        categoryReason: appointment.categoryReason,
         createdByUserId: input.ctx.actorUserId ?? null,
         updatedByUserId: input.ctx.actorUserId ?? null,
       },
@@ -224,6 +227,7 @@ export interface UpdateAppointmentInput {
     | "RESCHEDULED"
     | "COMPLETED";
   note?: string;
+  password?: string;
   ctx: AuditContext;
 }
 
@@ -233,6 +237,20 @@ export async function updateAppointment(input: UpdateAppointmentInput) {
       where: { id: input.appointmentId },
     });
     if (!before) throw new NotFoundError("Objednávka neexistuje.");
+
+    // Setting or clearing NO_SHOW is gated by the unlock password (same secret
+    // as opening Wednesday/Friday). Note-only edits are never gated.
+    const changingStatus =
+      input.status !== undefined && input.status !== before.status;
+    if (
+      changingStatus &&
+      (input.status === "NO_SHOW" || before.status === "NO_SHOW")
+    ) {
+      assertUnlockPassword(
+        input.password,
+        "Nesprávne heslo na zmenu stavu „Neprišiel“.",
+      );
+    }
 
     const updated = await tx.appointment.update({
       where: { id: before.id },

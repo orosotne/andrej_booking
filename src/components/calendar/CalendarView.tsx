@@ -20,10 +20,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SlotCard } from "./SlotCard";
 import { BookingDialog } from "@/components/booking/BookingDialog";
-import {
-  AppointmentActions,
-  type RescheduleOption,
-} from "@/components/booking/AppointmentActions";
+import { AppointmentActions } from "@/components/booking/AppointmentActions";
 import { SlotUnlockDialog } from "@/components/booking/SlotUnlockDialog";
 import {
   isoAddDays,
@@ -101,19 +98,6 @@ export function CalendarView({
   // Mobile shows one day: the selected day if it's in this week, else the first working day.
   const mobileDay = weekIsos.includes(selectedDay) ? selectedDay : workingIsos[0];
 
-  // Available slots of a given type across the loaded week (reschedule targets).
-  const rescheduleOptionsFor = (type: string): RescheduleOption[] => {
-    const out: RescheduleOption[] = [];
-    data?.days.forEach((day) =>
-      day.slots.forEach((slot) => {
-        if (slot.status === "AVAILABLE" && slot.appointmentType === type) {
-          out.push({ slot, dayIso: day.date });
-        }
-      }),
-    );
-    return out;
-  };
-
   function handleSelect(slot: SlotDTO, dayIso: string) {
     if (slot.status === "AVAILABLE") setDialog({ type: "book", slot, dayIso });
     else if (slot.status === "BOOKED") setDialog({ type: "actions", slot, dayIso });
@@ -161,7 +145,7 @@ export function CalendarView({
   };
 
   // Day mode: one day, full focus, navigated day-by-day. weekStart stays in sync
-  // so the fetched week always contains the selected day (and feeds reschedule).
+  // so the fetched week always contains the selected day.
   const isDay = mode === "day";
   function goToDay(iso: string) {
     setSelectedDay(iso);
@@ -330,9 +314,8 @@ export function CalendarView({
         <AppointmentActions
           slot={dialog.slot}
           dayIso={dialog.dayIso}
-          rescheduleOptions={rescheduleOptionsFor(dialog.slot.appointmentType)}
           onClose={close}
-          onChanged={afterChange}
+          onChanged={invalidate}
         />
       )}
       {dialog?.type === "unlock" && (

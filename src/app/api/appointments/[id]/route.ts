@@ -16,6 +16,7 @@ export async function PATCH(
       appointmentId: id,
       status: body.status,
       note: body.note,
+      password: body.password,
       ctx: auditContext(req, user.id),
     });
     return NextResponse.json({ appointment });

@@ -89,6 +89,9 @@ export const patchableAppointmentStatus = z.enum([
 export const updateAppointmentSchema = z.object({
   status: patchableAppointmentStatus.optional(),
   note: z.string().max(2000).optional(),
+  // Required only when the status change involves NO_SHOW (set or clear) — the
+  // booking service enforces it; the same unlock password as Wednesday/Friday.
+  password: z.string().max(200).optional(),
 });
 
 export const patientCreateSchema = z.object({
