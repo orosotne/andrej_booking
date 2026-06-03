@@ -168,12 +168,12 @@ body {
     table-layout: fixed;
   }
   .calendar-print col.col-cas { width: 15%; }
-  .calendar-print col.col-typ { width: 13%; }
-  .calendar-print col.col-stav { width: 12%; }
-  .calendar-print col.col-pacient { width: 15%; }
-  .calendar-print col.col-telefon { width: 13%; }
+  .calendar-print col.col-typ { width: 12%; }
+  .calendar-print col.col-stav { width: 11%; }
+  .calendar-print col.col-pacient { width: 14%; }
+  .calendar-print col.col-telefon { width: 17%; }
   .calendar-print col.col-ucast { width: 12%; }
-  .calendar-print col.col-poznamka { width: 20%; }
+  .calendar-print col.col-poznamka { width: 19%; }
   /* Repeat the column headers at the top of every printed page. */
   .calendar-print thead {
     display: table-header-group;
@@ -207,6 +207,11 @@ body {
     letter-spacing: 0;
   }
   .calendar-print .print-time {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Keep the phone number on one line (both "0917 …" and "+421 917 …" fit). */
+  .calendar-print .print-phone {
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }

@@ -147,7 +147,7 @@ export function CalendarPrint({
                   <td>{TYPE_META[slot.appointmentType].label}</td>
                   <td>{STATUS_LABEL[slot.status]}</td>
                   <td>{patientName(slot)}</td>
-                  <td>{slot.appointment?.patient.phone ?? "—"}</td>
+                  <td className="print-phone">{slot.appointment?.patient.phone ?? "—"}</td>
                   <td>{attendanceLabel(slot)}</td>
                   <td>{slot.appointment?.note ?? slot.lockedReason ?? "—"}</td>
                 </tr>
