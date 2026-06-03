@@ -202,9 +202,11 @@ body {
     color: #555;
   }
 
-  /* When printing a single appointment slip, suppress the calendar export and
-     reveal only the slip (portalled to <body>, outside the .no-print subtree). */
-  body.printing-slip .calendar-print {
+  /* When printing a single appointment slip, suppress everything else (header,
+     <main> with the open Modal, calendar export) and reveal only the slip
+     portalled to <body>. Without this the open Modal prints on page 1 and the
+     slip lands on page 2. */
+  body.printing-slip > *:not(.appointment-slip-print) {
     display: none !important;
   }
   body.printing-slip .appointment-slip-print {
