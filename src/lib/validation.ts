@@ -26,19 +26,20 @@ export const calendarRangeSchema = z.object({
   to: isoDate,
 });
 
-// Hromadné zatvorenie rozsahu dní (dovolenka). Chránené rovnakým heslom ako
-// zatvorenie jedného dňa; dôvod je nepovinný (audit).
-export const closeRangeSchema = z
+// Dovolenka (rozsah zatvorených dní). Spravuje ju ADMIN, preto bez hesla;
+// dôvod je nepovinný. Rovnaká schéma slúži na vytvorenie aj zmenu dátumov.
+export const vacationCreateSchema = z
   .object({
     from: isoDate,
     to: isoDate,
-    password: z.string().min(1, "Heslo je povinné").max(200),
     reason: z.string().max(500).optional(),
   })
   .refine((v) => v.from <= v.to, {
     message: "Dátum „od“ musí byť skôr alebo rovnaký ako „do“.",
     path: ["to"],
   });
+
+export const vacationUpdateSchema = vacationCreateSchema;
 
 // Zatvorenie jedného dňa. Heslo zostáva nepovinné v schéme, aby chýbajúce/zlé
 // heslo hlásil assertUnlockPassword rovnakou hláškou ako doteraz; schéma navyše

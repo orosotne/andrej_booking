@@ -52,6 +52,15 @@ export interface SlotCountsDTO {
   locked: number;
 }
 
+// A planned clinic closure (vacation). Dates are YYYY-MM-DD; createdAt is ISO.
+export interface VacationDTO {
+  id: string;
+  from: string;
+  to: string;
+  reason: string | null;
+  createdAt: string;
+}
+
 // Admin user-management DTO. Never carries passwordHash or totpSecret.
 export interface AdminUserDTO {
   id: string;

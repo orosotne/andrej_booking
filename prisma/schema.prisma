@@ -187,14 +187,39 @@ model CalendarDay {
   openedByUserId String?           @map("opened_by_user_id")
   openedAt       DateTime?         @map("opened_at")
   note           String?
+  // Set when a Vacation closed this day, so removing that vacation reopens only
+  // its own days and never a holiday- or manually-closed day. Exclusive: a day
+  // belongs to at most one vacation.
+  closedByVacationId String?       @map("closed_by_vacation_id")
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
 
-  openedBy User?             @relation("OpenedBy", fields: [openedByUserId], references: [id])
-  slots    AppointmentSlot[]
+  openedBy         User?             @relation("OpenedBy", fields: [openedByUserId], references: [id])
+  closedByVacation Vacation?         @relation(fields: [closedByVacationId], references: [id], onDelete: SetNull)
+  slots            AppointmentSlot[]
 
   @@index([date])
+  @@index([closedByVacationId])
   @@map("calendar_days")
+}
+
+// A planned clinic closure spanning a date range (vacation, training, …). Single
+// source of truth for range closures: creating one blocks the free slots of
+// every working day it covers; removing or shrinking it reopens only the days it
+// owns (tracked via CalendarDay.closedByVacationId).
+model Vacation {
+  id              String   @id @default(cuid())
+  startDate       DateTime @map("start_date") @db.Date
+  endDate         DateTime @map("end_date") @db.Date
+  reason          String?
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  closedDays CalendarDay[]
+
+  @@index([startDate, endDate])
+  @@map("vacations")
 }
 
 model AppointmentSlot {

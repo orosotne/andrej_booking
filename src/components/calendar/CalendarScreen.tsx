@@ -57,12 +57,12 @@ export function CalendarScreen({
 
         <div className="flex items-center gap-1.5">
           <NextAppointmentSearch onPickDay={pickDay} />
-          {canManageClosures && (
+          {isAdmin && (
             <button
               type="button"
               onClick={() => setShowRangeClose(true)}
-              title="Zatvoriť rozsah dní (dovolenka)"
-              aria-label="Zatvoriť rozsah dní (dovolenka)"
+              title="Naplánovať dovolenku"
+              aria-label="Naplánovať dovolenku"
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               <CalendarOff className="h-4 w-4" />

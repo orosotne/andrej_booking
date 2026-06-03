@@ -19,13 +19,12 @@ export function RangeCloseDialog({
   const [busy, setBusy] = useState(false);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [password, setPassword] = useState("");
   const [reason, setReason] = useState("");
   // Conflict / failure message kept inline (not just a toast) so the doctor can
   // read which days still hold appointments while deciding what to reschedule.
   const [error, setError] = useState<string | null>(null);
 
-  const invalid = !from || !to || !password || from > to;
+  const invalid = !from || !to || from > to;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,13 +32,12 @@ export function RangeCloseDialog({
     setError(null);
     setBusy(true);
     try {
-      await apiSend<{ closed: number }>("/api/calendar-days/close-range", "POST", {
+      await apiSend("/api/vacations", "POST", {
         from,
         to,
-        password,
         reason: reason.trim() || undefined,
       });
-      toast("Dni zatvorené (dovolenka)", "success");
+      toast("Dovolenka naplánovaná", "success");
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Operácia zlyhala");
@@ -50,8 +48,8 @@ export function RangeCloseDialog({
 
   return (
     <Modal
-      title="Zatvoriť rozsah dní (dovolenka)"
-      subtitle="Zablokuje všetky pracovné dni v rozsahu. Ak sú v rozsahu objednaní pacienti, najprv ich presuňte inde — až potom sa dá dovolenka zatvoriť."
+      title="Naplánovať dovolenku"
+      subtitle="Zablokuje všetky pracovné dni v rozsahu. Ak sú v rozsahu objednaní pacienti, najprv ich presuňte inde — až potom sa dá dovolenka naplánovať. Spravovať ich vieš v sekcii Dovolenky."
       onClose={onClose}
     >
       <form onSubmit={submit} className="space-y-3">
@@ -72,14 +70,6 @@ export function RangeCloseDialog({
             onChange={(e) => setTo(e.target.value)}
           />
         </div>
-        <Field
-          label="Heslo"
-          type="password"
-          required
-          autoFocus
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
         <TextareaField
           label="Dôvod (voliteľné)"
           value={reason}
@@ -104,7 +94,7 @@ export function RangeCloseDialog({
             disabled={invalid}
           >
             <CalendarOff className="h-4 w-4" />
-            Zatvoriť rozsah
+            Naplánovať dovolenku
           </Button>
         </div>
       </form>
