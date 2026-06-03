@@ -161,7 +161,19 @@ body {
   .calendar-print .print-table {
     width: 100%;
     border-collapse: collapse;
+    /* Fixed layout so the 7 columns share the page width proportionally.
+       Without it, mobile print preview renders the narrow device viewport and
+       lets content (time, names) stretch the left columns until Účasť and
+       Poznámka overflow past the right page margin and get clipped. */
+    table-layout: fixed;
   }
+  .calendar-print col.col-cas { width: 12%; }
+  .calendar-print col.col-typ { width: 11%; }
+  .calendar-print col.col-stav { width: 11%; }
+  .calendar-print col.col-pacient { width: 18%; }
+  .calendar-print col.col-telefon { width: 13%; }
+  .calendar-print col.col-ucast { width: 11%; }
+  .calendar-print col.col-poznamka { width: 24%; }
   /* Repeat the column headers at the top of every printed page. */
   .calendar-print thead {
     display: table-header-group;
@@ -172,6 +184,9 @@ body {
     padding: 3px 6px;
     text-align: left;
     vertical-align: top;
+    /* With table-layout: fixed, long values must wrap instead of forcing the
+       column wider (which would push later columns off the page). */
+    overflow-wrap: anywhere;
   }
   .calendar-print thead th {
     background: #f1f5f9;

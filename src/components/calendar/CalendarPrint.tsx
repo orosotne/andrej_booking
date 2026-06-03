@@ -108,6 +108,15 @@ export function CalendarPrint({
         <p className="print-empty">Žiadne vygenerované sloty pre toto obdobie.</p>
       ) : (
         <table className="print-table">
+          <colgroup>
+            <col className="col-cas" />
+            <col className="col-typ" />
+            <col className="col-stav" />
+            <col className="col-pacient" />
+            <col className="col-telefon" />
+            <col className="col-ucast" />
+            <col className="col-poznamka" />
+          </colgroup>
           <thead>
             <tr>
               <th>Čas</th>
