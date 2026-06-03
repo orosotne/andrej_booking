@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { ValidationError } from "@/lib/errors";
 
-function constantTimeEqual(a: string, b: string): boolean {
+/** Length-safe constant-time string comparison (avoids leaking secrets via timing). */
+export function constantTimeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
   if (bufA.length !== bufB.length) return false;

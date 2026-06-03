@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authConfig } from "./auth.config";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "./password";
-import { verifyTotp } from "./totp";
+import { verifyTotp, decryptTotpSecret } from "./totp";
 import { isLocked, nextFailureState, CLEARED_LOCKOUT } from "./lockout";
 
 const credentialsSchema = z.object({
@@ -42,7 +42,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         let secondFactorOk = true;
         if (passwordOk && user.twoFactorEnabled && user.totpSecret) {
           const code = parsed.data.totp ?? "";
-          secondFactorOk = /^\d{6}$/.test(code) && verifyTotp(user.totpSecret, code);
+          secondFactorOk =
+            /^\d{6}$/.test(code) &&
+            verifyTotp(decryptTotpSecret(user.totpSecret), code);
         }
 
         if (!passwordOk || !secondFactorOk) {

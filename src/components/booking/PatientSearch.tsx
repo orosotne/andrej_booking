@@ -5,6 +5,7 @@ import { UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
 
 export interface PatientLite {
@@ -19,6 +20,7 @@ export function PatientSearch({
 }: {
   onSelect: (patient: PatientLite) => void;
 }) {
+  const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PatientLite[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,12 +44,18 @@ export function PatientSearch({
           `/api/patients?search=${encodeURIComponent(q)}`,
         );
         setResults(r.patients);
+      } catch (e) {
+        // Surface the failure instead of showing an empty (= "not found") list.
+        toast(
+          e instanceof Error ? e.message : "Hľadanie pacienta zlyhalo",
+          "error",
+        );
       } finally {
         setLoading(false);
       }
     }, 200);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, toast]);
 
   if (showCreate) {
     return (

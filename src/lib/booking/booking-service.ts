@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { recordAudit, type AuditContext } from "@/lib/audit/audit";
+import { auditPatientSnapshot } from "@/lib/audit/patient-snapshot";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import type {
   AppointmentTypeLit,
@@ -396,7 +397,7 @@ export async function deletePatient(input: DeletePatientInput) {
       entityId: input.patientId,
       action: "delete",
       before: {
-        ...patient,
+        ...auditPatientSnapshot(patient),
         purgedAppointments: purged.count,
         freedSlots: heldSlots.length,
       },

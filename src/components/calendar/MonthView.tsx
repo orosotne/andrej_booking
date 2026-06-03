@@ -583,7 +583,9 @@ function DayCell({
   // is one of the rendered Wed/Thu/Fri cells, so non-working days highlight nothing).
   const todayRing = isToday ? " ring-2 ring-slate-900 ring-offset-1" : "";
 
-  const base = `min-h-[84px] rounded-lg border p-1.5 text-left transition ${
+  // Tighter padding/height on phones (the 3-col grid leaves little width, so the
+  // dense per-type tallies were cramped); roomier from sm: upward.
+  const base = `min-h-[72px] p-1 sm:min-h-[84px] sm:p-1.5 rounded-lg border text-left transition ${
     inMonth ? "bg-white" : "bg-transparent opacity-40"
   }`;
 

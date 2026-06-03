@@ -126,7 +126,21 @@ export const openDaySchema = z.object({
   password: z.string().max(200).optional(),
 });
 
-export const settingsUpdateSchema = z.record(z.string(), z.unknown());
+// Known settings are type-checked so a bad value (e.g. a non-number
+// retentionMonths, which feeds the purge cutoff) is rejected with a clean 400
+// instead of silently corrupting logic. Unknown keys still pass through via
+// catchall: the settings form re-sends every stored key on save, so rejecting
+// unrecognised keys would break that round-trip.
+export const settingsUpdateSchema = z
+  .object({
+    generateMonthsAhead: z.number().int().min(1).max(36).optional(),
+    sessionTimeoutMinutes: z.number().int().min(1).max(1440).optional(),
+    retentionMonths: z.number().int().min(1).max(120).optional(),
+    enableLateSlot: z.boolean().optional(),
+    twoFactorRequired: z.boolean().optional(),
+    storeSensitivePatientData: z.boolean().optional(),
+  })
+  .catchall(z.unknown());
 
 export const releasePolicyUpdateSchema = z.object({
   daysBefore: z.number().int().min(0).max(365).nullable().optional(),

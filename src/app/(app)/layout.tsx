@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import logo from "@/assets/logo-02.png";
-import { auth, signOut } from "@/lib/auth/auth";
+import { signOut } from "@/lib/auth/auth";
+import { getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
 import { NavLink } from "@/components/layout/NavLink";
 import { AdminMenu } from "@/components/layout/AdminMenu";
@@ -15,9 +16,10 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  const user = session.user;
+  // getSessionUser re-validates against the DB, so a deactivated/expired account
+  // (or a role change) is reflected here immediately, not only at next login.
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
 
   async function signOutToLogin() {
     "use server";

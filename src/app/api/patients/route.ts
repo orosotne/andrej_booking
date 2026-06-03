@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ALL_STAFF } from "@/lib/auth/rbac";
 import { patientCreateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
+import { auditPatientSnapshot } from "@/lib/audit/patient-snapshot";
 import { defineRoute } from "@/lib/route";
 
 export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
@@ -64,7 +65,7 @@ export const POST = defineRoute(
         entityType: "patient",
         entityId: created.id,
         action: "create",
-        after: created,
+        after: auditPatientSnapshot(created),
         ctx: audit,
       });
       return created;

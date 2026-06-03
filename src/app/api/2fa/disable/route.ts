@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ALL_STAFF } from "@/lib/auth/rbac";
 import { totpCodeSchema } from "@/lib/validation";
-import { verifyTotp } from "@/lib/auth/totp";
+import { verifyTotp, decryptTotpSecret } from "@/lib/auth/totp";
 import { recordAudit } from "@/lib/audit/audit";
 import { defineRoute } from "@/lib/route";
 import { ValidationError } from "@/lib/errors";
@@ -14,7 +14,7 @@ export const POST = defineRoute(
     if (!dbUser?.totpSecret || !dbUser.twoFactorEnabled) {
       throw new ValidationError("2FA nie je zapnuté.");
     }
-    if (!verifyTotp(dbUser.totpSecret, code)) {
+    if (!verifyTotp(decryptTotpSecret(dbUser.totpSecret), code)) {
       throw new ValidationError("Neplatný overovací kód.");
     }
 

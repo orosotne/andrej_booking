@@ -1,11 +1,26 @@
 import type { NextConfig } from "next";
 
-// Applied to every response. CSP is intentionally omitted here: a strict
-// connect-src 'self' would block the client Sentry beacon (it posts directly
-// to the ingest domain, no tunnel), and a nonce-based CSP would force every
-// page to dynamic rendering. Add CSP via proxy.ts once Sentry tunnelRoute is set.
+// Applied to every response. A *full* CSP is still intentionally omitted: a
+// strict connect-src 'self' would block the client Sentry beacon (it posts
+// directly to the ingest domain, no tunnel), and a nonce-based script-src would
+// force every page to dynamic rendering. Add those via proxy.ts once Sentry
+// tunnelRoute is set.
+//
+// We do ship the subset of CSP directives that harden against clickjacking and
+// injection without touching script-src/style-src/connect-src — so Sentry and
+// static rendering are unaffected: frame-ancestors (defence-in-depth alongside
+// X-Frame-Options), base-uri (no <base> hijack), form-action (posts stay
+// same-origin) and object-src (no plugins/embeds).
+const contentSecurityPolicy = [
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join("; ");
+
 const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

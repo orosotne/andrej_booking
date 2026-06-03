@@ -4,7 +4,13 @@ import { prisma } from "@/lib/db";
 import { ALL_STAFF } from "@/lib/auth/rbac";
 import { totpCodeSchema } from "@/lib/validation";
 import { defineRoute } from "@/lib/route";
-import { generateTotpSecret, totpUri, verifyTotp } from "@/lib/auth/totp";
+import {
+  generateTotpSecret,
+  totpUri,
+  verifyTotp,
+  encryptTotpSecret,
+  decryptTotpSecret,
+} from "@/lib/auth/totp";
 import { ValidationError } from "@/lib/errors";
 
 // Generates a new TOTP secret and returns a QR for the authenticator app.
@@ -19,7 +25,7 @@ export const POST = defineRoute({ roles: ALL_STAFF }, async ({ req, user }) => {
   // the proof required by /api/2fa/disable.
   if (current?.twoFactorEnabled && current.totpSecret) {
     const { code } = totpCodeSchema.parse(await req.json().catch(() => ({})));
-    if (!verifyTotp(current.totpSecret, code)) {
+    if (!verifyTotp(decryptTotpSecret(current.totpSecret), code)) {
       throw new ValidationError("Neplatný overovací kód pre aktuálne 2FA.");
     }
   }
@@ -27,7 +33,7 @@ export const POST = defineRoute({ roles: ALL_STAFF }, async ({ req, user }) => {
   const secret = generateTotpSecret();
   const dbUser = await prisma.user.update({
     where: { id: user.id },
-    data: { totpSecret: secret, twoFactorEnabled: false },
+    data: { totpSecret: encryptTotpSecret(secret), twoFactorEnabled: false },
   });
   const uri = totpUri(dbUser.email, secret);
   const qr = await QRCode.toDataURL(uri);

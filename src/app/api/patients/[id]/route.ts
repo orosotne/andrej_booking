@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ALL_STAFF } from "@/lib/auth/rbac";
 import { patientUpdateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
+import { auditPatientSnapshot } from "@/lib/audit/patient-snapshot";
 import { defineRoute } from "@/lib/route";
 import { NotFoundError } from "@/lib/errors";
 import { deletePatient } from "@/lib/booking/booking-service";
@@ -107,8 +108,8 @@ export const PATCH = defineRoute(
         entityType: "patient",
         entityId: id,
         action: "update",
-        before,
-        after: updated,
+        before: auditPatientSnapshot(before),
+        after: auditPatientSnapshot(updated),
         ctx: audit,
       });
       return updated;
