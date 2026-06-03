@@ -233,7 +233,7 @@ export function AppointmentActions({
 
           <div className="flex gap-2 border-t border-slate-100 pt-3">
             <Button variant="outline" fullWidth onClick={openReschedule}>
-              Presunúť
+              Presunúť termín
             </Button>
             <Button
               variant="secondary"
@@ -241,7 +241,7 @@ export function AppointmentActions({
               className="border-red-200 bg-red-50 text-red-700 ring-0 hover:bg-red-100"
               onClick={() => setMode("cancel")}
             >
-              Zrušiť
+              Zrušiť termín
             </Button>
           </div>
         </div>
