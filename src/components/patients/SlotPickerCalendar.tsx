@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { apiGet } from "@/lib/client";
 import {
   addMonths,
+  CLINIC_MONTHS_SHORT,
   clinicMonthLabel,
   clinicTime,
   dayOfMonth,
@@ -42,6 +43,10 @@ export function SlotPickerCalendar({
   const minMonth = monthOf(today);
   const [month, setMonth] = useState(() => startOfMonth(today));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => Number(month.slice(0, 4)));
+
+  const minYear = Number(minMonth.slice(0, 4));
 
   // The visible grid is a Monday-aligned 6-week block, so it spills into the
   // neighbouring months — fetch availability for the whole block.
@@ -78,6 +83,17 @@ export function SlotPickerCalendar({
     setMonth((m) => addMonths(m, delta));
   }
 
+  function openPicker() {
+    setPickerYear(Number(month.slice(0, 4)));
+    setPickerOpen(true);
+  }
+
+  function pickMonth(monthIdx: number) {
+    setSelectedDay(null);
+    setMonth(`${pickerYear}-${String(monthIdx + 1).padStart(2, "0")}-01`);
+    setPickerOpen(false);
+  }
+
   return (
     <Modal
       title="Vybrať termín"
@@ -95,9 +111,14 @@ export function SlotPickerCalendar({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="text-sm font-semibold capitalize text-slate-900">
+          <button
+            type="button"
+            onClick={openPicker}
+            aria-label="Vybrať mesiac a rok"
+            className="rounded-lg px-2 py-1 text-sm font-semibold capitalize text-slate-900 transition hover:bg-slate-50"
+          >
             {clinicMonthLabel(month)}
-          </span>
+          </button>
           <button
             type="button"
             onClick={() => changeMonth(1)}
@@ -108,7 +129,56 @@ export function SlotPickerCalendar({
           </button>
         </div>
 
-        <div className="relative">
+        {pickerOpen && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setPickerYear((y) => y - 1)}
+                disabled={pickerYear <= minYear}
+                aria-label="Predchádzajúci rok"
+                className="rounded-lg border border-slate-300 p-1.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm font-semibold text-slate-900">{pickerYear}</span>
+              <button
+                type="button"
+                onClick={() => setPickerYear((y) => y + 1)}
+                aria-label="Nasledujúci rok"
+                className="rounded-lg border border-slate-300 p-1.5 text-slate-600 transition hover:bg-slate-50"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {CLINIC_MONTHS_SHORT.map((label, idx) => {
+                const ym = `${pickerYear}-${String(idx + 1).padStart(2, "0")}`;
+                const disabled = ym < minMonth;
+                const isCurrent = ym === monthOf(month);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => pickMonth(idx)}
+                    className={`rounded-lg py-2 text-sm capitalize transition ${
+                      isCurrent
+                        ? "bg-slate-900 font-semibold text-white"
+                        : disabled
+                          ? "text-slate-300"
+                          : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className={`relative ${pickerOpen ? "hidden" : ""}`}>
           {isLoading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
@@ -155,7 +225,7 @@ export function SlotPickerCalendar({
           </div>
         </div>
 
-        {selectedDay && (
+        {!pickerOpen && selectedDay && (
           <div className="border-t border-slate-100 pt-3">
             {selectedSlots.length === 0 ? (
               <p className="text-sm text-slate-400">Žiadny voľný termín v tento deň.</p>
@@ -176,7 +246,7 @@ export function SlotPickerCalendar({
           </div>
         )}
 
-        {!selectedDay && !isLoading && (
+        {!pickerOpen && !selectedDay && !isLoading && (
           <p className="text-center text-xs text-slate-400">
             Vyberte zvýraznený deň a potom konkrétny čas.
           </p>
