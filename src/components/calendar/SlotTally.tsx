@@ -40,3 +40,35 @@ export function SlotTally({
     </div>
   );
 }
+
+// Companion pill: breakdown of the free count by appointment kind. Same colour
+// language as the month grid cells (pink/emerald/blue). Renders nothing when
+// nothing is free across all three kinds.
+export function SlotAvailByType({
+  counts,
+  label = "Z toho voľných",
+}: {
+  counts: { akut: number; disp: number; echo: number };
+  label?: string;
+}) {
+  if (counts.akut + counts.disp + counts.echo === 0) return null;
+  return (
+    <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
+      <span className="font-medium text-slate-500">{label}:</span>
+      <span>
+        <span className="font-semibold text-pink-700">{counts.akut}</span>{" "}
+        <span className="text-slate-500">akútne</span>
+      </span>
+      <span aria-hidden className="text-slate-300">·</span>
+      <span>
+        <span className="font-semibold text-emerald-700">{counts.disp}</span>{" "}
+        <span className="text-slate-500">dispenzárne</span>
+      </span>
+      <span aria-hidden className="text-slate-300">·</span>
+      <span>
+        <span className="font-semibold text-blue-700">{counts.echo}</span>{" "}
+        <span className="text-slate-500">ECHO</span>
+      </span>
+    </div>
+  );
+}

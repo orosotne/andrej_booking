@@ -35,11 +35,12 @@ import {
   buildDayMap,
   nextWorkingDay,
   countSlots,
+  availByType,
 } from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 import { holidayName } from "@/lib/holidays-sk";
 import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
-import { SlotTally } from "./SlotTally";
+import { SlotTally, SlotAvailByType } from "./SlotTally";
 
 type Dialog =
   | { type: "book"; slot: SlotDTO; dayIso: string }
@@ -183,10 +184,9 @@ export function CalendarView({
   const tallySlots = isDay
     ? (dayByIso.get(selectedDay)?.slots ?? [])
     : weekIsos.flatMap((iso) => dayByIso.get(iso)?.slots ?? []);
-  const tallyCounts = countSlots(
-    tallySlots,
-    isTodaySelected ? new Date().toISOString() : undefined,
-  );
+  const tallyNow = isTodaySelected ? new Date().toISOString() : undefined;
+  const tallyCounts = countSlots(tallySlots, tallyNow);
+  const tallyAvail = availByType(tallySlots, tallyNow);
 
   return (
     <>
@@ -205,11 +205,15 @@ export function CalendarView({
       />
 
       {!isLoading && !isError && tallySlots.length > 0 && (
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <SlotTally
             counts={tallyCounts}
             label={isDay ? (isTodaySelected ? "Dnes" : undefined) : "Tento týždeň"}
             freeWord={isTodaySelected ? "ešte voľných" : "voľných"}
+          />
+          <SlotAvailByType
+            counts={tallyAvail}
+            label={isTodaySelected ? "Z toho ešte voľných" : "Z toho voľných"}
           />
         </div>
       )}
