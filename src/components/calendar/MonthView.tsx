@@ -9,12 +9,17 @@ import {
   Loader2,
   Ban,
   RotateCcw,
+  Check,
+  AlertTriangle,
+  Search,
 } from "lucide-react";
 import type { CalendarDayDTO } from "@/lib/api-types";
+import type { AppointmentTypeLit } from "@/lib/slot-engine/types";
 import { useCalendar, useCalendarStats } from "@/hooks/useCalendar";
 import { useDayActions } from "@/hooks/useDayActions";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 import {
   startOfWeek,
@@ -25,6 +30,8 @@ import {
   todayIso,
   clinicMonthLabel,
   clinicLongDate,
+  clinicTime,
+  clinicDayChip,
   dayOfMonth,
 } from "@/lib/format";
 import {
@@ -34,9 +41,20 @@ import {
   countSlots,
   availByType,
 } from "@/lib/calendar-ui";
+import { TYPE_META } from "@/lib/slot-style";
 import { holidayName } from "@/lib/holidays-sk";
 import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
 import { SlotTally, SlotAvailByType } from "./SlotTally";
+
+type AttendanceEntry = {
+  appointmentId: string;
+  dayIso: string;
+  startAt: string;
+  lastName: string;
+  firstName: string;
+  phone: string | null;
+  appointmentType: AppointmentTypeLit;
+};
 
 // Ambulancia pracuje len v stredu/štvrtok/piatok — ostatné dni sa nezobrazujú.
 const WEEKDAY_HEADERS = ["St", "Št", "Pi"];
@@ -100,6 +118,9 @@ export function MonthView({
   } | null>(null);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
   const [pendingReopen, setPendingReopen] = useState<string | null>(null);
+  const [attendanceList, setAttendanceList] = useState<
+    "arrived" | "noShow" | null
+  >(null);
 
   const gridStart = startOfWeek(anchor);
   // gridStart je pondelok; zobrazujeme len stredu/štvrtok/piatok (+2/+3/+4)
@@ -145,6 +166,36 @@ export function MonthView({
     monthCounts.available + monthCounts.booked + monthCounts.locked > 0;
   const year = anchor.slice(0, 4);
   const yearStats = useCalendarStats(`${year}-01-01`, `${year}-12-31`);
+
+  // Per-appointment lists for the month: who arrived, who didn't show. Drives the
+  // clickable summary pills and the searchable dialog below the month grid.
+  const monthAttendance = useMemo(() => {
+    const arrived: AttendanceEntry[] = [];
+    const noShow: AttendanceEntry[] = [];
+    for (const day of data?.days ?? []) {
+      if (monthOf(day.date) !== monthOf(anchor)) continue;
+      for (const slot of day.slots) {
+        if (slot.status !== "BOOKED" || !slot.appointment) continue;
+        const a = slot.appointment;
+        if (a.status !== "ARRIVED" && a.status !== "NO_SHOW") continue;
+        const entry: AttendanceEntry = {
+          appointmentId: a.id,
+          dayIso: day.date,
+          startAt: slot.startAt,
+          lastName: a.patient.lastName,
+          firstName: a.patient.firstName,
+          phone: a.patient.phone,
+          appointmentType: slot.appointmentType,
+        };
+        (a.status === "ARRIVED" ? arrived : noShow).push(entry);
+      }
+    }
+    const byStart = (x: AttendanceEntry, y: AttendanceEntry) =>
+      x.startAt.localeCompare(y.startAt);
+    arrived.sort(byStart);
+    noShow.sort(byStart);
+    return { arrived, noShow };
+  }, [data, anchor]);
 
   async function performOpen(
     iso: string,
@@ -229,6 +280,40 @@ export function MonthView({
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         {monthHasSlots && <SlotTally counts={monthCounts} label="Tento mesiac" />}
         <SlotAvailByType counts={monthAvail} />
+        {(monthAttendance.arrived.length > 0 ||
+          monthAttendance.noShow.length > 0) && (
+          <div className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
+            <span className="font-medium text-slate-500">Návštevnosť:</span>
+            {monthAttendance.arrived.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAttendanceList("arrived")}
+                className="inline-flex items-center gap-1 rounded-md px-1 -mx-1 font-semibold text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
+              >
+                <Check className="h-3.5 w-3.5" />
+                {monthAttendance.arrived.length}{" "}
+                <span className="font-normal text-slate-500">prišli</span>
+              </button>
+            )}
+            {monthAttendance.arrived.length > 0 &&
+              monthAttendance.noShow.length > 0 && (
+                <span aria-hidden className="text-slate-300">
+                  ·
+                </span>
+              )}
+            {monthAttendance.noShow.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAttendanceList("noShow")}
+                className="inline-flex items-center gap-1 rounded-md px-1 -mx-1 font-semibold text-orange-700 transition hover:bg-orange-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/40"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {monthAttendance.noShow.length}{" "}
+                <span className="font-normal text-slate-500">neprišli</span>
+              </button>
+            )}
+          </div>
+        )}
         <span className="text-sm text-slate-500">
           Za rok {year}:{" "}
           <span className="font-semibold text-slate-700">
@@ -336,9 +421,118 @@ export function MonthView({
           }
         />
       )}
+
+      {attendanceList && (
+        <AttendanceListDialog
+          kind={attendanceList}
+          entries={
+            attendanceList === "arrived"
+              ? monthAttendance.arrived
+              : monthAttendance.noShow
+          }
+          monthLabel={clinicMonthLabel(anchor)}
+          onClose={() => setAttendanceList(null)}
+        />
+      )}
       </div>
       <CalendarPrint period="month" periodLabel={clinicMonthLabel(anchor)} groups={printGroups} />
     </>
+  );
+}
+
+function AttendanceListDialog({
+  kind,
+  entries,
+  monthLabel,
+  onClose,
+}: {
+  kind: "arrived" | "noShow";
+  entries: AttendanceEntry[];
+  monthLabel: string;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? entries.filter(
+        (e) =>
+          `${e.lastName} ${e.firstName}`.toLowerCase().includes(q) ||
+          (e.phone ?? "").toLowerCase().includes(q),
+      )
+    : entries;
+  const accent =
+    kind === "arrived"
+      ? { fg: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" }
+      : { fg: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" };
+  return (
+    <Modal
+      title={
+        kind === "arrived"
+          ? `Prišli — ${monthLabel}`
+          : `Neprišli — ${monthLabel}`
+      }
+      subtitle={`${entries.length} ${entries.length === 1 ? "záznam" : entries.length >= 2 && entries.length <= 4 ? "záznamy" : "záznamov"}`}
+      onClose={onClose}
+    >
+      <div className="space-y-3">
+        <label className="relative block">
+          <span className="sr-only">Vyhľadať pacienta</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            autoFocus
+            placeholder="Priezvisko, meno alebo telefón"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+          />
+        </label>
+        {filtered.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-400">
+            {entries.length === 0
+              ? "Žiadne záznamy."
+              : "Žiadny zhodný výsledok."}
+          </p>
+        ) : (
+          <ul className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto rounded-lg ring-1 ring-slate-200">
+            {filtered.map((e) => (
+              <li
+                key={e.appointmentId}
+                className="flex items-center justify-between gap-3 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-800">
+                    {e.lastName} {e.firstName}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    <span className="capitalize">{clinicDayChip(e.dayIso)}</span>
+                    {" · "}
+                    <span className="font-mono tabular-nums">
+                      {clinicTime(e.startAt)}
+                    </span>
+                    {" · "}
+                    {TYPE_META[e.appointmentType].label}
+                  </p>
+                  {e.phone && (
+                    <p className="mt-0.5 text-xs text-slate-400">📞 {e.phone}</p>
+                  )}
+                </div>
+                <span
+                  className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${accent.bg} ${accent.border} ${accent.fg}`}
+                  aria-hidden
+                >
+                  {kind === "arrived" ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4" />
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Modal>
   );
 }
 
