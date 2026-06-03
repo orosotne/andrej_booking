@@ -29,6 +29,7 @@ export function useDayActions() {
     iso: string,
     fn: () => Promise<unknown>,
     success: string,
+    silentConflict = false,
   ): Promise<DayActionResult> {
     setPendingIso(iso);
     try {
@@ -37,7 +38,11 @@ export function useDayActions() {
       toast(success, "success");
       return "ok";
     } catch (e) {
-      if (e instanceof ApiError && e.code === "CONFLICT") return "conflict";
+      if (e instanceof ApiError && e.code === "CONFLICT") {
+        if (silentConflict) return "conflict";
+        toast(e.message, "error");
+        return "conflict";
+      }
       toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
       return "error";
     } finally {
@@ -70,6 +75,7 @@ export function useDayActions() {
             : {},
         ),
       usesOpen ? "Deň otvorený" : "Deň vygenerovaný",
+      true,
     );
   }
 
