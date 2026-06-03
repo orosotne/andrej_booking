@@ -9,6 +9,7 @@ import {
   categoryAllowsSlot,
   PATIENT_CATEGORY_LABEL,
 } from "@/lib/patient-category";
+import { BLOCKING_STATUSES } from "@/lib/appointment-status";
 
 /** When a slot is freed, return it to AVAILABLE only if its release window is open. */
 function statusAfterFreeing(
@@ -324,5 +325,84 @@ export async function lockSlot(input: LockInput) {
       ctx: input.ctx,
     });
     return updated;
+  });
+}
+
+export interface DeletePatientInput {
+  patientId: string;
+  ctx: AuditContext;
+  now?: Date;
+}
+
+/**
+ * Deletes a patient and purges their non-active appointment rows (CANCELLED /
+ * RESCHEDULED / NO_SHOW), while refusing as long as real medical history exists
+ * (SCHEDULED / ARRIVED / COMPLETED — see BLOCKING_STATUSES).
+ *
+ * Key invariant: a NO_SHOW row still OCCUPIES its slot (it stays BOOKED — unlike
+ * CANCELLED/RESCHEDULED, which already released their slot). Purging a no-show
+ * without releasing its slot would leave an orphaned BOOKED slot — phantom,
+ * unbookable capacity that no longer maps to any appointment. So every slot
+ * still held by one of this patient's purged rows is released first, exactly as
+ * a cancellation would (statusAfterFreeing → AVAILABLE if released, else LOCKED).
+ */
+export async function deletePatient(input: DeletePatientInput) {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (tx) => {
+    const patient = await tx.patient.findUnique({
+      where: { id: input.patientId },
+    });
+    if (!patient) throw new NotFoundError("Pacient neexistuje.");
+
+    const blocking = await tx.appointment.count({
+      where: { patientId: input.patientId, status: { in: BLOCKING_STATUSES } },
+    });
+    if (blocking > 0) {
+      throw new ValidationError(
+        "Pacienta nemožno zmazať — má aktívne objednávky alebo dokončené návštevy. Najprv ich zrušte alebo presuňte.",
+      );
+    }
+
+    // Release slots this patient's purged rows still hold. After the blocking
+    // check the only live-occupant status that can remain is NO_SHOW, and the
+    // partial unique index guarantees a BOOKED slot has exactly one live
+    // appointment — so this can never free a slot rebooked by someone else.
+    const heldSlots = await tx.appointmentSlot.findMany({
+      where: {
+        status: "BOOKED",
+        appointments: {
+          some: {
+            patientId: input.patientId,
+            status: { notIn: ["CANCELLED", "RESCHEDULED"] },
+          },
+        },
+      },
+      select: { id: true, releaseAt: true },
+    });
+    for (const slot of heldSlots) {
+      await tx.appointmentSlot.update({
+        where: { id: slot.id },
+        data: { status: statusAfterFreeing(slot.releaseAt, now) },
+      });
+    }
+
+    const purged = await tx.appointment.deleteMany({
+      where: { patientId: input.patientId },
+    });
+    await tx.patient.delete({ where: { id: input.patientId } });
+
+    await recordAudit(tx, {
+      entityType: "patient",
+      entityId: input.patientId,
+      action: "delete",
+      before: {
+        ...patient,
+        purgedAppointments: purged.count,
+        freedSlots: heldSlots.length,
+      },
+      ctx: input.ctx,
+    });
+
+    return { purged: purged.count, freedSlots: heldSlots.length };
   });
 }

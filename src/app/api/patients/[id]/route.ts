@@ -4,8 +4,8 @@ import { ALL_STAFF } from "@/lib/auth/rbac";
 import { patientUpdateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
 import { defineRoute } from "@/lib/route";
-import { NotFoundError, ValidationError } from "@/lib/errors";
-import { BLOCKING_STATUSES } from "@/lib/appointment-status";
+import { NotFoundError } from "@/lib/errors";
+import { deletePatient } from "@/lib/booking/booking-service";
 
 export const GET = defineRoute({ roles: ALL_STAFF }, async ({ params }) => {
   const { id } = params;
@@ -119,33 +119,6 @@ export const PATCH = defineRoute(
 );
 
 export const DELETE = defineRoute({ roles: ALL_STAFF }, async ({ params, audit }) => {
-  const { id } = params;
-
-  await prisma.$transaction(async (tx) => {
-    const patient = await tx.patient.findUnique({ where: { id } });
-    if (!patient) throw new NotFoundError("Pacient neexistuje.");
-
-    // Refuse only when the patient has active bookings or completed visits —
-    // those are real medical history. Cancelled / rescheduled / no-show rows are
-    // purged below so they don't permanently block deletion.
-    const blocking = await tx.appointment.count({
-      where: { patientId: id, status: { in: BLOCKING_STATUSES } },
-    });
-    if (blocking > 0) {
-      throw new ValidationError(
-        "Pacienta nemožno zmazať — má aktívne objednávky alebo dokončené návštevy. Najprv ich zrušte alebo presuňte.",
-      );
-    }
-
-    const purged = await tx.appointment.deleteMany({ where: { patientId: id } });
-    await tx.patient.delete({ where: { id } });
-    await recordAudit(tx, {
-      entityType: "patient",
-      entityId: id,
-      action: "delete",
-      before: { ...patient, purgedAppointments: purged.count },
-      ctx: audit,
-    });
-  });
+  await deletePatient({ patientId: params.id, ctx: audit });
   return NextResponse.json({ ok: true });
 });
