@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Search, UserPlus, Users, Loader2, Pencil } from "lucide-react";
+import { Search, UserPlus, Users, Loader2, Pencil, CalendarSearch } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
@@ -11,6 +11,7 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
+import { SlotPickerCalendar } from "./SlotPickerCalendar";
 import {
   clinicTime,
   clinicLongDate,
@@ -432,6 +433,7 @@ function PatientAppointment({ patientId }: { patientId: string }) {
     slot: NextSlot | null;
   } | null>(null);
   const [lookupBusy, setLookupBusy] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   // Holds a candidate awaiting confirmation when it collides with an existing
   // appointment in the same day/week/month — booking is allowed, just warned.
   const [pendingBook, setPendingBook] = useState<{
@@ -600,6 +602,16 @@ function PatientAppointment({ patientId }: { patientId: string }) {
           ))}
         </div>
 
+        <button
+          type="button"
+          disabled={lookupBusy || busy}
+          onClick={() => setPickerOpen(true)}
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-500 transition hover:border-slate-400 hover:text-slate-700 disabled:opacity-50"
+        >
+          <CalendarSearch className="h-3.5 w-3.5" />
+          Vybrať termín z kalendára
+        </button>
+
         {lookupBusy && (
           <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -667,6 +679,18 @@ function PatientAppointment({ patientId }: { patientId: string }) {
           </p>
         )}
       </div>
+
+      {pickerOpen && (
+        <SlotPickerCalendar
+          type={type}
+          typeLabel={BOOK_TYPES.find((t) => t.type === type)?.label ?? ""}
+          onPick={(slot) => {
+            setPickerOpen(false);
+            book(slot, category);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </>
   );
 }
