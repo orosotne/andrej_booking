@@ -110,17 +110,26 @@ export function MonthView({
   // Totals above the grid: this month (from the loaded grid data) and the whole
   // year (one tiny aggregate query). Year "voľné" is naturally small — far-future
   // slots are still LOCKED — so booked is the headline number.
-  const monthCounts = useMemo(
-    () =>
-      countSlots(
-        (data?.days ?? [])
-          .filter((d) => monthOf(d.date) === monthOf(anchor))
-          .flatMap((d) => d.slots),
-      ),
-    [data, anchor],
-  );
+  const monthCounts = useMemo(() => {
+    const monthSlots = (data?.days ?? [])
+      .filter((d) => monthOf(d.date) === monthOf(anchor))
+      .flatMap((d) => d.slots);
+    const base = countSlots(monthSlots);
+    let akut = 0;
+    let disp = 0;
+    let echo = 0;
+    for (const s of monthSlots) {
+      if (s.status !== "AVAILABLE") continue;
+      if (s.appointmentType === "PRE_HOSPITAL" || s.appointmentType === "ACUTE_RESERVE")
+        akut++;
+      else if (s.appointmentType === "DISPENSARY") disp++;
+      else if (s.appointmentType === "ECHO") echo++;
+    }
+    return { ...base, avail: { akut, disp, echo } };
+  }, [data, anchor]);
   const monthHasSlots =
     monthCounts.available + monthCounts.booked + monthCounts.locked > 0;
+  const monthHasAvail = monthCounts.available > 0;
   const year = anchor.slice(0, 4);
   const yearStats = useCalendarStats(`${year}-01-01`, `${year}-12-31`);
 
@@ -206,6 +215,31 @@ export function MonthView({
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         {monthHasSlots && <SlotTally counts={monthCounts} label="Tento mesiac" />}
+        {monthHasAvail && (
+          <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
+            <span className="font-medium text-slate-500">Z toho voľných:</span>
+            <span>
+              <span className="font-semibold text-pink-700">
+                {monthCounts.avail.akut}
+              </span>{" "}
+              <span className="text-slate-500">akútne</span>
+            </span>
+            <span aria-hidden className="text-slate-300">·</span>
+            <span>
+              <span className="font-semibold text-emerald-700">
+                {monthCounts.avail.disp}
+              </span>{" "}
+              <span className="text-slate-500">dispenzárne</span>
+            </span>
+            <span aria-hidden className="text-slate-300">·</span>
+            <span>
+              <span className="font-semibold text-blue-700">
+                {monthCounts.avail.echo}
+              </span>{" "}
+              <span className="text-slate-500">ECHO</span>
+            </span>
+          </div>
+        )}
         <span className="text-sm text-slate-500">
           Za rok {year}:{" "}
           <span className="font-semibold text-slate-700">
@@ -480,7 +514,7 @@ function DayCell({
           type="button"
           onClick={onOpen}
           disabled={opening}
-          className="mt-1 inline-flex items-center gap-0.5 rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          className="ml-1.5 mt-1 inline-flex items-center gap-0.5 rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
         >
           {opening ? (
             <Loader2 className="h-3 w-3 animate-spin" />
