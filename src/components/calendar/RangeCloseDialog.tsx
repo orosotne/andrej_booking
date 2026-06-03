@@ -5,7 +5,7 @@ import { CalendarOff } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
-import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useToast } from "@/components/ui/Toast";
 import { apiSend } from "@/lib/client";
 
 export function RangeCloseDialog({
@@ -15,33 +15,43 @@ export function RangeCloseDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const { busy, run } = useAsyncAction();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [password, setPassword] = useState("");
   const [reason, setReason] = useState("");
+  // Conflict / failure message kept inline (not just a toast) so the doctor can
+  // read which days still hold appointments while deciding what to reschedule.
+  const [error, setError] = useState<string | null>(null);
 
   const invalid = !from || !to || !password || from > to;
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (invalid) return;
-    run(
-      () =>
-        apiSend<{ closed: number }>("/api/calendar-days/close-range", "POST", {
-          from,
-          to,
-          password,
-          reason: reason.trim() || undefined,
-        }),
-      { success: "Dni zatvorené (dovolenka)", onDone },
-    );
+    setError(null);
+    setBusy(true);
+    try {
+      await apiSend<{ closed: number }>("/api/calendar-days/close-range", "POST", {
+        from,
+        to,
+        password,
+        reason: reason.trim() || undefined,
+      });
+      toast("Dni zatvorené (dovolenka)", "success");
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operácia zlyhala");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <Modal
       title="Zatvoriť rozsah dní (dovolenka)"
-      subtitle="Zablokuje všetky pracovné dni v rozsahu. Existujúce objednávky zostanú zachované."
+      subtitle="Zablokuje všetky pracovné dni v rozsahu. Ak sú v rozsahu objednaní pacienti, najprv ich presuňte inde — až potom sa dá dovolenka zatvoriť."
       onClose={onClose}
     >
       <form onSubmit={submit} className="space-y-3">
@@ -77,6 +87,11 @@ export function RangeCloseDialog({
           rows={2}
           placeholder="napr. dovolenka, školenie"
         />
+        {error && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
         <div className="flex gap-2 pt-1">
           <Button type="button" variant="outline" fullWidth onClick={onClose}>
             Zrušiť
