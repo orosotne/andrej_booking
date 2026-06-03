@@ -2,7 +2,7 @@
 
 import type { CalendarDayDTO, SlotDTO } from "@/lib/api-types";
 import { clinicTime, clinicLongDate, CLINIC_TZ } from "@/lib/format";
-import { TYPE_META, STATUS_LABEL } from "@/lib/slot-style";
+import { TYPE_META, STATUS_LABEL, apptStatusLabel } from "@/lib/slot-style";
 
 /**
  * Print / "Export do PDF" view of the calendar — one clean, continuous table
@@ -40,17 +40,6 @@ const PERIOD_NOUN: Record<PeriodKind, string> = {
   month: "Mesiac",
 };
 
-// Mirrors the labels in AppointmentActions.tsx so the printout reads the same
-// as the on-screen popover. Unknown statuses fall back to the raw enum string.
-const APPT_STATUS_LABEL: Record<string, string> = {
-  SCHEDULED: "Objednaný",
-  ARRIVED: "Prišiel",
-  NO_SHOW: "Neprišiel",
-  CANCELLED: "Zrušený",
-  RESCHEDULED: "Presunutý",
-  COMPLETED: "Vybavený",
-};
-
 const printedAtFmt = new Intl.DateTimeFormat("sk-SK", {
   timeZone: CLINIC_TZ,
   dateStyle: "short",
@@ -66,7 +55,7 @@ const patientName = (slot: SlotDTO) =>
 
 const attendanceLabel = (slot: SlotDTO) =>
   slot.appointment
-    ? (APPT_STATUS_LABEL[slot.appointment.status] ?? slot.appointment.status)
+    ? apptStatusLabel(slot.appointment.status)
     : "—";
 
 export function CalendarPrint({

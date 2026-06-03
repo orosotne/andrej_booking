@@ -1,4 +1,8 @@
-import type { AppointmentTypeLit, SlotStatusLit } from "@/lib/slot-engine/types";
+import type {
+  AppointmentTypeLit,
+  AppointmentStatusLit,
+  SlotStatusLit,
+} from "@/lib/slot-engine/types";
 
 export const TYPE_META: Record<
   AppointmentTypeLit,
@@ -52,4 +56,21 @@ export const STATUS_LABEL: Record<SlotStatusLit, string> = {
 
 export function isBookable(status: SlotStatusLit): boolean {
   return status === "AVAILABLE";
+}
+
+// Appointment status → Slovak label (capitalized, as shown in the slot popover
+// and the printout). The audit log uses its own lowercase/neuter phrasing for
+// inline sentences, so it intentionally does NOT share this map.
+export const APPT_STATUS_LABEL: Record<AppointmentStatusLit, string> = {
+  SCHEDULED: "Objednaný",
+  ARRIVED: "Prišiel",
+  NO_SHOW: "Neprišiel",
+  CANCELLED: "Zrušený",
+  RESCHEDULED: "Presunutý",
+  COMPLETED: "Vybavený",
+};
+
+/** Appointment status → label, falling back to the raw value for unknowns. */
+export function apptStatusLabel(status: string): string {
+  return APPT_STATUS_LABEL[status as AppointmentStatusLit] ?? status;
 }

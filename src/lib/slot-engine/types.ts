@@ -20,6 +20,14 @@ export type SlotStatusLit =
   | "CANCELLED"
   | "COMPLETED";
 
+export type AppointmentStatusLit =
+  | "SCHEDULED"
+  | "ARRIVED"
+  | "NO_SHOW"
+  | "CANCELLED"
+  | "RESCHEDULED"
+  | "COMPLETED";
+
 export type ReleaseTypeLit =
   | "IMMEDIATE"
   | "DAYS_BEFORE"

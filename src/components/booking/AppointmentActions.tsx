@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/Toast";
 import { AlertTriangle, CalendarClock, Loader2, Printer } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
-import { TYPE_META } from "@/lib/slot-style";
+import { TYPE_META, apptStatusLabel } from "@/lib/slot-style";
 import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
 
 export interface RescheduleOption {
@@ -20,15 +20,6 @@ export interface RescheduleOption {
 }
 
 type Mode = "view" | "cancel" | "reschedule" | "note" | "statusPassword";
-
-const STATUS_LABEL: Record<string, string> = {
-  SCHEDULED: "Objednaný",
-  ARRIVED: "Prišiel",
-  NO_SHOW: "Neprišiel",
-  CANCELLED: "Zrušený",
-  RESCHEDULED: "Presunutý",
-  COMPLETED: "Vybavený",
-};
 
 // Setting NO_SHOW or leaving it again is gated by the same unlock password as
 // opening Wednesday/Friday — enforced server-side, mirrored here for the UX.
@@ -75,7 +66,7 @@ export function AppointmentActions({
     runAction(
       () => apiSend(`/api/appointments/${apptId}`, "PATCH", { status: target, password: pw }),
       {
-        success: `Stav: ${STATUS_LABEL[target] ?? target}`,
+        success: `Stav: ${apptStatusLabel(target)}`,
         onDone: () => {
           setStatus(target);
           setPendingStatus(null);
@@ -157,7 +148,7 @@ export function AppointmentActions({
               </span>
             </span>
             <span className="text-xs font-semibold uppercase tracking-wide">
-              {STATUS_LABEL[status] ?? status}
+              {apptStatusLabel(status)}
             </span>
           </div>
 
