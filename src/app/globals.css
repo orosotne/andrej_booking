@@ -169,11 +169,11 @@ body {
   }
   .calendar-print col.col-cas { width: 15%; }
   .calendar-print col.col-typ { width: 15%; }
-  .calendar-print col.col-stav { width: 11%; }
+  .calendar-print col.col-stav { width: 13%; }
   .calendar-print col.col-pacient { width: 11%; }
   .calendar-print col.col-telefon { width: 17%; }
-  .calendar-print col.col-ucast { width: 11%; }
-  .calendar-print col.col-poznamka { width: 20%; }
+  .calendar-print col.col-ucast { width: 13%; }
+  .calendar-print col.col-poznamka { width: 16%; }
   /* Repeat the column headers at the top of every printed page. */
   .calendar-print thead {
     display: table-header-group;
@@ -214,6 +214,11 @@ body {
   .calendar-print .print-phone {
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+  }
+  /* Notes get a smaller font so more text fits in the narrow Poznámka column. */
+  .calendar-print .print-note {
+    font-size: 9px;
+    line-height: 1.25;
   }
   /* Keep a row (and a day's heading) from splitting across pages. */
   .calendar-print tr {

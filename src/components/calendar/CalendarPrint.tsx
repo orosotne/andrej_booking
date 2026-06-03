@@ -149,7 +149,9 @@ export function CalendarPrint({
                   <td>{patientName(slot)}</td>
                   <td className="print-phone">{slot.appointment?.patient.phone ?? "—"}</td>
                   <td>{attendanceLabel(slot)}</td>
-                  <td>{slot.appointment?.note ?? slot.lockedReason ?? "—"}</td>
+                  <td className="print-note">
+                    {slot.appointment?.note ?? slot.lockedReason ?? "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>
