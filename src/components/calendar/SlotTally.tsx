@@ -1,5 +1,6 @@
 import { Lock } from "lucide-react";
 import type { SlotCountsDTO } from "@/lib/api-types";
+import type { TypeAvail } from "@/lib/calendar-ui";
 
 // Slim info strip: free / booked (+ locked when present), in the same colour
 // language as the month grid. `freeWord` lets the day view say "ešte voľných".
@@ -41,41 +42,48 @@ export function SlotTally({
   );
 }
 
-// Companion pill: breakdown of the free count by appointment kind. Same colour
+// Companion pill: free / total capacity by appointment kind. Same colour
 // language as the month grid cells (pink/emerald/blue). Renders nothing when
-// nothing is free across all three kinds.
+// there are no bookable slots of any kind.
+function AvailItem({
+  stat,
+  colorClass,
+  label,
+}: {
+  stat: TypeAvail;
+  colorClass: string;
+  label: string;
+}) {
+  return (
+    <span>
+      <span className={`font-semibold ${colorClass}`}>{stat.free}</span>
+      <span className="text-slate-400">/{stat.total}</span>{" "}
+      <span className="text-slate-500">{label}</span>
+    </span>
+  );
+}
+
 export function SlotAvailByType({
   counts,
   label = "Z toho voľných",
 }: {
-  counts: { akut: number; disp: number; echo: number; custom: number };
+  counts: { akut: TypeAvail; disp: TypeAvail; echo: TypeAvail; custom: TypeAvail };
   label?: string;
 }) {
-  if (counts.akut + counts.disp + counts.echo + counts.custom === 0) return null;
+  if (counts.akut.total + counts.disp.total + counts.echo.total + counts.custom.total === 0)
+    return null;
   return (
     <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
       <span className="font-medium text-slate-500">{label}:</span>
-      <span>
-        <span className="font-semibold text-pink-700">{counts.akut}</span>{" "}
-        <span className="text-slate-500">akútne</span>
-      </span>
+      <AvailItem stat={counts.akut} colorClass="text-pink-700" label="akútne" />
       <span aria-hidden className="text-slate-300">·</span>
-      <span>
-        <span className="font-semibold text-emerald-700">{counts.disp}</span>{" "}
-        <span className="text-slate-500">dispenzárne</span>
-      </span>
+      <AvailItem stat={counts.disp} colorClass="text-emerald-700" label="dispenzárne" />
       <span aria-hidden className="text-slate-300">·</span>
-      <span>
-        <span className="font-semibold text-blue-700">{counts.echo}</span>{" "}
-        <span className="text-slate-500">ECHO</span>
-      </span>
-      {counts.custom > 0 && (
+      <AvailItem stat={counts.echo} colorClass="text-blue-700" label="ECHO" />
+      {counts.custom.total > 0 && (
         <>
           <span aria-hidden className="text-slate-300">·</span>
-          <span>
-            <span className="font-semibold text-slate-700">{counts.custom}</span>{" "}
-            <span className="text-slate-500">iné</span>
-          </span>
+          <AvailItem stat={counts.custom} colorClass="text-slate-700" label="iné" />
         </>
       )}
     </div>
