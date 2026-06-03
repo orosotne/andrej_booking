@@ -191,9 +191,9 @@ function PatientDialog({
               lastName: form.lastName,
               birthYear: Number(form.birthYear),
               phone: form.phone,
+              nationalId: form.nationalId || "",
+              email: form.email || "",
             }),
-            nationalId: form.nationalId || undefined,
-            email: form.email || "",
             note: form.note,
           }),
         { success: "Pacient upravený", onDone: onSaved },
@@ -284,6 +284,8 @@ function PatientDialog({
             label="Rodné číslo"
             hint="nepovinné"
             inputMode="numeric"
+            disabled={locked}
+            className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
             value={form.nationalId}
             onChange={(e) => set("nationalId", e.target.value)}
           />
@@ -301,6 +303,8 @@ function PatientDialog({
           type="email"
           inputMode="email"
           autoComplete="email"
+          disabled={locked}
+          className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
           value={form.email}
           onChange={(e) => set("email", e.target.value)}
         />
