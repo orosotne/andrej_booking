@@ -41,7 +41,7 @@ export function ConfirmDialog({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const blocked =
-    (requireReason && !reason.trim()) || (requirePassword && !password);
+    (requireReason && !reason.trim()) || (requirePassword && !password.trim());
 
   async function confirm() {
     if (blocked) return;
@@ -49,7 +49,7 @@ export function ConfirmDialog({
     try {
       await onConfirm({
         reason: requireReason ? reason.trim() : undefined,
-        password: requirePassword ? password : undefined,
+        password: requirePassword ? password.trim() : undefined,
       });
     } finally {
       setBusy(false);
@@ -64,6 +64,7 @@ export function ConfirmDialog({
           <Field
             label={passwordLabel}
             type="password"
+            autoComplete="one-time-code"
             required
             autoFocus
             value={password}
