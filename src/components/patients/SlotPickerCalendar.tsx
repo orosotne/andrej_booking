@@ -101,33 +101,35 @@ export function SlotPickerCalendar({
       onClose={onClose}
     >
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => changeMonth(-1)}
-            disabled={monthOf(month) <= minMonth}
-            aria-label="Predchádzajúci mesiac"
-            className="rounded-lg border border-slate-300 p-1.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-30"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={openPicker}
-            aria-label="Vybrať mesiac a rok"
-            className="rounded-lg px-2 py-1 text-sm font-semibold capitalize text-slate-900 transition hover:bg-slate-50"
-          >
-            {clinicMonthLabel(month)}
-          </button>
-          <button
-            type="button"
-            onClick={() => changeMonth(1)}
-            aria-label="Nasledujúci mesiac"
-            className="rounded-lg border border-slate-300 p-1.5 text-slate-600 transition hover:bg-slate-50"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+        {!pickerOpen && (
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => changeMonth(-1)}
+              disabled={monthOf(month) <= minMonth}
+              aria-label="Predchádzajúci mesiac"
+              className="rounded-lg border border-slate-300 p-1.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={openPicker}
+              aria-label="Vybrať mesiac a rok"
+              className="rounded-lg px-2 py-1 text-sm font-semibold capitalize text-slate-900 transition hover:bg-slate-50"
+            >
+              {clinicMonthLabel(month)}
+            </button>
+            <button
+              type="button"
+              onClick={() => changeMonth(1)}
+              aria-label="Nasledujúci mesiac"
+              className="rounded-lg border border-slate-300 p-1.5 text-slate-600 transition hover:bg-slate-50"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {pickerOpen && (
           <div className="space-y-3">
