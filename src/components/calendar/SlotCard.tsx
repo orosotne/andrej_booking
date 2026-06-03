@@ -73,7 +73,7 @@ export function SlotCard({
                 : slot.appointment.status === "ARRIVED"
                   ? "text-slate-500 line-through"
                   : slot.appointment.status === "NO_SHOW"
-                    ? "italic text-orange-700"
+                    ? "italic text-orange-700 line-through"
                     : "text-slate-900"
             }`}
           >

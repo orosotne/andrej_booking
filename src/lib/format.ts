@@ -108,3 +108,19 @@ export function clinicMonthLabel(isoDate: string): string {
 export function dayOfMonth(isoDate: string): number {
   return Number(isoDate.slice(8, 10));
 }
+
+/** ISO-8601 week number (1–53) for a YYYY-MM-DD string. */
+export function isoWeekNumber(isoDate: string): number {
+  const d = new Date(`${isoDate}T00:00:00.000Z`);
+  const dow = d.getUTCDay() || 7; // Mon=1..Sun=7
+  d.setUTCDate(d.getUTCDate() + 4 - dow); // shift to the week's Thursday
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+}
+
+/** Localized short month names ["jan", "feb", …] in clinic locale. */
+export const CLINIC_MONTHS_SHORT = Array.from({ length: 12 }, (_, i) =>
+  new Intl.DateTimeFormat("sk-SK", { month: "short" }).format(
+    new Date(Date.UTC(2021, i, 1)),
+  ),
+);

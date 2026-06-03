@@ -369,7 +369,15 @@ export function AppointmentActions({
       {typeof document !== "undefined" &&
         createPortal(
           <section className="appointment-slip-print" aria-hidden="true">
-            <p className="slip-title">Termín vyšetrenia</p>
+            <div className="slip-header">
+              <p className="slip-clinic">
+                Pacient objednaný na kardiologickú ambulanciu č. 2 v nemocnici
+                Partizánske
+              </p>
+              <p className="slip-address">
+                Adresa: Nemocničná cesta, 958 03 Malé Kršteňany
+              </p>
+            </div>
             <table className="slip-table">
               <thead>
                 <tr>

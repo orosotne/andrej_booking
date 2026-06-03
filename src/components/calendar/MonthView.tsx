@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Lock,
   Plus,
   Loader2,
@@ -33,6 +34,7 @@ import {
   clinicTime,
   clinicDayChip,
   dayOfMonth,
+  CLINIC_MONTHS_SHORT,
 } from "@/lib/format";
 import {
   weekdayOf,
@@ -43,7 +45,6 @@ import {
 } from "@/lib/calendar-ui";
 import { TYPE_META } from "@/lib/slot-style";
 import { holidayName } from "@/lib/holidays-sk";
-import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
 import { SlotTally, SlotAvailByType } from "./SlotTally";
 
 type AttendanceEntry = {
@@ -232,21 +233,14 @@ export function MonthView({
     }
   }
 
-  // PDF/print export: this month's working days that carry slots, as a table.
-  const printGroups: PrintGroup[] = cells
-    .filter(
-      (iso) =>
-        monthOf(iso) === monthOf(anchor) && WORKING_WEEKDAYS.includes(weekdayOf(iso)),
-    )
-    .map((iso) => ({ iso, day: dayByIso.get(iso) }));
-
   return (
     <>
       <div className="no-print">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold capitalize text-slate-900">
-          {clinicMonthLabel(anchor)}
-        </h2>
+        <MonthPicker
+          anchor={anchor}
+          onPick={(iso) => setAnchor(startOfMonth(iso))}
+        />
         <div className="flex items-center gap-1">
           <Button
             variant="secondary"
@@ -435,8 +429,97 @@ export function MonthView({
         />
       )}
       </div>
-      <CalendarPrint period="month" periodLabel={clinicMonthLabel(anchor)} groups={printGroups} />
     </>
+  );
+}
+
+function MonthPicker({
+  anchor,
+  onPick,
+}: {
+  anchor: string;
+  onPick: (iso: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [year, setYear] = useState(() => Number(anchor.slice(0, 4)));
+  const selYear = Number(anchor.slice(0, 4));
+  const selMonth = Number(anchor.slice(5, 7));
+
+  // Re-sync the displayed year when the month changes via arrows while closed.
+  useEffect(() => {
+    if (!open) setYear(Number(anchor.slice(0, 4)));
+  }, [anchor, open]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-lg font-semibold capitalize text-slate-900 transition hover:bg-slate-100"
+      >
+        {clinicMonthLabel(anchor)}
+        <ChevronDown className="h-4 w-4 text-slate-400" />
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-20 cursor-default"
+          />
+          <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                aria-label="Predošlý rok"
+                onClick={() => setYear((y) => y - 1)}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm font-semibold text-slate-800 tabular-nums">
+                {year}
+              </span>
+              <button
+                type="button"
+                aria-label="Ďalší rok"
+                onClick={() => setYear((y) => y + 1)}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-1">
+              {CLINIC_MONTHS_SHORT.map((m, i) => {
+                const isSel = year === selYear && i + 1 === selMonth;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      onPick(`${year}-${String(i + 1).padStart(2, "0")}-01`);
+                      setOpen(false);
+                    }}
+                    className={[
+                      "rounded-md px-2 py-1.5 text-sm font-medium capitalize transition",
+                      isSel
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100",
+                    ].join(" ")}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

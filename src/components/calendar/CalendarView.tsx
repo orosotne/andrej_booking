@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -28,6 +28,7 @@ import {
   todayIso,
   clinicDayChip,
   clinicLongDate,
+  isoWeekNumber,
 } from "@/lib/format";
 import {
   weekdayOf,
@@ -39,7 +40,6 @@ import {
 } from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 import { holidayName } from "@/lib/holidays-sk";
-import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
 import { SlotTally, SlotAvailByType } from "./SlotTally";
 
 type Dialog =
@@ -55,6 +55,7 @@ export function CalendarView({
   mode = "week",
   initialWeekStart,
   initialDay,
+  onActiveDayChange,
 }: {
   isAdmin: boolean;
   canManageDays: boolean;
@@ -62,6 +63,7 @@ export function CalendarView({
   mode?: "week" | "day";
   initialWeekStart?: string;
   initialDay?: string;
+  onActiveDayChange?: (iso: string) => void;
 }) {
   const [weekStart, setWeekStart] = useState(
     () => initialWeekStart ?? startOfWeek(todayIso()),
@@ -98,6 +100,14 @@ export function CalendarView({
 
   // Mobile shows one day: the selected day if it's in this week, else the first working day.
   const mobileDay = weekIsos.includes(selectedDay) ? selectedDay : workingIsos[0];
+
+  // The day the print/export targets: the focused day in day mode, otherwise the
+  // selected/visible day of the week. Reported up so the screen-level print export
+  // always covers exactly the day on screen.
+  const activeDay = mode === "day" ? selectedDay : mobileDay;
+  useEffect(() => {
+    onActiveDayChange?.(activeDay);
+  }, [activeDay, onActiveDayChange]);
 
   function handleSelect(slot: SlotDTO, dayIso: string) {
     if (slot.status === "AVAILABLE") setDialog({ type: "book", slot, dayIso });
@@ -169,14 +179,6 @@ export function CalendarView({
     }
   }
 
-  // PDF/print export (day or week): the same slots the view loaded, as a table.
-  const printGroups: PrintGroup[] = isDay
-    ? [{ iso: selectedDay, day: dayByIso.get(selectedDay) }]
-    : weekIsos.map((iso) => ({ iso, day: dayByIso.get(iso) }));
-  const printLabel = isDay
-    ? clinicLongDate(selectedDay)
-    : `${clinicLongDate(weekStart)} – ${clinicLongDate(weekEnd)}`;
-
   // Free/booked tally under the legend. The day view, when it's today, counts
   // only slots that haven't started yet ("ešte voľných"); the week view sums the
   // three working columns without the time filter.
@@ -197,6 +199,7 @@ export function CalendarView({
             ? clinicLongDate(selectedDay)
             : `${clinicLongDate(weekStart)} – ${clinicLongDate(weekEnd)}`
         }
+        badge={isDay ? undefined : `${isoWeekNumber(weekStart)}. týždeň`}
         prevAria={isDay ? "Predošlý deň" : "Predošlý týždeň"}
         nextAria={isDay ? "Ďalší deň" : "Ďalší týždeň"}
         onPrev={handlePrev}
@@ -415,13 +418,13 @@ export function CalendarView({
         />
       )}
       </div>
-      <CalendarPrint period={mode} periodLabel={printLabel} groups={printGroups} />
     </>
   );
 }
 
 function Header({
   subtitle,
+  badge,
   prevAria,
   nextAria,
   onPrev,
@@ -429,6 +432,7 @@ function Header({
   onToday,
 }: {
   subtitle: string;
+  badge?: string;
   prevAria: string;
   nextAria: string;
   onPrev: () => void;
@@ -441,6 +445,11 @@ function Header({
         <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
           <CalendarDays className="h-5 w-5 text-slate-400" />
           Kalendár ambulancie
+          {badge && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+              {badge}
+            </span>
+          )}
         </h1>
         <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
       </div>
