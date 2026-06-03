@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CalendarDays,
   Plus,
   Loader2,
@@ -29,6 +30,9 @@ import {
   clinicDayChip,
   clinicLongDate,
   isoWeekNumber,
+  isoWeekYear,
+  isoWeeksInYear,
+  isoWeekStart,
 } from "@/lib/format";
 import {
   weekdayOf,
@@ -198,7 +202,11 @@ export function CalendarView({
             ? clinicLongDate(selectedDay)
             : `${clinicLongDate(weekStart)} – ${clinicLongDate(weekEnd)}`
         }
-        badge={isDay ? undefined : `${isoWeekNumber(weekStart)}. týždeň`}
+        badge={
+          isDay ? undefined : (
+            <WeekPicker weekStart={weekStart} onPick={setWeekStart} />
+          )
+        }
         prevAria={isDay ? "Predošlý deň" : "Predošlý týždeň"}
         nextAria={isDay ? "Ďalší deň" : "Ďalší týždeň"}
         onPrev={handlePrev}
@@ -432,7 +440,7 @@ function Header({
   onToday,
 }: {
   subtitle: string;
-  badge?: string;
+  badge?: React.ReactNode;
   prevAria: string;
   nextAria: string;
   onPrev: () => void;
@@ -445,11 +453,7 @@ function Header({
         <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
           <CalendarDays className="h-5 w-5 text-slate-400" />
           Kalendár ambulancie
-          {badge && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-              {badge}
-            </span>
-          )}
+          {badge}
         </h1>
         <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
       </div>
@@ -478,6 +482,102 @@ function Header({
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
+    </div>
+  );
+}
+
+// Clickable "23. týždeň" badge: opens a popover to jump to any ISO week of any
+// year. `onPick` receives the Monday (ISO) that starts the chosen week.
+function WeekPicker({
+  weekStart,
+  onPick,
+}: {
+  weekStart: string;
+  onPick: (mondayIso: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selYear = isoWeekYear(weekStart);
+  const selWeek = isoWeekNumber(weekStart);
+  const [year, setYear] = useState(selYear);
+
+  // Opening the popover snaps the year navigation back to the current selection.
+  function toggle() {
+    if (!open) setYear(selYear);
+    setOpen((o) => !o);
+  }
+
+  const weeks = isoWeeksInYear(year);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-200"
+      >
+        {selWeek}. týždeň
+        <ChevronDown className="h-3 w-3 text-slate-400" />
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-20 cursor-default"
+          />
+          <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                aria-label="Predošlý rok"
+                onClick={() => setYear((y) => y - 1)}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm font-semibold text-slate-800 tabular-nums">
+                {year}
+              </span>
+              <button
+                type="button"
+                aria-label="Ďalší rok"
+                onClick={() => setYear((y) => y + 1)}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-7 gap-1">
+              {Array.from({ length: weeks }, (_, i) => i + 1).map((w) => {
+                const isSel = year === selYear && w === selWeek;
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    title={clinicLongDate(isoWeekStart(year, w))}
+                    onClick={() => {
+                      onPick(isoWeekStart(year, w));
+                      setOpen(false);
+                    }}
+                    className={[
+                      "rounded-md py-1 text-xs font-medium tabular-nums transition",
+                      isSel
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100",
+                    ].join(" ")}
+                  >
+                    {w}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

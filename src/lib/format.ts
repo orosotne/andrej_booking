@@ -118,6 +118,28 @@ export function isoWeekNumber(isoDate: string): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
 
+/** ISO-8601 week-numbering year for a YYYY-MM-DD string (the week's Thursday). */
+export function isoWeekYear(isoDate: string): number {
+  const d = new Date(`${isoDate}T00:00:00.000Z`);
+  const dow = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dow);
+  return d.getUTCFullYear();
+}
+
+/** Number of ISO weeks (52 or 53) in a given ISO week-numbering year. */
+export function isoWeeksInYear(year: number): number {
+  return isoWeekNumber(`${year}-12-28`);
+}
+
+/** YYYY-MM-DD of the Monday that starts ISO week `week` of `year`. */
+export function isoWeekStart(year: number, week: number): string {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dow = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - (dow - 1) + (week - 1) * 7);
+  return monday.toISOString().slice(0, 10);
+}
+
 /** Localized short month names ["jan", "feb", …] in clinic locale. */
 export const CLINIC_MONTHS_SHORT = Array.from({ length: 12 }, (_, i) =>
   new Intl.DateTimeFormat("sk-SK", { month: "short" }).format(
