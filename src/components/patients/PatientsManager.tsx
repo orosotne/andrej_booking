@@ -5,6 +5,7 @@ import { Search, UserPlus, Users, Loader2, Pencil, CalendarSearch } from "lucide
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
+import { PhoneField } from "@/components/ui/PhoneField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
@@ -172,6 +173,7 @@ function PatientDialog({
     birthYear: patient?.birthYear ? String(patient.birthYear) : "",
     nationalId: patient?.nationalId ?? "",
     phone: patient?.phone ?? "",
+    email: patient?.email ?? "",
     note: patient?.note ?? "",
   });
   const set = (k: keyof typeof form, v: string) =>
@@ -191,6 +193,7 @@ function PatientDialog({
               phone: form.phone,
             }),
             nationalId: form.nationalId || undefined,
+            email: form.email || "",
             note: form.note,
           }),
         { success: "Pacient upravený", onDone: onSaved },
@@ -205,6 +208,7 @@ function PatientDialog({
           birthYear: Number(form.birthYear),
           nationalId: form.nationalId || undefined,
           phone: form.phone,
+          email: form.email || undefined,
           note: form.note || undefined,
         }),
       { success: "Pacient vytvorený", onDone: onSaved },
@@ -284,14 +288,21 @@ function PatientDialog({
             onChange={(e) => set("nationalId", e.target.value)}
           />
         </div>
-        <Field
+        <PhoneField
           label="Telefónne číslo"
           required
-          inputMode="tel"
           disabled={locked}
-          className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
           value={form.phone}
-          onChange={(e) => set("phone", e.target.value)}
+          onChange={(v) => set("phone", v)}
+        />
+        <Field
+          label="E-mail"
+          hint="nepovinné"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          value={form.email}
+          onChange={(e) => set("email", e.target.value)}
         />
         <TextareaField
           label="Poznámka"

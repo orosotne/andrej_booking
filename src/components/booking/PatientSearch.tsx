@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
+import { PhoneField } from "@/components/ui/PhoneField";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
@@ -127,6 +128,7 @@ function CreatePatient({
   const [birthYear, setBirthYear] = useState("");
   const [nationalId, setNationalId] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
 
   function submit(e: React.FormEvent) {
@@ -139,6 +141,7 @@ function CreatePatient({
           birthYear: Number(birthYear),
           nationalId: nationalId || undefined,
           phone,
+          email: email || undefined,
           note: note || undefined,
         });
         onCreated(r.patient);
@@ -173,12 +176,20 @@ function CreatePatient({
           onChange={(e) => setNationalId(e.target.value)}
         />
       </div>
-      <Field
+      <PhoneField
         label="Telefónne číslo"
         required
-        inputMode="tel"
         value={phone}
-        onChange={(e) => setPhone(e.target.value)}
+        onChange={setPhone}
+      />
+      <Field
+        label="E-mail"
+        hint="nepovinné"
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
       />
       <TextareaField
         label="Poznámka (voliteľné)"

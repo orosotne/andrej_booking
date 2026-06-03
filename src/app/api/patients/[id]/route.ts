@@ -99,7 +99,7 @@ export const PATCH = defineRoute(
               : body.dateOfBirth
                 ? new Date(body.dateOfBirth)
                 : null,
-          email: body.email,
+          email: body.email === undefined ? undefined : body.email || null,
           externalPatientId: body.externalPatientId,
           note: body.note === undefined ? undefined : body.note || null,
         },
