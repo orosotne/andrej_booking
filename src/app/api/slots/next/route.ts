@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth/rbac";
-import { jsonError } from "@/lib/api";
+import { ALL_STAFF } from "@/lib/auth/rbac";
+import { defineRoute } from "@/lib/route";
 import { dateOnly, toIsoDate } from "@/lib/calendar-date";
 import type { AppointmentTypeLit } from "@/lib/slot-engine/types";
 
@@ -28,62 +28,57 @@ const querySchema = z.object({
  * days are excluded. Used by the "Najbližší termín" picker in the calendar header
  * and the patient detail quick-book.
  */
-export async function GET(req: Request) {
-  try {
-    await requireUser();
-    const url = new URL(req.url);
-    const { type, months, maxMonths } = querySchema.parse({
-      type: url.searchParams.get("type"),
-      months: url.searchParams.get("months"),
-      maxMonths: url.searchParams.get("maxMonths") ?? undefined,
-    });
+export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
+  const url = new URL(req.url);
+  const { type, months, maxMonths } = querySchema.parse({
+    type: url.searchParams.get("type"),
+    months: url.searchParams.get("months"),
+    maxMonths: url.searchParams.get("maxMonths") ?? undefined,
+  });
 
-    const now = new Date();
-    // Najbližší (months=0): vylúč dnešok cez calendarDay.date > dnes (@db.Date je
-    // polnoc UTC, takže to znamená „od zajtra ďalej“). Horizont (N>0): prvý slot,
-    // ktorý začína aspoň N mesiacov od dnes. maxMonths (voliteľný): horný strop —
-    // slot musí začať pred dnes+maxMonths mesiacov.
-    const calendarDayFilter =
-      months === 0
-        ? { status: { not: "CLOSED" as const }, date: { gt: dateOnly(toIsoDate(now)) } }
-        : { status: { not: "CLOSED" as const } };
-    const monthOffset = (n: number) =>
-      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + n, now.getUTCDate()));
-    const startAt =
-      months === 0 && maxMonths === undefined
-        ? undefined
-        : {
-            ...(months > 0 ? { gte: monthOffset(months) } : {}),
-            ...(maxMonths !== undefined ? { lt: monthOffset(maxMonths) } : {}),
-          };
+  const now = new Date();
+  // Najbližší (months=0): vylúč dnešok cez calendarDay.date > dnes (@db.Date je
+  // polnoc UTC, takže to znamená „od zajtra ďalej“). Horizont (N>0): prvý slot,
+  // ktorý začína aspoň N mesiacov od dnes. maxMonths (voliteľný): horný strop —
+  // slot musí začať pred dnes+maxMonths mesiacov.
+  const calendarDayFilter =
+    months === 0
+      ? { status: { not: "CLOSED" as const }, date: { gt: dateOnly(toIsoDate(now)) } }
+      : { status: { not: "CLOSED" as const } };
+  const monthOffset = (n: number) =>
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + n, now.getUTCDate()));
+  const startAt =
+    months === 0 && maxMonths === undefined
+      ? undefined
+      : {
+          ...(months > 0 ? { gte: monthOffset(months) } : {}),
+          ...(maxMonths !== undefined ? { lt: monthOffset(maxMonths) } : {}),
+        };
 
-    const slot = await prisma.appointmentSlot.findFirst({
-      where: {
-        status: "AVAILABLE",
-        appointmentType: type as AppointmentTypeLit,
-        calendarDay: calendarDayFilter,
-        ...(startAt ? { startAt } : {}),
-      },
-      orderBy: { startAt: "asc" },
-      include: {
-        calendarDay: { select: { date: true } },
-      },
-    });
+  const slot = await prisma.appointmentSlot.findFirst({
+    where: {
+      status: "AVAILABLE",
+      appointmentType: type as AppointmentTypeLit,
+      calendarDay: calendarDayFilter,
+      ...(startAt ? { startAt } : {}),
+    },
+    orderBy: { startAt: "asc" },
+    include: {
+      calendarDay: { select: { date: true } },
+    },
+  });
 
-    if (!slot) {
-      return NextResponse.json({ slot: null });
-    }
-
-    return NextResponse.json({
-      slot: {
-        id: slot.id,
-        startAt: slot.startAt.toISOString(),
-        endAt: slot.endAt.toISOString(),
-        appointmentType: slot.appointmentType,
-        date: slot.calendarDay.date.toISOString().slice(0, 10),
-      },
-    });
-  } catch (e) {
-    return jsonError(e);
+  if (!slot) {
+    return NextResponse.json({ slot: null });
   }
-}
+
+  return NextResponse.json({
+    slot: {
+      id: slot.id,
+      startAt: slot.startAt.toISOString(),
+      endAt: slot.endAt.toISOString(),
+      appointmentType: slot.appointmentType,
+      date: slot.calendarDay.date.toISOString().slice(0, 10),
+    },
+  });
+});

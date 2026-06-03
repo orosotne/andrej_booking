@@ -1,44 +1,42 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireRole, ADMIN_ONLY } from "@/lib/auth/rbac";
+import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { recordAudit } from "@/lib/audit/audit";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 
 const DEFAULT_RETENTION_MONTHS = 24;
 
 // Conservative, admin-triggered, audited purge: removes only long-dead
 // appointment records (cancelled/rescheduled) older than the retention window.
 // Patients and active appointments are never touched.
-export async function POST(req: Request) {
-  try {
-    const user = await requireRole(ADMIN_ONLY);
+export const POST = defineRoute({ roles: ADMIN_ONLY }, async ({ audit }) => {
+  const setting = await prisma.setting.findUnique({
+    where: { key: "retentionMonths" },
+  });
+  const months =
+    typeof setting?.value === "number" ? setting.value : DEFAULT_RETENTION_MONTHS;
 
-    const setting = await prisma.setting.findUnique({
-      where: { key: "retentionMonths" },
-    });
-    const months =
-      typeof setting?.value === "number" ? setting.value : DEFAULT_RETENTION_MONTHS;
+  const cutoff = new Date();
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
 
-    const cutoff = new Date();
-    cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
-
-    const result = await prisma.appointment.deleteMany({
+  const result = await prisma.$transaction(async (tx) => {
+    const deleted = await tx.appointment.deleteMany({
       where: {
         status: { in: ["CANCELLED", "RESCHEDULED"] },
         updatedAt: { lt: cutoff },
       },
     });
 
-    await recordAudit(prisma, {
+    await recordAudit(tx, {
       entityType: "retention",
       entityId: "purge",
       action: "purge",
-      after: { deleted: result.count, months, cutoff: cutoff.toISOString() },
-      ctx: auditContext(req, user.id),
+      after: { deleted: deleted.count, months, cutoff: cutoff.toISOString() },
+      ctx: audit,
     });
 
-    return NextResponse.json({ deleted: result.count, months });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+    return deleted;
+  });
+
+  return NextResponse.json({ deleted: result.count, months });
+});

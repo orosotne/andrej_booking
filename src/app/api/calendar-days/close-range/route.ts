@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireRole, ALL_STAFF } from "@/lib/auth/rbac";
+import { ALL_STAFF } from "@/lib/auth/rbac";
 import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 import { closeRangeSchema } from "@/lib/validation";
 import { dateOnly } from "@/lib/calendar-date";
 
@@ -13,12 +13,11 @@ import { dateOnly } from "@/lib/calendar-date";
  * blocked, so existing appointments are preserved. Ungenerated working days in
  * the range are already non-bookable and are left untouched.
  */
-export async function POST(req: Request) {
-  try {
-    // Closures (vacation / non-working days) may be managed by any staff member
-    // — incl. nurses — and stay gated by the shared unlock password below.
-    const user = await requireRole(ALL_STAFF);
-    const body = closeRangeSchema.parse(await req.json().catch(() => ({})));
+export const POST = defineRoute(
+  { roles: ALL_STAFF, body: closeRangeSchema },
+  // Closures (vacation / non-working days) may be managed by any staff member
+  // — incl. nurses — and stay gated by the shared unlock password below.
+  async ({ body, audit }) => {
     assertUnlockPassword(
       body.password,
       "Nesprávne heslo na zatvorenie rozsahu dní.",
@@ -33,29 +32,29 @@ export async function POST(req: Request) {
     const ids = days.map((d) => d.id);
     const closed = days.filter((d) => d.status !== "CLOSED").length;
 
-    if (ids.length > 0) {
-      await prisma.$transaction([
-        prisma.appointmentSlot.updateMany({
+    // Slots blocked + days closed + audit, all atomic: the audit entry can no
+    // longer be lost if the process dies after the status update (the audit
+    // trail is a compliance requirement, so the write must share the tx).
+    await prisma.$transaction(async (tx) => {
+      if (ids.length > 0) {
+        await tx.appointmentSlot.updateMany({
           where: { calendarDayId: { in: ids }, status: { in: ["AVAILABLE", "LOCKED"] } },
           data: { status: "BLOCKED" },
-        }),
-        prisma.calendarDay.updateMany({
+        });
+        await tx.calendarDay.updateMany({
           where: { id: { in: ids }, status: { not: "CLOSED" } },
           data: { status: "CLOSED" },
-        }),
-      ]);
-    }
-
-    await recordAudit(prisma, {
-      entityType: "calendar_day_range",
-      entityId: `${body.from}_${body.to}`,
-      action: "close_range",
-      reason: body.reason ?? null,
-      ctx: auditContext(req, user.id),
+        });
+      }
+      await recordAudit(tx, {
+        entityType: "calendar_day_range",
+        entityId: `${body.from}_${body.to}`,
+        action: "close_range",
+        reason: body.reason ?? null,
+        ctx: audit,
+      });
     });
 
     return NextResponse.json({ ok: true, closed });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireRole, DOCTOR_ADMIN } from "@/lib/auth/rbac";
+import { DOCTOR_ADMIN } from "@/lib/auth/rbac";
 import { recordAudit } from "@/lib/audit/audit";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 import { NotFoundError, ConflictError } from "@/lib/errors";
 import { dateOnly } from "@/lib/calendar-date";
 import { isoDate } from "@/lib/validation";
@@ -21,13 +21,10 @@ const BLOCKING_STATUSES: AppointmentStatus[] = [
 // Removes a calendar day and its slots (cascade). Used to undo a manually
 // opened day. Refuses if any active/completed appointment exists — those days
 // should be blocked via /close instead, not deleted.
-export async function DELETE(
-  req: Request,
-  ctx: { params: Promise<{ date: string }> },
-) {
-  try {
-    const user = await requireRole(DOCTOR_ADMIN);
-    const { date } = await ctx.params;
+export const DELETE = defineRoute(
+  { roles: DOCTOR_ADMIN },
+  async ({ params, audit }) => {
+    const { date } = params;
     isoDate.parse(date);
     const target = dateOnly(date);
 
@@ -56,12 +53,10 @@ export async function DELETE(
         entityId: day.id,
         action: "delete",
         before: { date, dayType: day.dayType, purgedAppointments: purged.count },
-        ctx: auditContext(req, user.id),
+        ctx: audit,
       });
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);

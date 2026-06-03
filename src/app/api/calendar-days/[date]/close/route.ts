@@ -1,31 +1,22 @@
 import { NextResponse } from "next/server";
-import { requireRole, ALL_STAFF } from "@/lib/auth/rbac";
+import { ALL_STAFF } from "@/lib/auth/rbac";
 import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit/audit";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 import { NotFoundError, ConflictError } from "@/lib/errors";
 import { dateOnly } from "@/lib/calendar-date";
-import { isoDate } from "@/lib/validation";
+import { isoDate, closeDaySchema } from "@/lib/validation";
 
-export async function POST(
-  req: Request,
-  ctx: { params: Promise<{ date: string }> },
-) {
-  try {
-    // Closing a day (vacation / non-working) is allowed for any staff member,
-    // incl. nurses; still gated by the shared unlock password below.
-    const user = await requireRole(ALL_STAFF);
-    const { date } = await ctx.params;
-    isoDate.parse(date);
-    const body = (await req.json().catch(() => ({}))) as {
-      force?: boolean;
-      reason?: string;
-      password?: string;
-    };
+// Closing a day (vacation / non-working) is allowed for any staff member, incl.
+// nurses; still gated by the shared unlock password below.
+export const POST = defineRoute(
+  { roles: ALL_STAFF, body: closeDaySchema },
+  async ({ params, body, audit }) => {
+    isoDate.parse(params.date);
     // Zatvorenie celého dňa je chránené heslom.
     assertUnlockPassword(body.password, "Nesprávne heslo na zatvorenie dňa.");
-    const target = dateOnly(date);
+    const target = dateOnly(params.date);
 
     const day = await prisma.calendarDay.findUnique({
       where: { date: target },
@@ -46,27 +37,27 @@ export async function POST(
       );
     }
 
-    await prisma.$transaction([
-      prisma.appointmentSlot.updateMany({
+    // Slots blocked + day closed + audit, all atomic: the audit entry can no
+    // longer be lost if the process dies after the status update (the audit
+    // trail is a compliance requirement, so the write must share the tx).
+    await prisma.$transaction(async (tx) => {
+      await tx.appointmentSlot.updateMany({
         where: { calendarDayId: day.id, status: { in: ["AVAILABLE", "LOCKED"] } },
         data: { status: "BLOCKED" },
-      }),
-      prisma.calendarDay.update({
+      });
+      await tx.calendarDay.update({
         where: { id: day.id },
         data: { status: "CLOSED" },
-      }),
-    ]);
-
-    await recordAudit(prisma, {
-      entityType: "calendar_day",
-      entityId: day.id,
-      action: "close",
-      reason: body.reason ?? null,
-      ctx: auditContext(req, user.id),
+      });
+      await recordAudit(tx, {
+        entityType: "calendar_day",
+        entityId: day.id,
+        action: "close",
+        reason: body.reason ?? null,
+        ctx: audit,
+      });
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);

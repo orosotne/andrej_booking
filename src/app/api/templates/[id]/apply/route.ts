@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireRole, ADMIN_ONLY } from "@/lib/auth/rbac";
+import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { templateApplySchema } from "@/lib/validation";
 import { syncTemplateToFutureDays } from "@/lib/slot-engine/sync";
 import { recordAudit } from "@/lib/audit/audit";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 
 // Re-applies the template to its already-generated future days. `dryRun: true`
 // previews the change without writing. Booked slots are never deleted.
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  try {
-    const user = await requireRole(ADMIN_ONLY);
-    const { id } = await ctx.params;
-    const { dryRun } = templateApplySchema.parse(await req.json().catch(() => ({})));
+export const POST = defineRoute(
+  { roles: ADMIN_ONLY, body: templateApplySchema },
+  async ({ params, body: { dryRun }, audit }) => {
+    const { id } = params;
 
     const report = await syncTemplateToFutureDays(id, { dryRun });
 
@@ -22,11 +21,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         entityId: id,
         action: "apply_to_future_days",
         after: report,
-        ctx: auditContext(req, user.id),
+        ctx: audit,
       });
     }
     return NextResponse.json({ report });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireRole, ADMIN_ONLY } from "@/lib/auth/rbac";
+import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { userCreateSchema } from "@/lib/validation";
 import { hashPassword } from "@/lib/auth/password";
 import { generatePassphrase } from "@/lib/auth/passphrase";
@@ -11,26 +11,20 @@ import {
   expiryEndOfDay,
 } from "@/lib/auth/user-admin";
 import { recordAudit } from "@/lib/audit/audit";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 import { ValidationError } from "@/lib/errors";
 
-export async function GET() {
-  try {
-    await requireRole(ADMIN_ONLY);
-    const users = await prisma.user.findMany({
-      select: USER_LIST_SELECT,
-      orderBy: [{ isActive: "desc" }, { name: "asc" }],
-    });
-    return NextResponse.json({ users: users.map(toAdminUserDTO) });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+export const GET = defineRoute({ roles: ADMIN_ONLY }, async () => {
+  const users = await prisma.user.findMany({
+    select: USER_LIST_SELECT,
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+  });
+  return NextResponse.json({ users: users.map(toAdminUserDTO) });
+});
 
-export async function POST(req: Request) {
-  try {
-    const actor = await requireRole(ADMIN_ONLY);
-    const data = userCreateSchema.parse(await req.json());
+export const POST = defineRoute(
+  { roles: ADMIN_ONLY, body: userCreateSchema },
+  async ({ body: data, audit }) => {
     const email = data.email.trim().toLowerCase();
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -43,28 +37,29 @@ export async function POST(req: Request) {
     const password = generatePassphrase();
     const passwordHash = await hashPassword(password);
 
-    const user = await prisma.user.create({
-      data: {
-        name: data.name.trim(),
-        email,
-        role: data.role,
-        passwordHash,
-        expiresAt: data.expiresAt ? expiryEndOfDay(data.expiresAt) : null,
-      },
-    });
-    await recordAudit(prisma, {
-      entityType: "user",
-      entityId: user.id,
-      action: "create",
-      after: auditUserSnapshot(user),
-      ctx: auditContext(req, actor.id),
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name: data.name.trim(),
+          email,
+          role: data.role,
+          passwordHash,
+          expiresAt: data.expiresAt ? expiryEndOfDay(data.expiresAt) : null,
+        },
+      });
+      await recordAudit(tx, {
+        entityType: "user",
+        entityId: created.id,
+        action: "create",
+        after: auditUserSnapshot(created),
+        ctx: audit,
+      });
+      return created;
     });
 
     return NextResponse.json(
       { user: toAdminUserDTO(user), password },
       { status: 201 },
     );
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);

@@ -1,28 +1,21 @@
 import { NextResponse } from "next/server";
-import { requireRole, ALL_STAFF } from "@/lib/auth/rbac";
+import { ALL_STAFF } from "@/lib/auth/rbac";
 import { bookSlot } from "@/lib/booking/booking-service";
 import { bookSlotSchema } from "@/lib/validation";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 
-export async function POST(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  try {
-    const user = await requireRole(ALL_STAFF);
-    const { id } = await ctx.params;
-    const body = bookSlotSchema.parse(await req.json());
+export const POST = defineRoute(
+  { roles: ALL_STAFF, body: bookSlotSchema },
+  async ({ params, body, audit }) => {
     const appointment = await bookSlot({
-      slotId: id,
+      slotId: params.id,
       patientId: body.patientId,
       appointmentType: body.appointmentType,
       patientCategory: body.patientCategory,
       categoryReason: body.categoryReason,
       note: body.note,
-      ctx: auditContext(req, user.id),
+      ctx: audit,
     });
     return NextResponse.json({ appointment }, { status: 201 });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);

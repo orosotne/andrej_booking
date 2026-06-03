@@ -40,6 +40,15 @@ export const closeRangeSchema = z
     path: ["to"],
   });
 
+// Zatvorenie jedného dňa. Heslo zostáva nepovinné v schéme, aby chýbajúce/zlé
+// heslo hlásil assertUnlockPassword rovnakou hláškou ako doteraz; schéma navyše
+// validuje a ohraničuje `force` a `reason` (predtým neoverené).
+export const closeDaySchema = z.object({
+  force: z.boolean().optional(),
+  reason: z.string().max(500).optional(),
+  password: z.string().max(200).optional(),
+});
+
 export const bookSlotSchema = z
   .object({
     patientId: z.string().min(1),

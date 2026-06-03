@@ -1,58 +1,53 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireRole, ADMIN_ONLY } from "@/lib/auth/rbac";
+import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { slotRuleUpdateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
-import { auditContext, jsonError } from "@/lib/api";
+import { defineRoute } from "@/lib/route";
 import { NotFoundError } from "@/lib/errors";
 
-export async function PATCH(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  try {
-    const user = await requireRole(ADMIN_ONLY);
-    const { id } = await ctx.params;
-    const data = slotRuleUpdateSchema.parse(await req.json());
+export const PATCH = defineRoute(
+  { roles: ADMIN_ONLY, body: slotRuleUpdateSchema },
+  async ({ params, body: data, audit }) => {
+    const { id } = params;
 
-    const before = await prisma.slotRule.findUnique({ where: { id } });
-    if (!before) throw new NotFoundError("Pravidlo neexistuje.");
+    const rule = await prisma.$transaction(async (tx) => {
+      const before = await tx.slotRule.findUnique({ where: { id } });
+      if (!before) throw new NotFoundError("Pravidlo neexistuje.");
 
-    const rule = await prisma.slotRule.update({ where: { id }, data });
-    await recordAudit(prisma, {
-      entityType: "slot_rule",
-      entityId: id,
-      action: "update",
-      before,
-      after: rule,
-      ctx: auditContext(req, user.id),
+      const updated = await tx.slotRule.update({ where: { id }, data });
+      await recordAudit(tx, {
+        entityType: "slot_rule",
+        entityId: id,
+        action: "update",
+        before,
+        after: updated,
+        ctx: audit,
+      });
+      return updated;
     });
     return NextResponse.json({ rule });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);
 
-export async function DELETE(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  try {
-    const user = await requireRole(ADMIN_ONLY);
-    const { id } = await ctx.params;
-    const before = await prisma.slotRule.findUnique({ where: { id } });
-    if (!before) throw new NotFoundError("Pravidlo neexistuje.");
+export const DELETE = defineRoute(
+  { roles: ADMIN_ONLY },
+  async ({ params, audit }) => {
+    const { id } = params;
 
-    await prisma.slotRule.delete({ where: { id } });
-    await recordAudit(prisma, {
-      entityType: "slot_rule",
-      entityId: id,
-      action: "delete",
-      before,
-      ctx: auditContext(req, user.id),
+    await prisma.$transaction(async (tx) => {
+      const before = await tx.slotRule.findUnique({ where: { id } });
+      if (!before) throw new NotFoundError("Pravidlo neexistuje.");
+
+      await tx.slotRule.delete({ where: { id } });
+      await recordAudit(tx, {
+        entityType: "slot_rule",
+        entityId: id,
+        action: "delete",
+        before,
+        ctx: audit,
+      });
     });
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return jsonError(e);
-  }
-}
+  },
+);
