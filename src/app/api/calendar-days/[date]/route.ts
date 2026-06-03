@@ -6,17 +6,7 @@ import { defineRoute } from "@/lib/route";
 import { NotFoundError, ConflictError } from "@/lib/errors";
 import { dateOnly } from "@/lib/calendar-date";
 import { isoDate } from "@/lib/validation";
-import { AppointmentStatus } from "@/generated/prisma/enums";
-
-// Statuses representing real, irreversible state (active commitments or completed
-// medical records). Anything else (CANCELLED, NO_SHOW, RESCHEDULED) is scheduling
-// noise — those rows are cleaned up alongside the day so phantom history can't
-// permanently block deletion.
-const BLOCKING_STATUSES: AppointmentStatus[] = [
-  AppointmentStatus.SCHEDULED,
-  AppointmentStatus.ARRIVED,
-  AppointmentStatus.COMPLETED,
-];
+import { BLOCKING_STATUSES } from "@/lib/appointment-status";
 
 // Removes a calendar day and its slots (cascade). Used to undo a manually
 // opened day. Refuses if any active/completed appointment exists — those days

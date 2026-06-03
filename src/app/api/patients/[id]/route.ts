@@ -5,6 +5,7 @@ import { patientUpdateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
 import { defineRoute } from "@/lib/route";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { BLOCKING_STATUSES } from "@/lib/appointment-status";
 
 export const GET = defineRoute({ roles: ALL_STAFF }, async ({ params }) => {
   const { id } = params;
@@ -124,22 +125,25 @@ export const DELETE = defineRoute({ roles: ALL_STAFF }, async ({ params, audit }
     const patient = await tx.patient.findUnique({ where: { id } });
     if (!patient) throw new NotFoundError("Pacient neexistuje.");
 
-    // A patient linked to appointments is part of the medical history and must
-    // not be hard-deleted (the DB foreign key would also block it). Only
-    // appointment-free records (e.g. test/duplicate entries) can be removed.
-    const appointments = await tx.appointment.count({ where: { patientId: id } });
-    if (appointments > 0) {
+    // Refuse only when the patient has active bookings or completed visits —
+    // those are real medical history. Cancelled / rescheduled / no-show rows are
+    // purged below so they don't permanently block deletion.
+    const blocking = await tx.appointment.count({
+      where: { patientId: id, status: { in: BLOCKING_STATUSES } },
+    });
+    if (blocking > 0) {
       throw new ValidationError(
-        "Pacienta nemožno zmazať — má naviazané objednávky. Zmazať sa dá len pacient bez objednávok.",
+        "Pacienta nemožno zmazať — má aktívne objednávky alebo dokončené návštevy. Najprv ich zrušte alebo presuňte.",
       );
     }
 
+    const purged = await tx.appointment.deleteMany({ where: { patientId: id } });
     await tx.patient.delete({ where: { id } });
     await recordAudit(tx, {
       entityType: "patient",
       entityId: id,
       action: "delete",
-      before: patient,
+      before: { ...patient, purgedAppointments: purged.count },
       ctx: audit,
     });
   });
