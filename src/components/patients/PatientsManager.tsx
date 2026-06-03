@@ -326,8 +326,12 @@ const BOOK_TYPES: ReadonlyArray<{
   { type: "PRE_HOSPITAL", label: "Akútne", category: "AKUTNE" },
 ];
 
-const HORIZONS: ReadonlyArray<{ months: number; label: string }> = [
-  { months: 0, label: "Najbližší" },
+const HORIZONS: ReadonlyArray<{
+  months: number;
+  maxMonths?: number;
+  label: string;
+}> = [
+  { months: 0, maxMonths: 1, label: "do 1 mes." },
   { months: 3, label: "o 3 mes." },
   { months: 6, label: "o 6 mes." },
   { months: 11, label: "o 11 mes." },
@@ -343,6 +347,11 @@ interface UpcomingDTO {
   date: string;
 }
 
+interface LastVisitDTO {
+  date: string;
+  appointmentType: string;
+}
+
 interface NextSlot {
   id: string;
   startAt: string;
@@ -356,24 +365,33 @@ function PatientAppointment({ patientId }: { patientId: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [type, setType] = useState<BookType>("DISPENSARY");
-  const [lookup, setLookup] = useState<{ months: number; slot: NextSlot | null } | null>(null);
+  const [lookup, setLookup] = useState<{
+    months: number;
+    maxMonths?: number;
+    slot: NextSlot | null;
+  } | null>(null);
   const [lookupBusy, setLookupBusy] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["patient-upcoming", patientId],
     queryFn: () =>
-      apiGet<{ upcoming: UpcomingDTO | null }>(`/api/patients/${patientId}`),
+      apiGet<{ upcoming: UpcomingDTO | null; lastVisit: LastVisitDTO | null }>(
+        `/api/patients/${patientId}`,
+      ),
   });
   const upcoming = data?.upcoming ?? null;
+  const lastVisit = data?.lastVisit ?? null;
 
-  async function lookupSlot(months: number) {
+  async function lookupSlot(h: { months: number; maxMonths?: number }) {
     setLookupBusy(true);
     setLookup(null);
     try {
       const r = await apiGet<{ slot: NextSlot | null }>(
-        `/api/slots/next?type=${type}&months=${months}`,
+        `/api/slots/next?type=${type}&months=${h.months}${
+          h.maxMonths !== undefined ? `&maxMonths=${h.maxMonths}` : ""
+        }`,
       );
-      setLookup({ months, slot: r.slot });
+      setLookup({ months: h.months, maxMonths: h.maxMonths, slot: r.slot });
     } catch (e) {
       toast(e instanceof Error ? e.message : "Hľadanie termínu zlyhalo", "error");
     } finally {
@@ -409,21 +427,42 @@ function PatientAppointment({ patientId }: { patientId: string }) {
     );
   }
 
+  // Shown in every state (booked or not) above the rest of the panel.
+  const lastVisitLine = (
+    <p className="mb-2 text-xs text-slate-500">
+      <span className="font-semibold uppercase tracking-wide text-slate-400">
+        Naposledy vyšetrený:
+      </span>{" "}
+      {lastVisit ? (
+        <span className="text-slate-700">
+          {clinicShortDate(lastVisit.date)} ·{" "}
+          {TYPE_META[lastVisit.appointmentType as AppointmentTypeLit]?.label ??
+            lastVisit.appointmentType}
+        </span>
+      ) : (
+        <span className="italic text-slate-400">zatiaľ bez návštevy</span>
+      )}
+    </p>
+  );
+
   if (upcoming) {
     return (
-      <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-          Objednaný termín
-        </p>
-        <p className="mt-0.5 text-sm font-medium text-slate-900">
-          {clinicLongDate(upcoming.date)}
-        </p>
-        <p className="text-sm text-slate-600">
-          {clinicTime(upcoming.startAt)}–{clinicTime(upcoming.endAt)} ·{" "}
-          {TYPE_META[upcoming.appointmentType as AppointmentTypeLit]?.label ??
-            upcoming.appointmentType}
-        </p>
-      </div>
+      <>
+        {lastVisitLine}
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Objednaný termín
+          </p>
+          <p className="mt-0.5 text-sm font-medium text-slate-900">
+            {clinicLongDate(upcoming.date)}
+          </p>
+          <p className="text-sm text-slate-600">
+            {clinicTime(upcoming.startAt)}–{clinicTime(upcoming.endAt)} ·{" "}
+            {TYPE_META[upcoming.appointmentType as AppointmentTypeLit]?.label ??
+              upcoming.appointmentType}
+          </p>
+        </div>
+      </>
     );
   }
 
@@ -432,77 +471,82 @@ function PatientAppointment({ patientId }: { patientId: string }) {
   const noneFound = lookup !== null && !lookupBusy && lookup.slot === null;
 
   return (
-    <div className="mb-4 rounded-lg border border-slate-200 bg-white px-3 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Nie je objednaný — rýchle objednanie
-      </p>
-
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {BOOK_TYPES.map((t) => (
-          <button
-            key={t.type}
-            type="button"
-            onClick={() => {
-              setType(t.type);
-              setLookup(null);
-            }}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              type === t.type
-                ? "bg-slate-900 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-2 grid grid-cols-4 gap-1.5">
-        {HORIZONS.map((h) => (
-          <button
-            key={h.months}
-            type="button"
-            disabled={lookupBusy || busy}
-            onClick={() => lookupSlot(h.months)}
-            className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
-              lookup?.months === h.months
-                ? "border-slate-900 bg-slate-50 text-slate-900"
-                : "border-slate-200 text-slate-600 hover:border-slate-400"
-            }`}
-          >
-            {h.label}
-          </button>
-        ))}
-      </div>
-
-      {lookupBusy && (
-        <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Hľadám termín…
-        </div>
-      )}
-
-      {candidate && (
-        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
-          <span className="text-sm">
-            <span className="font-medium text-slate-900">
-              {clinicDayChip(candidate.date)}
-            </span>{" "}
-            <span className="font-mono tabular-nums text-slate-600">
-              {clinicTime(candidate.startAt)}
-            </span>
-          </span>
-          <Button size="sm" loading={busy} onClick={() => book(candidate, category)}>
-            Objednať
-          </Button>
-        </div>
-      )}
-
-      {noneFound && (
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          Pre tento výber nie je žiadny voľný termín.
+    <>
+      {lastVisitLine}
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white px-3 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Nie je objednaný — rýchle objednanie
         </p>
-      )}
-    </div>
+
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {BOOK_TYPES.map((t) => (
+            <button
+              key={t.type}
+              type="button"
+              onClick={() => {
+                setType(t.type);
+                setLookup(null);
+              }}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                type === t.type
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-2 grid grid-cols-4 gap-1.5">
+          {HORIZONS.map((h) => (
+            <button
+              key={h.months}
+              type="button"
+              disabled={lookupBusy || busy}
+              onClick={() => lookupSlot(h)}
+              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+                lookup?.months === h.months
+                  ? "border-slate-900 bg-slate-50 text-slate-900"
+                  : "border-slate-200 text-slate-600 hover:border-slate-400"
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+
+        {lookupBusy && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Hľadám termín…
+          </div>
+        )}
+
+        {candidate && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+            <span className="text-sm">
+              <span className="font-medium text-slate-900">
+                {clinicDayChip(candidate.date)}
+              </span>{" "}
+              <span className="font-mono tabular-nums text-slate-600">
+                {clinicTime(candidate.startAt)}
+              </span>
+            </span>
+            <Button size="sm" loading={busy} onClick={() => book(candidate, category)}>
+              Objednať
+            </Button>
+          </div>
+        )}
+
+        {noneFound && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            {lookup?.maxMonths !== undefined
+              ? "Žiadny voľný termín do mesiaca."
+              : "Pre tento výber nie je žiadny voľný termín."}
+          </p>
+        )}
+      </div>
+    </>
   );
 }

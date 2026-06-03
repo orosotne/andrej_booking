@@ -39,6 +39,27 @@ export async function GET(
       },
     });
 
+    // The most recent past appointment that counts as an actual visit — shown as
+    // "naposledy vyšetrený". Includes still-SCHEDULED past slots (visits that
+    // were never marked) and ARRIVED/COMPLETED; excludes NO_SHOW, CANCELLED and
+    // RESCHEDULED, which are not visits.
+    const lastVisit = await prisma.appointment.findFirst({
+      where: {
+        patientId: id,
+        status: { in: ["SCHEDULED", "ARRIVED", "COMPLETED"] },
+        slot: { startAt: { lt: new Date() } },
+      },
+      orderBy: { slot: { startAt: "desc" } },
+      include: {
+        slot: {
+          select: {
+            appointmentType: true,
+            calendarDay: { select: { date: true } },
+          },
+        },
+      },
+    });
+
     return NextResponse.json({
       patient,
       upcoming: upcoming
@@ -48,6 +69,12 @@ export async function GET(
             endAt: upcoming.slot.endAt.toISOString(),
             appointmentType: upcoming.slot.appointmentType,
             date: upcoming.slot.calendarDay.date.toISOString().slice(0, 10),
+          }
+        : null,
+      lastVisit: lastVisit
+        ? {
+            date: lastVisit.slot.calendarDay.date.toISOString().slice(0, 10),
+            appointmentType: lastVisit.slot.appointmentType,
           }
         : null,
     });
