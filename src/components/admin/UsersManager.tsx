@@ -75,7 +75,7 @@ export function UsersManager({
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-5xl">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Používatelia</h1>
