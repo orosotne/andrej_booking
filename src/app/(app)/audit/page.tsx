@@ -358,7 +358,8 @@ export default async function AuditPage() {
         Posledných {logs.length} záznamov
       </p>
 
-      <div className="mt-4 overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+      {/* Desktop: full table */}
+      <div className="mt-4 hidden overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200 md:block">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
@@ -407,6 +408,42 @@ export default async function AuditPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Mobile: one card per audit entry */}
+      <ul className="mt-4 space-y-2 md:hidden">
+        {logs.map((log) => {
+          const role = log.actor?.role ?? null;
+          return (
+            <li key={log.id} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+              <div className="flex items-center justify-between gap-2">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+                  {ACTION_LABEL[`${log.entityType}.${log.action}`] ??
+                    `${log.entityType} · ${log.action}`}
+                </span>
+                <span className="shrink-0 font-mono text-xs text-slate-400">
+                  {dtFmt.format(log.createdAt)}
+                </span>
+              </div>
+              <div className="mt-2 text-sm text-slate-700">{describe(log)}</div>
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="text-slate-500">{log.actor?.name ?? "—"}</span>
+                {role && (
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                      ROLE_CHIP[role] ?? "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {ROLE_LABEL[role] ?? role.toLowerCase()}
+                  </span>
+                )}
+              </div>
+              {log.reason && (
+                <p className="mt-2 text-xs text-slate-500">Dôvod: {log.reason}</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -206,7 +206,7 @@ function RuleRow({
         value={draft.startTime}
         onChange={(e) => set({ startTime: e.target.value })}
         aria-label="Začiatok"
-        className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm tabular-nums outline-none focus:border-slate-900"
+        className="rounded-lg border border-slate-300 px-2 py-1.5 text-base tabular-nums outline-none focus:border-slate-900 sm:text-sm"
       />
       <span className="text-slate-400">–</span>
       <input
@@ -214,7 +214,7 @@ function RuleRow({
         value={draft.endTime}
         onChange={(e) => set({ endTime: e.target.value })}
         aria-label="Koniec"
-        className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm tabular-nums outline-none focus:border-slate-900"
+        className="rounded-lg border border-slate-300 px-2 py-1.5 text-base tabular-nums outline-none focus:border-slate-900 sm:text-sm"
       />
       <Select
         aria-label="Typ vyšetrenia"

@@ -5,13 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
-
-const ITEMS = [
-  { href: "/sablona", label: "Šablóna" },
-  { href: "/nastavenia", label: "Nastavenia" },
-  { href: "/pouzivatelia", label: "Používatelia" },
-  { href: "/audit", label: "Audit" },
-];
+import { ADMIN_ITEMS } from "./nav-items";
 
 const isOn = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
@@ -21,7 +15,7 @@ export function AdminMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const active = ITEMS.some((it) => isOn(pathname, it.href));
+  const active = ADMIN_ITEMS.some((it) => isOn(pathname, it.href));
 
   useEffect(() => {
     if (!open) return;
@@ -62,7 +56,7 @@ export function AdminMenu() {
           role="menu"
           className="absolute left-0 top-full z-50 mt-2 min-w-40 overflow-hidden rounded-lg bg-white py-1 shadow-lg ring-1 ring-slate-200"
         >
-          {ITEMS.map((it) => (
+          {ADMIN_ITEMS.map((it) => (
             <Link
               key={it.href}
               href={it.href}

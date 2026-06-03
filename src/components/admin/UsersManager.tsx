@@ -74,6 +74,29 @@ export function UsersManager({
     );
   }
 
+  // Shared by the desktop table row and the mobile card so both stay in sync.
+  const userActions = (u: AdminUserDTO) => {
+    const isSelf = u.id === currentUserId;
+    return (
+      <>
+        <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: "edit", user: u })}>
+          <Pencil className="h-4 w-4" />
+          Upraviť
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: "reset", user: u })}>
+          <KeyRound className="h-4 w-4" />
+          Heslo
+        </Button>
+        {!isSelf && (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => toggleActive(u)}>
+            {u.isActive ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+            {u.isActive ? "Deaktivovať" : "Aktivovať"}
+          </Button>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="max-w-5xl">
       <div className="flex items-center justify-between gap-3">
@@ -89,7 +112,8 @@ export function UsersManager({
         </Button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+      {/* Desktop: full table */}
+      <div className="mt-4 hidden overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200 md:block">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
@@ -104,7 +128,6 @@ export function UsersManager({
           <tbody className="divide-y divide-slate-50">
             {users.map((u) => {
               const badge = statusBadge(u);
-              const isSelf = u.id === currentUserId;
               return (
                 <tr key={u.id} className="text-slate-700">
                   <td className="px-3 py-2 font-medium text-slate-900">{u.name}</td>
@@ -117,22 +140,7 @@ export function UsersManager({
                   </td>
                   <td className="px-3 py-2 text-slate-400">{u.twoFactorEnabled ? "áno" : "—"}</td>
                   <td className="px-3 py-2">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: "edit", user: u })}>
-                        <Pencil className="h-4 w-4" />
-                        Upraviť
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: "reset", user: u })}>
-                        <KeyRound className="h-4 w-4" />
-                        Heslo
-                      </Button>
-                      {!isSelf && (
-                        <Button variant="ghost" size="sm" disabled={busy} onClick={() => toggleActive(u)}>
-                          {u.isActive ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                          {u.isActive ? "Deaktivovať" : "Aktivovať"}
-                        </Button>
-                      )}
-                    </div>
+                    <div className="flex justify-end gap-1">{userActions(u)}</div>
                   </td>
                 </tr>
               );
@@ -140,6 +148,36 @@ export function UsersManager({
           </tbody>
         </table>
       </div>
+
+      {/* Mobile: one card per user */}
+      <ul className="mt-4 space-y-2 md:hidden">
+        {users.map((u) => {
+          const badge = statusBadge(u);
+          return (
+            <li key={u.id} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-slate-900">{u.name}</p>
+                  <p className="truncate text-sm text-slate-500">{u.email}</p>
+                </div>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${badge.cls}`}
+                >
+                  {badge.label}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                <span>{ROLE_LABEL[u.role]}</span>
+                <span aria-hidden="true">·</span>
+                <span>2FA: {u.twoFactorEnabled ? "áno" : "—"}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1 border-t border-slate-100 pt-2">
+                {userActions(u)}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
 
       {dialog.kind === "create" && (
         <UserFormModal

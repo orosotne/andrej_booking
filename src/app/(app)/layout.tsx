@@ -6,6 +6,7 @@ import { auth, signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db";
 import { NavLink } from "@/components/layout/NavLink";
 import { AdminMenu } from "@/components/layout/AdminMenu";
+import { MobileNav } from "@/components/layout/MobileNav";
 import { TwoFactorSetup } from "@/components/admin/TwoFactorSetup";
 import { ROLE_LABEL } from "@/lib/auth/roles";
 
@@ -17,6 +18,11 @@ export default async function AppLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
   const user = session.user;
+
+  async function signOutToLogin() {
+    "use server";
+    await signOut({ redirectTo: "/login" });
+  }
 
   // When the clinic requires 2FA, an admin without it enrolled is blocked from
   // the app (but not from logging in — bootstrap's first admin has no 2FA yet)
@@ -74,8 +80,11 @@ export default async function AppLayout({
                 priority
               />
             </Link>
-            <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
-            <nav className="flex items-center gap-4 text-sm" aria-label="Hlavná navigácia">
+            <span className="hidden h-5 w-px bg-slate-200 md:block" aria-hidden="true" />
+            <nav
+              className="hidden items-center gap-4 text-sm md:flex"
+              aria-label="Hlavná navigácia"
+            >
               <NavLink href="/calendar">Kalendár</NavLink>
               <NavLink href="/pacienti">Pacienti</NavLink>
               {user.role === "ADMIN" && (
@@ -86,26 +95,31 @@ export default async function AppLayout({
               )}
             </nav>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          {/* Desktop: profile + sign-out inline */}
+          <div className="hidden items-center gap-3 text-sm md:flex">
             <Link
               href="/profil"
-              className="hidden text-slate-600 hover:text-slate-900 sm:inline"
+              className="text-slate-600 hover:text-slate-900"
             >
               {user.name}{" "}
               <span className="text-slate-400">
                 · {ROLE_LABEL[user.role] ?? user.role}
               </span>
             </Link>
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/login" });
-              }}
-            >
+            <form action={signOutToLogin}>
               <button className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">
                 Odhlásiť
               </button>
             </form>
+          </div>
+          {/* Mobile: everything collapses into a hamburger menu */}
+          <div className="md:hidden">
+            <MobileNav
+              isAdmin={user.role === "ADMIN"}
+              userName={user.name ?? ""}
+              roleLabel={ROLE_LABEL[user.role] ?? user.role}
+              signOutAction={signOutToLogin}
+            />
           </div>
         </div>
       </header>
