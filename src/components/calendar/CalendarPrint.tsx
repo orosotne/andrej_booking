@@ -17,10 +17,13 @@ import { TYPE_META, STATUS_LABEL } from "@/lib/slot-style";
  *                   repeats on every printed page; rows never split across pages.
  *   • Fonts       : inherits the app sans (IBM Plex Sans → system-ui fallback);
  *                   ~11px body, 10px caption, tabular-nums for the time column.
- *   • Columns     : Čas · Typ · Stav · Pacient · Telefón · Poznámka.
+ *   • Columns     : Čas · Typ · Stav · Pacient · Telefón · Účasť · Poznámka.
  *   • Data        : exactly the slots the on-screen view already loaded — no
  *                   extra fetch, no derived/altered content. Booked slots add
  *                   the patient name + phone; otherwise those cells show "—".
+ *                   The Účasť column reflects appointment.status (Prišiel /
+ *                   Neprišiel / Objednaný / …) so the printout records who
+ *                   actually attended.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -37,6 +40,17 @@ const PERIOD_NOUN: Record<PeriodKind, string> = {
   month: "Mesiac",
 };
 
+// Mirrors the labels in AppointmentActions.tsx so the printout reads the same
+// as the on-screen popover. Unknown statuses fall back to the raw enum string.
+const APPT_STATUS_LABEL: Record<string, string> = {
+  SCHEDULED: "Objednaný",
+  ARRIVED: "Prišiel",
+  NO_SHOW: "Neprišiel",
+  CANCELLED: "Zrušený",
+  RESCHEDULED: "Presunutý",
+  COMPLETED: "Vybavený",
+};
+
 const printedAtFmt = new Intl.DateTimeFormat("sk-SK", {
   timeZone: CLINIC_TZ,
   dateStyle: "short",
@@ -48,6 +62,11 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const patientName = (slot: SlotDTO) =>
   slot.appointment
     ? `${slot.appointment.patient.lastName} ${slot.appointment.patient.firstName}`
+    : "—";
+
+const attendanceLabel = (slot: SlotDTO) =>
+  slot.appointment
+    ? (APPT_STATUS_LABEL[slot.appointment.status] ?? slot.appointment.status)
     : "—";
 
 export function CalendarPrint({
@@ -107,6 +126,7 @@ export function CalendarPrint({
               <th>Stav</th>
               <th>Pacient</th>
               <th>Telefón</th>
+              <th>Účasť</th>
               <th>Poznámka</th>
             </tr>
           </thead>
@@ -114,7 +134,7 @@ export function CalendarPrint({
             <tbody key={iso}>
               {period !== "day" && (
                 <tr className="print-day-head">
-                  <th colSpan={6}>
+                  <th colSpan={7}>
                     {capitalize(clinicLongDate(iso))}
                     {day.status === "CLOSED" &&
                       ` · Zatvorené${day.note ? ` (${day.note})` : ""}`}
@@ -130,6 +150,7 @@ export function CalendarPrint({
                   <td>{STATUS_LABEL[slot.status]}</td>
                   <td>{patientName(slot)}</td>
                   <td>{slot.appointment?.patient.phone ?? "—"}</td>
+                  <td>{attendanceLabel(slot)}</td>
                   <td>{slot.appointment?.note ?? slot.lockedReason ?? "—"}</td>
                 </tr>
               ))}
