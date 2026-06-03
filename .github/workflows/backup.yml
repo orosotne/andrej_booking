@@ -1,0 +1,65 @@
+name: Nightly DB backup
+
+# Logical backup of the production database to Cloudflare R2.
+# Runs in GitHub's cloud — no local machine needed. The dump is gzipped and
+# encrypted (AES256) before upload, so patient data is never stored in clear.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   BACKUP_DATABASE_URL   Neon DIRECT (non-pooler) connection string
+#   BACKUP_PASSPHRASE     symmetric key to decrypt the dump — KEEP SAFE, lose it = lose backups
+#   R2_ACCOUNT_ID         Cloudflare account id (for the S3 endpoint URL)
+#   R2_ACCESS_KEY_ID      R2 API token access key
+#   R2_SECRET_ACCESS_KEY  R2 API token secret
+#   R2_BUCKET             R2 bucket name (e.g. andrej-booking-backups)
+#
+# Restore (locally):
+#   aws s3 cp s3://<bucket>/andrej-booking/<file> . --endpoint-url https://<acct>.r2.cloudflarestorage.com
+#   gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -d <file> | gunzip > dump.sql
+#   psql "$TARGET_DATABASE_URL" < dump.sql
+
+on:
+  schedule:
+    - cron: "30 1 * * *" # 01:30 UTC ≈ 02:30 (zima) / 03:30 (leto) v Bratislave
+  workflow_dispatch: {}
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump, compress and encrypt
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          STAMP="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+          FILE="andrej-booking-${STAMP}.sql.gz.gpg"
+          # pg_dump 17 (matches Neon's Postgres 17) via the official image.
+          docker run --rm -e DATABASE_URL postgres:17 \
+            sh -c 'pg_dump --no-owner --no-privileges --format=plain "$DATABASE_URL"' \
+            | gzip -9 \
+            | gpg --batch --yes --pinentry-mode loopback \
+                  --passphrase "$BACKUP_PASSPHRASE" \
+                  --symmetric --cipher-algo AES256 \
+                  -o "$FILE"
+          test -s "$FILE"
+          echo "BACKUP_FILE=$FILE" >> "$GITHUB_ENV"
+          echo "Created $FILE ($(du -h "$FILE" | cut -f1))"
+
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          aws s3 cp "$BACKUP_FILE" \
+            "s3://${R2_BUCKET}/andrej-booking/${BACKUP_FILE}" \
+            --endpoint-url "$R2_ENDPOINT"
+          echo "Uploaded to s3://${R2_BUCKET}/andrej-booking/${BACKUP_FILE}"
