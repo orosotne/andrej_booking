@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,9 @@ import type { SlotDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META, apptStatusLabel } from "@/lib/slot-style";
 import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
+
+// Grace window (min) after slot start before "Neprišiel" (no-show) can be set.
+const NO_SHOW_GRACE_MIN = 10;
 
 export interface RescheduleOption {
   slot: SlotDTO;
@@ -48,10 +51,29 @@ export function AppointmentActions({
   const [status, setStatus] = useState(appointment?.status ?? "SCHEDULED");
   const [statusOpen, setStatusOpen] = useState(false);
   const [options, setOptions] = useState<RescheduleOption[] | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const meta = TYPE_META[slot.appointmentType];
+
+  // Attendance unlocks by time: "Prišiel" from start + 1 min, "Neprišiel" only
+  // after a grace window (a late patient may still walk in). Timer re-renders at each gate.
+  const startMs = new Date(slot.startAt).getTime();
+  const arriveGateMs = startMs + 60_000;
+  const noShowGateMs = startMs + NO_SHOW_GRACE_MIN * 60_000;
+  const canArrive = now >= arriveGateMs;
+  const canNoShow = now >= noShowGateMs;
+  useEffect(() => {
+    const nextGate = [arriveGateMs, noShowGateMs].find((g) => g > now);
+    if (nextGate === undefined) return;
+    const delay = nextGate - Date.now();
+    if (delay > 6 * 60 * 60_000) return;
+    const id = setTimeout(() => setNow(Date.now()), delay + 250);
+    return () => clearTimeout(id);
+  }, [now, arriveGateMs, noShowGateMs]);
 
   if (!appointment) return null;
   const apptId = appointment.id;
+  const arriveGateLabel = clinicTime(new Date(arriveGateMs).toISOString());
+  const noShowGateLabel = clinicTime(new Date(noShowGateMs).toISOString());
 
   // Status changes keep the modal open: update the local status, refresh the
   // calendar in the background, and collapse back to the status summary.
@@ -167,13 +189,24 @@ export function AppointmentActions({
                 <Button
                   variant={status === "NO_SHOW" ? "danger" : "secondary"}
                   size="sm"
-                  disabled={busy}
-                  title={status === "NO_SHOW" ? "Zrušiť stav „Neprišiel“" : undefined}
+                  disabled={busy || !canNoShow}
+                  title={
+                    !canNoShow
+                      ? `„Neprišiel“ bude možné označiť o ${noShowGateLabel}`
+                      : status === "NO_SHOW"
+                        ? "Zrušiť stav „Neprišiel“"
+                        : undefined
+                  }
                   onClick={() => changeStatus("NO_SHOW")}
                 >
                   Neprišiel
                 </Button>
               </div>
+              {!canNoShow && (
+                <p className="text-center text-[11px] text-slate-400">
+                  „Neprišiel“ bude možné označiť o {noShowGateLabel}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => setStatusOpen(false)}
@@ -182,7 +215,7 @@ export function AppointmentActions({
                 Zavrieť
               </button>
             </div>
-          ) : (
+          ) : canArrive ? (
             <button
               type="button"
               onClick={() => setStatusOpen(true)}
@@ -190,25 +223,25 @@ export function AppointmentActions({
             >
               Zmeniť stav
             </button>
+          ) : (
+            <p className="text-center text-xs text-slate-400">
+              Stav bude možné zmeniť o {arriveGateLabel}
+            </p>
           )}
 
-          {status !== "ARRIVED" && (
-            <div className="flex gap-2 border-t border-slate-100 pt-3">
-              <Button variant="outline" fullWidth onClick={openReschedule}>
-                Presunúť
-              </Button>
-              {status !== "NO_SHOW" && (
-                <Button
-                  variant="secondary"
-                  fullWidth
-                  className="border-red-200 bg-red-50 text-red-700 ring-0 hover:bg-red-100"
-                  onClick={() => setMode("cancel")}
-                >
-                  Zrušiť
-                </Button>
-              )}
-            </div>
-          )}
+          <div className="flex gap-2 border-t border-slate-100 pt-3">
+            <Button variant="outline" fullWidth onClick={openReschedule}>
+              Presunúť
+            </Button>
+            <Button
+              variant="secondary"
+              fullWidth
+              className="border-red-200 bg-red-50 text-red-700 ring-0 hover:bg-red-100"
+              onClick={() => setMode("cancel")}
+            >
+              Zrušiť
+            </Button>
+          </div>
         </div>
       )}
 
