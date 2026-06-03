@@ -11,7 +11,6 @@ export const PATCH = defineRoute(
       appointmentId: params.id,
       status: body.status,
       note: body.note,
-      password: body.password,
       ctx: audit,
     });
     return NextResponse.json({ appointment });

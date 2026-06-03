@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, TextareaField } from "@/components/ui/Field";
+import { TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
@@ -19,13 +19,7 @@ export interface RescheduleOption {
   dayIso: string;
 }
 
-type Mode = "view" | "cancel" | "reschedule" | "note" | "statusPassword";
-
-// Setting NO_SHOW or leaving it again is gated by the same unlock password as
-// opening Wednesday/Friday — enforced server-side, mirrored here for the UX.
-function statusNeedsPassword(current: string, target: string) {
-  return target === "NO_SHOW" || current === "NO_SHOW";
-}
+type Mode = "view" | "cancel" | "reschedule" | "note";
 
 function statusRowClass(status: string) {
   if (status === "ARRIVED") return "border-green-200 bg-green-50 text-green-800";
@@ -52,8 +46,7 @@ export function AppointmentActions({
   const [savedNote, setSavedNote] = useState(appointment?.note ?? "");
   const [noteText, setNoteText] = useState(appointment?.note ?? "");
   const [status, setStatus] = useState(appointment?.status ?? "SCHEDULED");
-  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
-  const [password, setPassword] = useState("");
+  const [statusOpen, setStatusOpen] = useState(false);
   const [options, setOptions] = useState<RescheduleOption[] | null>(null);
   const meta = TYPE_META[slot.appointmentType];
 
@@ -61,32 +54,24 @@ export function AppointmentActions({
   const apptId = appointment.id;
 
   // Status changes keep the modal open: update the local status, refresh the
-  // calendar in the background, and stay on the view so the new colour shows.
-  function submitStatus(target: string, pw?: string) {
+  // calendar in the background, and collapse back to the status summary.
+  function submitStatus(target: string) {
     runAction(
-      () => apiSend(`/api/appointments/${apptId}`, "PATCH", { status: target, password: pw }),
+      () => apiSend(`/api/appointments/${apptId}`, "PATCH", { status: target }),
       {
         success: `Stav: ${apptStatusLabel(target)}`,
         onDone: () => {
           setStatus(target);
-          setPendingStatus(null);
-          setPassword("");
-          setMode("view");
+          setStatusOpen(false);
           onChanged();
         },
       },
     );
   }
 
+  // Clicking the already-active status clears it back to "Objednaný".
   function changeStatus(clicked: "ARRIVED" | "NO_SHOW") {
-    const target = status === clicked ? "SCHEDULED" : clicked;
-    if (statusNeedsPassword(status, target)) {
-      setPendingStatus(target);
-      setPassword("");
-      setMode("statusPassword");
-    } else {
-      submitStatus(target);
-    }
+    submitStatus(status === clicked ? "SCHEDULED" : clicked);
   }
 
   async function openReschedule() {
@@ -167,38 +152,45 @@ export function AppointmentActions({
             )}
           </button>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant={status === "ARRIVED" ? "success" : "secondary"}
-              size="sm"
-              disabled={busy || status === "NO_SHOW"}
-              title={
-                status === "NO_SHOW"
-                  ? "Najprv zrušte stav „Neprišiel“"
-                  : status === "ARRIVED"
-                    ? "Zrušiť stav „Prišiel“"
-                    : undefined
-              }
-              onClick={() => changeStatus("ARRIVED")}
+          {statusOpen ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={status === "ARRIVED" ? "success" : "secondary"}
+                  size="sm"
+                  disabled={busy}
+                  title={status === "ARRIVED" ? "Zrušiť stav „Prišiel“" : undefined}
+                  onClick={() => changeStatus("ARRIVED")}
+                >
+                  Prišiel
+                </Button>
+                <Button
+                  variant={status === "NO_SHOW" ? "danger" : "secondary"}
+                  size="sm"
+                  disabled={busy}
+                  title={status === "NO_SHOW" ? "Zrušiť stav „Neprišiel“" : undefined}
+                  onClick={() => changeStatus("NO_SHOW")}
+                >
+                  Neprišiel
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusOpen(false)}
+                className="block w-full text-center text-xs font-medium text-slate-400 transition hover:text-slate-600"
+              >
+                Zavrieť
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setStatusOpen(true)}
+              className="block w-full text-center text-sm font-medium text-slate-500 underline-offset-2 transition hover:text-slate-700 hover:underline"
             >
-              Prišiel
-            </Button>
-            <Button
-              variant={status === "NO_SHOW" ? "danger" : "secondary"}
-              size="sm"
-              disabled={busy || status === "ARRIVED"}
-              title={
-                status === "ARRIVED"
-                  ? "Najprv zrušte stav „Prišiel“"
-                  : status === "NO_SHOW"
-                    ? "Zrušiť stav „Neprišiel“"
-                    : undefined
-              }
-              onClick={() => changeStatus("NO_SHOW")}
-            >
-              Neprišiel
-            </Button>
-          </div>
+              Zmeniť stav
+            </button>
+          )}
 
           {status !== "ARRIVED" && (
             <div className="flex gap-2 border-t border-slate-100 pt-3">
@@ -217,39 +209,6 @@ export function AppointmentActions({
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {mode === "statusPassword" && (
-        <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            Zmena stavu „Neprišiel“ je chránená heslom (rovnakým ako pri otváraní
-            stredy a piatka). Zadajte ho pre potvrdenie.
-          </p>
-          <Field
-            label="Heslo"
-            type="password"
-            autoComplete="one-time-code"
-            required
-            autoFocus
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <Button variant="outline" fullWidth onClick={() => setMode("view")}>
-              Späť
-            </Button>
-            <Button
-              fullWidth
-              loading={busy}
-              disabled={!password.trim()}
-              onClick={() =>
-                pendingStatus && submitStatus(pendingStatus, password.trim())
-              }
-            >
-              Potvrdiť
-            </Button>
-          </div>
         </div>
       )}
 
