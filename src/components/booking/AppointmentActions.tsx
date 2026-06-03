@@ -59,10 +59,8 @@ export function AppointmentActions({
   const startMs = new Date(slot.startAt).getTime();
   const arriveGateMs = startMs + 60_000;
   const noShowGateMs = startMs + NO_SHOW_GRACE_MIN * 60_000;
-  // TEMP: time gate disabled for testing the Prišiel/Neprišiel/Objednaný buttons.
-  // Revert these two lines to `now >= arriveGateMs` / `now >= noShowGateMs` before go-live.
-  const canArrive = true;
-  const canNoShow = true;
+  const canArrive = now >= arriveGateMs;
+  const canNoShow = now >= noShowGateMs;
   useEffect(() => {
     const nextGate = [arriveGateMs, noShowGateMs].find((g) => g > now);
     if (nextGate === undefined) return;
