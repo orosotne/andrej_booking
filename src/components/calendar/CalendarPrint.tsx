@@ -58,6 +58,20 @@ const attendanceLabel = (slot: SlotDTO) =>
     ? apptStatusLabel(slot.appointment.status)
     : "—";
 
+// Notes are recorded on the patient; the appointment note is a fallback. Long
+// notes are clipped with an ellipsis so the narrow print column stays tidy
+// while still signalling the text continues.
+const NOTE_PRINT_LIMIT = 80;
+
+const noteText = (slot: SlotDTO) => {
+  const raw = slot.appointment
+    ? slot.appointment.patient.note ?? slot.appointment.note
+    : slot.lockedReason;
+  const t = raw?.trim();
+  if (!t) return "—";
+  return t.length > NOTE_PRINT_LIMIT ? `${t.slice(0, NOTE_PRINT_LIMIT)}…` : t;
+};
+
 export function CalendarPrint({
   period,
   periodLabel,
@@ -149,9 +163,7 @@ export function CalendarPrint({
                   <td>{patientName(slot)}</td>
                   <td className="print-phone">{slot.appointment?.patient.phone ?? "—"}</td>
                   <td>{attendanceLabel(slot)}</td>
-                  <td className="print-note">
-                    {slot.appointment?.note ?? slot.lockedReason ?? "—"}
-                  </td>
+                  <td className="print-note">{noteText(slot)}</td>
                 </tr>
               ))}
             </tbody>
