@@ -167,13 +167,13 @@ body {
        Poznámka overflow past the right page margin and get clipped. */
     table-layout: fixed;
   }
-  .calendar-print col.col-cas { width: 12%; }
+  .calendar-print col.col-cas { width: 15%; }
   .calendar-print col.col-typ { width: 13%; }
   .calendar-print col.col-stav { width: 12%; }
-  .calendar-print col.col-pacient { width: 16%; }
+  .calendar-print col.col-pacient { width: 15%; }
   .calendar-print col.col-telefon { width: 13%; }
   .calendar-print col.col-ucast { width: 12%; }
-  .calendar-print col.col-poznamka { width: 22%; }
+  .calendar-print col.col-poznamka { width: 20%; }
   /* Repeat the column headers at the top of every printed page. */
   .calendar-print thead {
     display: table-header-group;
