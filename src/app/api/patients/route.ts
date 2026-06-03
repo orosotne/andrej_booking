@@ -22,8 +22,27 @@ export async function GET(req: Request) {
         : {},
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       take: 20,
+      // Nearest still-scheduled future appointment per patient — same definition
+      // as the patient detail's "upcoming". Lets the list show booked-or-not.
+      include: {
+        appointments: {
+          where: { status: "SCHEDULED", slot: { startAt: { gte: new Date() } } },
+          orderBy: { slot: { startAt: "asc" } },
+          take: 1,
+          select: {
+            slot: { select: { calendarDay: { select: { date: true } } } },
+          },
+        },
+      },
     });
-    return NextResponse.json({ patients });
+    return NextResponse.json({
+      patients: patients.map(({ appointments, ...rest }) => ({
+        ...rest,
+        nextAppointmentDate:
+          appointments[0]?.slot.calendarDay.date.toISOString().slice(0, 10) ??
+          null,
+      })),
+    });
   } catch (e) {
     return jsonError(e);
   }

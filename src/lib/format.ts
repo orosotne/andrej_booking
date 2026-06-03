@@ -37,6 +37,18 @@ export function clinicLongDate(isoDate: string): string {
   return longDateFmt.format(new Date(`${isoDate}T12:00:00.000Z`));
 }
 
+const shortDateFmt = new Intl.DateTimeFormat("sk-SK", {
+  timeZone: CLINIC_TZ,
+  day: "numeric",
+  month: "numeric",
+  year: "numeric",
+});
+
+/** "12. 6. 2026" (numeric d. m. yyyy) from a YYYY-MM-DD string. */
+export function clinicShortDate(isoDate: string): string {
+  return shortDateFmt.format(new Date(`${isoDate}T12:00:00.000Z`));
+}
+
 // --- YYYY-MM-DD arithmetic (UTC-safe, no timezone drift) ---
 
 export function isoAddDays(isoDate: string, days: number): string {

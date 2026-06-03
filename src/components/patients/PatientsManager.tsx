@@ -11,7 +11,12 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
-import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
+import {
+  clinicTime,
+  clinicLongDate,
+  clinicDayChip,
+  clinicShortDate,
+} from "@/lib/format";
 import type {
   AppointmentTypeLit,
   PatientCategoryLit,
@@ -28,6 +33,8 @@ interface Patient {
   email: string | null;
   externalPatientId: string | null;
   note: string | null;
+  // YYYY-MM-DD of the nearest upcoming scheduled appointment, or null if none.
+  nextAppointmentDate: string | null;
 }
 
 type Editing = Patient | "new" | null;
@@ -94,12 +101,25 @@ export function PatientsManager() {
               <button
                 type="button"
                 onClick={() => setEditing(p)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-slate-50"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
               >
-                <span className="font-medium text-slate-900">
-                  {p.lastName} {p.firstName}
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-slate-900">
+                    {p.lastName} {p.firstName}
+                  </span>
+                  {p.phone && (
+                    <span className="block text-sm text-slate-400">{p.phone}</span>
+                  )}
                 </span>
-                <span className="text-sm text-slate-400">{p.phone ?? ""}</span>
+                <span className="shrink-0 text-sm font-medium tabular-nums">
+                  {p.nextAppointmentDate ? (
+                    <span className="text-emerald-700">
+                      {clinicShortDate(p.nextAppointmentDate)}
+                    </span>
+                  ) : (
+                    <span className="text-slate-900">Neobjednaný</span>
+                  )}
+                </span>
               </button>
             </li>
           ))}
