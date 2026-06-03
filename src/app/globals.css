@@ -93,6 +93,12 @@ body {
   display: none;
 }
 
+/* Single-appointment slip handed to the patient (name + date + time). Hidden on
+   screen; revealed only while printing with the body.printing-slip flag set. */
+.appointment-slip-print {
+  display: none;
+}
+
 @page {
   size: A4 portrait;
   margin: 14mm;
@@ -194,6 +200,48 @@ body {
     padding: 24px 0;
     text-align: center;
     color: #555;
+  }
+
+  /* When printing a single appointment slip, suppress the calendar export and
+     reveal only the slip (portalled to <body>, outside the .no-print subtree). */
+  body.printing-slip .calendar-print {
+    display: none !important;
+  }
+  body.printing-slip .appointment-slip-print {
+    display: block !important;
+    color: #000;
+    padding-top: 6mm;
+  }
+  .appointment-slip-print .slip-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #333;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+    margin-bottom: 18px;
+  }
+  .appointment-slip-print .slip-name {
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+  .appointment-slip-print .slip-row {
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+  .appointment-slip-print .slip-label {
+    display: inline-block;
+    width: 64px;
+    color: #555;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .appointment-slip-print .slip-value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 }
 

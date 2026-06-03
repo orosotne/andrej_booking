@@ -39,16 +39,26 @@ function summarize(day: CalendarDayDTO) {
   let available = 0;
   let booked = 0;
   let locked = 0;
+  // Available slots split by the three bookable kinds (akútne / dispenzárne /
+  // echo) so a month cell shows what's still free per type, not just a total.
+  let akut = 0;
+  let disp = 0;
+  let echo = 0;
   for (const s of day.slots) {
-    if (s.status === "AVAILABLE") available++;
-    else if (s.status === "BOOKED") booked++;
+    if (s.status === "AVAILABLE") {
+      available++;
+      if (s.appointmentType === "PRE_HOSPITAL" || s.appointmentType === "ACUTE_RESERVE")
+        akut++;
+      else if (s.appointmentType === "DISPENSARY") disp++;
+      else if (s.appointmentType === "ECHO") echo++;
+    } else if (s.status === "BOOKED") booked++;
     else if (s.status === "LOCKED") locked++;
   }
   const earliestLocked = day.slots
     .filter((s) => s.status === "LOCKED" && s.releaseAt)
     .map((s) => s.releaseAt!.slice(0, 10))
     .sort()[0];
-  return { available, booked, locked, earliestLocked };
+  return { available, booked, locked, earliestLocked, avail: { akut, disp, echo } };
 }
 
 export function MonthView({
@@ -352,6 +362,10 @@ function DayCell({
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status === "CLOSED";
 
+  // Graphically mark the current day in the month grid (only ever set when today
+  // is one of the rendered Wed/Thu/Fri cells, so non-working days highlight nothing).
+  const todayRing = isToday ? " ring-2 ring-slate-900 ring-offset-1" : "";
+
   const base = `min-h-[84px] rounded-lg border p-1.5 text-left transition ${
     inMonth ? "bg-white" : "bg-transparent opacity-40"
   }`;
@@ -373,13 +387,13 @@ function DayCell({
         <button
           type="button"
           onClick={onPick}
-          className={`${base} w-full ${
+          className={`${base} w-full${todayRing} ${
             closed
               ? "border-amber-200 bg-amber-50/50"
-              : "border-slate-200 hover:border-slate-400 hover:shadow-sm"
+              : "border-emerald-300 bg-emerald-50/40 hover:border-emerald-400 hover:shadow-sm"
           }`}
         >
-          <DayNumber iso={iso} isToday={isToday} muted={closed} />
+          <DayNumber iso={iso} isToday={isToday} muted={closed} open={!closed} />
           <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
             {closed ? (
               <>
@@ -397,7 +411,17 @@ function DayCell({
             ) : (
               <>
                 {s.available > 0 && (
-                  <p className="font-medium text-emerald-700">{s.available} voľné</p>
+                  <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 font-medium">
+                    {s.avail.akut > 0 && (
+                      <span className="text-pink-700">{s.avail.akut} ak.</span>
+                    )}
+                    {s.avail.disp > 0 && (
+                      <span className="text-emerald-700">{s.avail.disp} disp.</span>
+                    )}
+                    {s.avail.echo > 0 && (
+                      <span className="text-blue-700">{s.avail.echo} echo</span>
+                    )}
+                  </div>
                 )}
                 {s.booked > 0 && <p className="text-slate-600">{s.booked} obj.</p>}
                 {s.locked > 0 && (
@@ -439,7 +463,7 @@ function DayCell({
   // Working day, not generated yet (incl. holidays — shown but openable only under password).
   return (
     <div
-      className={`${base} border-dashed ${holiday ? "border-amber-200 bg-amber-50/40" : "border-slate-200"}`}
+      className={`${base} border-dashed${todayRing} ${holiday ? "border-amber-200 bg-amber-50/40" : "border-slate-200"}`}
     >
       <DayNumber iso={iso} isToday={isToday} muted={!!holiday} />
       {holiday && (
@@ -478,16 +502,27 @@ function DayNumber({
   iso,
   isToday,
   muted,
+  open,
 }: {
   iso: string;
   isToday: boolean;
   muted?: boolean;
+  open?: boolean;
 }) {
+  // Today wins (dark chip); an open day gets an emerald chip so working days
+  // and their date stand out; otherwise a plain number.
+  const tone = isToday
+    ? "bg-slate-900 text-white"
+    : open
+      ? "bg-emerald-600 text-white"
+      : muted
+        ? "text-slate-400"
+        : "text-slate-700";
   return (
     <span
       className={[
         "inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",
-        isToday ? "bg-slate-900 text-white" : muted ? "text-slate-400" : "text-slate-700",
+        tone,
       ].join(" ")}
     >
       {dayOfMonth(iso)}

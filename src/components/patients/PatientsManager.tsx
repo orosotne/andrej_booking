@@ -6,8 +6,16 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
+import { TYPE_META } from "@/lib/slot-style";
+import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
+import type {
+  AppointmentTypeLit,
+  PatientCategoryLit,
+} from "@/lib/slot-engine/types";
 
 interface Patient {
   id: string;
@@ -122,6 +130,8 @@ function PatientDialog({
   onSaved: () => void;
 }) {
   const { busy, run } = useAsyncAction();
+  // Identity fields are frozen once a patient exists; only national ID + note stay editable.
+  const locked = patient !== null;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState({
     firstName: patient?.firstName ?? "",
@@ -136,20 +146,29 @@ function PatientDialog({
 
   function save(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
-      firstName: form.firstName,
-      lastName: form.lastName,
-      birthYear: Number(form.birthYear),
-      nationalId: form.nationalId || undefined,
-      phone: form.phone,
-      note: form.note || undefined,
-    };
+    // Editing only sends the still-mutable fields; creation sends the full identity.
+    if (patient) {
+      run(
+        () =>
+          apiSend(`/api/patients/${patient.id}`, "PATCH", {
+            nationalId: form.nationalId || undefined,
+            note: form.note || undefined,
+          }),
+        { success: "Pacient upravený", onDone: onSaved },
+      );
+      return;
+    }
     run(
       () =>
-        patient
-          ? apiSend(`/api/patients/${patient.id}`, "PATCH", payload)
-          : apiSend("/api/patients", "POST", payload),
-      { success: patient ? "Pacient upravený" : "Pacient vytvorený", onDone: onSaved },
+        apiSend("/api/patients", "POST", {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          birthYear: Number(form.birthYear),
+          nationalId: form.nationalId || undefined,
+          phone: form.phone,
+          note: form.note || undefined,
+        }),
+      { success: "Pacient vytvorený", onDone: onSaved },
     );
   }
 
@@ -164,10 +183,31 @@ function PatientDialog({
 
   return (
     <Modal title={patient ? "Upraviť pacienta" : "Nový pacient"} onClose={onClose}>
+      {patient && <PatientAppointment patientId={patient.id} />}
       <form onSubmit={save} className="space-y-3">
+        {locked && (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Identifikačné údaje (meno, priezvisko, rok narodenia, telefón) sa po
+            vytvorení nedajú meniť. Upraviť možno rodné číslo a poznámku.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Meno" required value={form.firstName} onChange={(e) => set("firstName", e.target.value)} />
-          <Field label="Priezvisko" required value={form.lastName} onChange={(e) => set("lastName", e.target.value)} />
+          <Field
+            label="Meno"
+            required
+            disabled={locked}
+            className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+            value={form.firstName}
+            onChange={(e) => set("firstName", e.target.value)}
+          />
+          <Field
+            label="Priezvisko"
+            required
+            disabled={locked}
+            className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+            value={form.lastName}
+            onChange={(e) => set("lastName", e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field
@@ -178,6 +218,8 @@ function PatientDialog({
             min={1900}
             max={new Date().getFullYear()}
             placeholder="napr. 1985"
+            disabled={locked}
+            className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
             value={form.birthYear}
             onChange={(e) => set("birthYear", e.target.value)}
           />
@@ -193,6 +235,8 @@ function PatientDialog({
           label="Telefónne číslo"
           required
           inputMode="tel"
+          disabled={locked}
+          className="disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
           value={form.phone}
           onChange={(e) => set("phone", e.target.value)}
         />
@@ -246,5 +290,199 @@ function PatientDialog({
           ))}
       </form>
     </Modal>
+  );
+}
+
+// Quick-book picker lives only in the patient detail. The three bookable types
+// each map to the patient category that the booking service accepts for that
+// slot type (see categoryAllowsSlot).
+const BOOK_TYPES: ReadonlyArray<{
+  type: Extract<AppointmentTypeLit, "DISPENSARY" | "ECHO" | "PRE_HOSPITAL">;
+  label: string;
+  category: PatientCategoryLit;
+}> = [
+  { type: "DISPENSARY", label: "Dispenzárne", category: "DISPENZAR" },
+  { type: "ECHO", label: "ECHO", category: "ECHO" },
+  { type: "PRE_HOSPITAL", label: "Akútne", category: "AKUTNE" },
+];
+
+const HORIZONS: ReadonlyArray<{ months: number; label: string }> = [
+  { months: 0, label: "Najbližší" },
+  { months: 3, label: "o 3 mes." },
+  { months: 6, label: "o 6 mes." },
+  { months: 11, label: "o 11 mes." },
+];
+
+type BookType = (typeof BOOK_TYPES)[number]["type"];
+
+interface UpcomingDTO {
+  id: string;
+  startAt: string;
+  endAt: string;
+  appointmentType: string;
+  date: string;
+}
+
+interface NextSlot {
+  id: string;
+  startAt: string;
+  endAt: string;
+  appointmentType: string;
+  date: string;
+}
+
+function PatientAppointment({ patientId }: { patientId: string }) {
+  const { busy, run } = useAsyncAction();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [type, setType] = useState<BookType>("DISPENSARY");
+  const [lookup, setLookup] = useState<{ months: number; slot: NextSlot | null } | null>(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["patient-upcoming", patientId],
+    queryFn: () =>
+      apiGet<{ upcoming: UpcomingDTO | null }>(`/api/patients/${patientId}`),
+  });
+  const upcoming = data?.upcoming ?? null;
+
+  async function lookupSlot(months: number) {
+    setLookupBusy(true);
+    setLookup(null);
+    try {
+      const r = await apiGet<{ slot: NextSlot | null }>(
+        `/api/slots/next?type=${type}&months=${months}`,
+      );
+      setLookup({ months, slot: r.slot });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Hľadanie termínu zlyhalo", "error");
+    } finally {
+      setLookupBusy(false);
+    }
+  }
+
+  function book(slot: NextSlot, category: PatientCategoryLit) {
+    run(
+      () =>
+        apiSend(`/api/slots/${slot.id}/book`, "POST", {
+          patientId,
+          appointmentType: slot.appointmentType,
+          patientCategory: category,
+        }),
+      {
+        success: "Pacient objednaný",
+        onDone: () => {
+          setLookup(null);
+          qc.invalidateQueries({ queryKey: ["patient-upcoming", patientId] });
+          qc.invalidateQueries({ queryKey: ["calendar"] });
+        },
+      },
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="mb-4 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Načítavam termín…
+      </div>
+    );
+  }
+
+  if (upcoming) {
+    return (
+      <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+          Objednaný termín
+        </p>
+        <p className="mt-0.5 text-sm font-medium text-slate-900">
+          {clinicLongDate(upcoming.date)}
+        </p>
+        <p className="text-sm text-slate-600">
+          {clinicTime(upcoming.startAt)}–{clinicTime(upcoming.endAt)} ·{" "}
+          {TYPE_META[upcoming.appointmentType as AppointmentTypeLit]?.label ??
+            upcoming.appointmentType}
+        </p>
+      </div>
+    );
+  }
+
+  const category = BOOK_TYPES.find((t) => t.type === type)?.category ?? "AKUTNE";
+  const candidate = lookup && !lookupBusy ? lookup.slot : null;
+  const noneFound = lookup !== null && !lookupBusy && lookup.slot === null;
+
+  return (
+    <div className="mb-4 rounded-lg border border-slate-200 bg-white px-3 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Nie je objednaný — rýchle objednanie
+      </p>
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {BOOK_TYPES.map((t) => (
+          <button
+            key={t.type}
+            type="button"
+            onClick={() => {
+              setType(t.type);
+              setLookup(null);
+            }}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              type === t.type
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        {HORIZONS.map((h) => (
+          <button
+            key={h.months}
+            type="button"
+            disabled={lookupBusy || busy}
+            onClick={() => lookupSlot(h.months)}
+            className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+              lookup?.months === h.months
+                ? "border-slate-900 bg-slate-50 text-slate-900"
+                : "border-slate-200 text-slate-600 hover:border-slate-400"
+            }`}
+          >
+            {h.label}
+          </button>
+        ))}
+      </div>
+
+      {lookupBusy && (
+        <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Hľadám termín…
+        </div>
+      )}
+
+      {candidate && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+          <span className="text-sm">
+            <span className="font-medium text-slate-900">
+              {clinicDayChip(candidate.date)}
+            </span>{" "}
+            <span className="font-mono tabular-nums text-slate-600">
+              {clinicTime(candidate.startAt)}
+            </span>
+          </span>
+          <Button size="sm" loading={busy} onClick={() => book(candidate, category)}>
+            Objednať
+          </Button>
+        </div>
+      )}
+
+      {noneFound && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          Pre tento výber nie je žiadny voľný termín.
+        </p>
+      )}
+    </div>
   );
 }

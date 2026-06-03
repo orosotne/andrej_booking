@@ -497,6 +497,7 @@ function DayColumn({
   const isWednesday = weekdayOf(iso) === 3;
   const isLastFriday = weekdayOf(iso) === 5 && isLastFridayOfMonth(dateOnly(iso));
   const isWorkingDay = WORKING_WEEKDAYS.includes(weekdayOf(iso));
+  const isToday = iso === todayIso();
   const holiday = isWorkingDay ? holidayName(iso) : null;
   const canDelete = canManage && day?.dayType === "MANUAL_WEDNESDAY";
   const canClose =
@@ -510,11 +511,20 @@ function DayColumn({
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status === "CLOSED";
   return (
-    <section className="rounded-xl bg-white/60 ring-1 ring-slate-200">
+    <section
+      className={`rounded-xl bg-white/60 ${isToday ? "ring-2 ring-slate-900" : "ring-1 ring-slate-200"}`}
+    >
       <header className="sticky top-0 flex items-center justify-between rounded-t-xl border-b border-slate-100 bg-white/90 px-3 py-2 backdrop-blur">
-        <p className="text-sm font-semibold capitalize text-slate-900">
-          {clinicDayChip(iso)}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold capitalize text-slate-900">
+            {clinicDayChip(iso)}
+          </p>
+          {isToday && (
+            <span className="rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+              Dnes
+            </span>
+          )}
+        </div>
         {canDelete && (
           <button
             type="button"

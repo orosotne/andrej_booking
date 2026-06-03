@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
-import { CalendarClock, Loader2 } from "lucide-react";
+import { CalendarClock, Loader2, Printer } from "lucide-react";
 import type { SlotDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
@@ -111,7 +112,20 @@ export function AppointmentActions({
     }
   }
 
+  // Print a single-appointment slip for the patient. The slip lives in a portal
+  // on <body>; the body.printing-slip flag swaps the print target to just it.
+  function printSlip() {
+    document.body.classList.add("printing-slip");
+    const cleanup = () => {
+      document.body.classList.remove("printing-slip");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  }
+
   return (
+    <>
     <Modal
       title={`${appointment.patient.lastName} ${appointment.patient.firstName}`}
       subtitle={`${clinicLongDate(dayIso)} · ${clinicTime(slot.startAt)}–${clinicTime(slot.endAt)} · ${meta.label}`}
@@ -119,9 +133,17 @@ export function AppointmentActions({
     >
       {mode === "view" && (
         <div className="space-y-4">
-          {appointment.patient.phone && (
-            <p className="text-sm text-slate-600">📞 {appointment.patient.phone}</p>
-          )}
+          <div className="flex items-center justify-between gap-2">
+            {appointment.patient.phone ? (
+              <p className="text-sm text-slate-600">📞 {appointment.patient.phone}</p>
+            ) : (
+              <span />
+            )}
+            <Button variant="outline" size="sm" onClick={printSlip}>
+              <Printer className="h-4 w-4" />
+              Tlačiť lístok
+            </Button>
+          </div>
 
           <div
             className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${statusRowClass(status)}`}
@@ -335,5 +357,30 @@ export function AppointmentActions({
         </div>
       )}
     </Modal>
+      {typeof document !== "undefined" &&
+        createPortal(
+          <section className="appointment-slip-print" aria-hidden="true">
+            <p className="slip-title">Termín vyšetrenia</p>
+            <p className="slip-name">
+              {appointment.patient.lastName} {appointment.patient.firstName}
+            </p>
+            <p className="slip-row">
+              <span className="slip-label">Dátum</span>
+              <span className="slip-value">{clinicLongDate(dayIso)}</span>
+            </p>
+            <p className="slip-row">
+              <span className="slip-label">Čas</span>
+              <span className="slip-value">
+                {clinicTime(slot.startAt)}–{clinicTime(slot.endAt)}
+              </span>
+            </p>
+            <p className="slip-row">
+              <span className="slip-label">Typ</span>
+              <span className="slip-value">{meta.label}</span>
+            </p>
+          </section>,
+          document.body,
+        )}
+    </>
   );
 }
