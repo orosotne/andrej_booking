@@ -529,7 +529,7 @@ function WeekPicker({
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-20 cursor-default"
           />
-          <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <div className="absolute right-0 top-full z-30 mt-1 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:left-0 sm:right-auto">
             <div className="flex items-center justify-between">
               <button
                 type="button"
