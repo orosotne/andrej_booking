@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Search, Loader2, ChevronRight } from "lucide-react";
+import {
+  CalendarClock,
+  Search,
+  Loader2,
+  ChevronRight,
+  ChevronLeft,
+} from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AppointmentActions } from "@/components/booking/AppointmentActions";
@@ -12,10 +18,14 @@ import type { BookedAppointmentDTO } from "@/lib/api-types";
 
 type Scope = "upcoming" | "past";
 
+const PAGE_SIZES = [20, 50, 100] as const;
+
 export function BookedAppointmentsManager() {
   const qc = useQueryClient();
   const [scope, setScope] = useState<Scope>("upcoming");
   const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(20);
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<BookedAppointmentDTO | null>(null);
 
   // Debounce the name search so typing doesn't fire a request per keystroke.
@@ -26,13 +36,15 @@ export function BookedAppointmentsManager() {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["booked-appointments", scope, debounced],
+    queryKey: ["booked-appointments", scope, debounced, page, pageSize],
     queryFn: () =>
-      apiGet<{ items: BookedAppointmentDTO[] }>(
-        `/api/appointments?scope=${scope}&q=${encodeURIComponent(debounced)}`,
+      apiGet<{ items: BookedAppointmentDTO[]; total: number }>(
+        `/api/appointments?scope=${scope}&q=${encodeURIComponent(debounced)}&page=${page}&pageSize=${pageSize}`,
       ),
   });
   const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const refresh = () =>
     qc.invalidateQueries({ queryKey: ["booked-appointments"] });
@@ -57,10 +69,24 @@ export function BookedAppointmentsManager() {
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
-          <button type="button" className={tab(scope === "upcoming")} onClick={() => setScope("upcoming")}>
+          <button
+            type="button"
+            className={tab(scope === "upcoming")}
+            onClick={() => {
+              setScope("upcoming");
+              setPage(1);
+            }}
+          >
             Nadchádzajúce
           </button>
-          <button type="button" className={tab(scope === "past")} onClick={() => setScope("past")}>
+          <button
+            type="button"
+            className={tab(scope === "past")}
+            onClick={() => {
+              setScope("past");
+              setPage(1);
+            }}
+          >
             Minulé
           </button>
         </div>
@@ -69,7 +95,10 @@ export function BookedAppointmentsManager() {
           <input
             type="search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder="Hľadať podľa mena…"
             className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
           />
@@ -93,16 +122,68 @@ export function BookedAppointmentsManager() {
           }
         />
       ) : (
-        <ul className="space-y-2">
-          {items.map((item) => (
-            <BookedRow
-              key={item.slot.appointment?.id ?? item.slot.id}
-              item={item}
-              showStatus={scope === "past"}
-              onClick={() => setSelected(item)}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-2">
+            {items.map((item) => (
+              <BookedRow
+                key={item.slot.appointment?.id ?? item.slot.id}
+                item={item}
+                showStatus={scope === "past"}
+                onClick={() => setSelected(item)}
+              />
+            ))}
+          </ul>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <span>Na stránku:</span>
+              <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
+                {PAGE_SIZES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                    className={`rounded-md px-2.5 py-1 text-sm font-medium tabular-nums transition ${
+                      pageSize === n
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <span className="tabular-nums">· spolu {total}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                aria-label="Predošlá strana"
+                className="rounded-lg border border-slate-300 p-1.5 text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm tabular-nums text-slate-600">
+                {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                aria-label="Ďalšia strana"
+                className="rounded-lg border border-slate-300 p-1.5 text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {selected?.slot.appointment && (

@@ -11,7 +11,8 @@ import type { Prisma, AppointmentStatus } from "@/generated/prisma/client";
 // Upcoming view = active bookings still ahead (or today). Past view = full
 // history, any status (incl. cancelled / no-show / rescheduled).
 const UPCOMING_STATUSES: AppointmentStatus[] = ["SCHEDULED", "ARRIVED"];
-const MAX_ROWS = 500;
+const PAGE_SIZES = [20, 50, 100];
+const DEFAULT_PAGE_SIZE = 20;
 
 const patientSelect = {
   id: true,
@@ -28,6 +29,12 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
   const url = new URL(req.url);
   const past = url.searchParams.get("scope") === "past";
   const q = (url.searchParams.get("q") ?? "").trim();
+  const pageSizeRaw = Number(url.searchParams.get("pageSize"));
+  const pageSize = PAGE_SIZES.includes(pageSizeRaw)
+    ? pageSizeRaw
+    : DEFAULT_PAGE_SIZE;
+  const pageRaw = Number(url.searchParams.get("page"));
+  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1;
 
   const today = dateOnly(todayIso());
 
@@ -44,15 +51,19 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
     }),
   };
 
-  const appointments = await prisma.appointment.findMany({
-    where,
-    take: MAX_ROWS,
-    orderBy: { slot: { startAt: past ? "desc" : "asc" } },
-    include: {
-      slot: { include: { calendarDay: { select: { date: true } } } },
-      patient: { select: patientSelect },
-    },
-  });
+  const [total, appointments] = await Promise.all([
+    prisma.appointment.count({ where }),
+    prisma.appointment.findMany({
+      where,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      orderBy: { slot: { startAt: past ? "desc" : "asc" } },
+      include: {
+        slot: { include: { calendarDay: { select: { date: true } } } },
+        patient: { select: patientSelect },
+      },
+    }),
+  ]);
 
   const items: BookedAppointmentDTO[] = appointments.map((a) => ({
     dayIso: toIsoDate(a.slot.calendarDay.date),
@@ -64,5 +75,5 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
     }),
   }));
 
-  return NextResponse.json({ items });
+  return NextResponse.json({ items, total, page, pageSize });
 });
