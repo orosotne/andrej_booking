@@ -16,8 +16,15 @@ import { Field, TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
-import { clinicShortDate, todayIso } from "@/lib/format";
+import { clinicShortDate, clinicLongDate, todayIso } from "@/lib/format";
 import type { VacationDTO, ClosedDayDTO } from "@/lib/api-types";
+
+// The list only carries genuine closures (rule-based default-closed days are
+// filtered out server-side), so the reason is either the holiday or a manual close.
+function closedDayReason(d: ClosedDayDTO): string {
+  if (d.holiday) return `Sviatok: ${d.holiday}`;
+  return d.note ?? "Zatvorené ručne";
+}
 
 const CURRENT_YEAR = Number(todayIso().slice(0, 4));
 
@@ -39,11 +46,11 @@ export function VacationsManager() {
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
             <CalendarOff className="h-5 w-5 text-slate-400" />
-            Dovolenky
+            Dovolenky a zatvorené dni
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Naplánované zatvorenia ambulancie. Dovolenku nemožno naplánovať na deň
-            s objednaným pacientom — najprv ho presuňte inde.
+            Naplánované dovolenky aj jednotlivo zatvorené dni ambulancie. Dovolenku
+            nemožno naplánovať na deň s objednaným pacientom — najprv ho presuňte inde.
           </p>
         </div>
         <div className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white p-0.5">
@@ -230,9 +237,11 @@ function ClosedDaysManager({ year }: { year: number }) {
               className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
             >
               <div className="min-w-0">
-                <p className="font-medium text-slate-900">{clinicShortDate(d.date)}</p>
+                <p className="font-medium text-slate-900 first-letter:uppercase">
+                  {clinicLongDate(d.date)}
+                </p>
                 <p className="mt-0.5 truncate text-sm text-slate-500">
-                  {d.holiday ? `Sviatok: ${d.holiday}` : (d.note ?? "Zatvorené")}
+                  {closedDayReason(d)}
                 </p>
               </div>
               <button
