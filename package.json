@@ -21,7 +21,8 @@
     "user:create": "tsx prisma/create-user.ts",
     "user:reset": "tsx prisma/reset-password.ts",
     "user:list": "tsx prisma/list-users.ts",
-    "user:delete": "tsx prisma/delete-user.ts"
+    "user:delete": "tsx prisma/delete-user.ts",
+    "user:passwords": "tsx scripts/export-user-passwords.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
