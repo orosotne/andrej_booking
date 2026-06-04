@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarOff, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import {
+  CalendarOff,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  Lock,
+  LockOpen,
+} from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
@@ -9,7 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
 import { clinicShortDate, todayIso } from "@/lib/format";
-import type { VacationDTO } from "@/lib/api-types";
+import type { VacationDTO, ClosedDayDTO } from "@/lib/api-types";
 
 const CURRENT_YEAR = Number(todayIso().slice(0, 4));
 
@@ -82,7 +90,169 @@ export function VacationsManager() {
           </ul>
         )}
       </div>
+
+      <ClosedDaysManager year={year} />
     </div>
+  );
+}
+
+function ClosedDaysManager({ year }: { year: number }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [password, setPassword] = useState("");
+  const [lockDate, setLockDate] = useState("");
+  const [lockReason, setLockReason] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["closed-days", year],
+    queryFn: () =>
+      apiGet<{ days: ClosedDayDTO[] }>(`/api/calendar-days/closed?year=${year}`),
+  });
+  const days = data?.days ?? [];
+  const refresh = () => qc.invalidateQueries({ queryKey: ["closed-days"] });
+
+  async function unlock(date: string) {
+    if (!password) {
+      setError("Zadajte heslo na odomknutie.");
+      return;
+    }
+    setError(null);
+    setBusy(date);
+    try {
+      await apiSend(`/api/calendar-days/${date}/reopen`, "POST", { password });
+      toast("Deň odomknutý", "success");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operácia zlyhala");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function lock(e: React.FormEvent) {
+    e.preventDefault();
+    if (!lockDate) return;
+    if (!password) {
+      setError("Zadajte heslo na zamknutie.");
+      return;
+    }
+    setError(null);
+    setBusy("lock");
+    try {
+      await apiSend(`/api/calendar-days/${lockDate}/close`, "POST", {
+        password,
+        reason: lockReason.trim() || undefined,
+      });
+      toast("Deň zamknutý", "success");
+      setLockDate("");
+      setLockReason("");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operácia zlyhala");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="space-y-4 border-t border-slate-200 pt-6">
+      <div>
+        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+          <Lock className="h-4 w-4 text-slate-400" />
+          Administratívne zatvorené dni
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Jednotlivo zamknuté dni a zatvorené sviatky (mimo dovoleniek). Zamykanie
+          aj odomykanie je chránené rovnakým heslom ako v kalendári.
+        </p>
+      </div>
+
+      <Field
+        label="Heslo"
+        type="password"
+        autoComplete="off"
+        placeholder="Heslo na zamknutie/odomknutie dňa"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
+      <form
+        onSubmit={lock}
+        className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+      >
+        <div className="min-w-[10rem] flex-1">
+          <Field
+            label="Zamknúť deň"
+            type="date"
+            value={lockDate}
+            onChange={(e) => setLockDate(e.target.value)}
+          />
+        </div>
+        <div className="min-w-[10rem] flex-1">
+          <Field
+            label="Dôvod (voliteľné)"
+            value={lockReason}
+            onChange={(e) => setLockReason(e.target.value)}
+            placeholder="napr. školenie"
+          />
+        </div>
+        <Button
+          type="submit"
+          loading={busy === "lock"}
+          disabled={!lockDate}
+        >
+          <Lock className="h-4 w-4" />
+          Zamknúť
+        </Button>
+      </form>
+
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+        </div>
+      ) : days.length === 0 ? (
+        <EmptyState
+          icon={Lock}
+          title="Žiadne zatvorené dni"
+          description={`V roku ${year} nie je administratívne zatvorený žiadny deň.`}
+        />
+      ) : (
+        <ul className="space-y-2">
+          {days.map((d) => (
+            <li
+              key={d.date}
+              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-slate-900">{clinicShortDate(d.date)}</p>
+                <p className="mt-0.5 truncate text-sm text-slate-500">
+                  {d.holiday ? `Sviatok: ${d.holiday}` : (d.note ?? "Zatvorené")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => unlock(d.date)}
+                disabled={busy === d.date}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
+              >
+                {busy === d.date ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LockOpen className="h-4 w-4" />
+                )}
+                Odomknúť
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
