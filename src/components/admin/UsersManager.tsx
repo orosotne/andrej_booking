@@ -404,16 +404,19 @@ function ResetPasswordModal({
   onSubmit: (password?: string) => void;
 }) {
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const trimmed = password.trim();
   const tooShort = trimmed.length > 0 && trimmed.length < 8;
-  const canSet = trimmed.length >= 8;
+  const longEnough = trimmed.length >= 8;
+  const mismatch = confirm.length > 0 && trimmed !== confirm.trim();
+  const canSet = longEnough && trimmed === confirm.trim();
 
   return (
     <Modal title="Resetovať heslo" subtitle={user.name} onClose={onClose}>
       <div className="space-y-3">
         <p className="text-sm text-slate-600">
-          Zadajte vlastné heslo a kliknite „Nastaviť heslo“, alebo nechajte
-          systém vygenerovať náhodné (zobrazí sa iba raz).
+          Zadajte vlastné heslo (min. 8 znakov) dvakrát a kliknite „Nastaviť
+          heslo“, alebo nechajte systém vygenerovať náhodné (zobrazí sa iba raz).
         </p>
         <Field
           label="Vlastné heslo"
@@ -421,8 +424,17 @@ function ResetPasswordModal({
           autoComplete="off"
           value={password}
           placeholder="aspoň 8 znakov"
-          error={tooShort ? "Min. 8 znakov" : undefined}
+          error={tooShort ? "Heslo musí mať aspoň 8 znakov" : undefined}
           onChange={(e) => setPassword(e.target.value)}
+        />
+        <Field
+          label="Zopakujte heslo"
+          type="text"
+          autoComplete="off"
+          value={confirm}
+          placeholder="to isté heslo znova"
+          error={mismatch ? "Heslá sa nezhodujú" : undefined}
+          onChange={(e) => setConfirm(e.target.value)}
         />
         <div className="flex flex-col gap-2">
           <Button
