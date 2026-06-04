@@ -1,9 +1,14 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
 import { TYPE_META } from "@/lib/slot-style";
 import { PATIENT_CATEGORY_LABEL } from "@/lib/patient-category";
+
+const PAGE_SIZES = [20, 50, 100];
+const DEFAULT_PAGE_SIZE = 50;
 
 const dtFmt = new Intl.DateTimeFormat("sk-SK", {
   timeZone: "Europe/Bratislava",
@@ -85,14 +90,31 @@ function fmtIsoDate(iso: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : dateOnlyFmt.format(d);
 }
 
-export default async function AuditPage() {
+export default async function AuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== "ADMIN") redirect("/calendar");
 
+  const sp = await searchParams;
+  const pageSize = PAGE_SIZES.includes(Number(sp.pageSize))
+    ? Number(sp.pageSize)
+    : DEFAULT_PAGE_SIZE;
+  const total = await prisma.auditLog.count();
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageRaw = Number(sp.page);
+  const page =
+    Number.isFinite(pageRaw) && pageRaw >= 1
+      ? Math.min(Math.floor(pageRaw), totalPages)
+      : 1;
+
   const logs = await prisma.auditLog.findMany({
     orderBy: { createdAt: "desc" },
-    take: 100,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
     include: { actor: { select: { name: true, role: true } } },
   });
 
@@ -355,7 +377,7 @@ export default async function AuditPage() {
     <div>
       <h1 className="text-lg font-semibold text-slate-900">Audit zmien</h1>
       <p className="mt-0.5 text-sm text-slate-500">
-        Posledných {logs.length} záznamov
+        Spolu {total} záznamov · strana {page} z {totalPages}
       </p>
 
       {/* Desktop: full table */}
@@ -444,6 +466,59 @@ export default async function AuditPage() {
           );
         })}
       </ul>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <span>Na stránku:</span>
+          <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
+            {PAGE_SIZES.map((n) => (
+              <Link
+                key={n}
+                href={`/audit?page=1&pageSize=${n}`}
+                className={`rounded-md px-2.5 py-1 text-sm font-medium tabular-nums transition ${
+                  pageSize === n
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {n}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {page > 1 ? (
+            <Link
+              href={`/audit?page=${page - 1}&pageSize=${pageSize}`}
+              aria-label="Predošlá strana"
+              className="rounded-lg border border-slate-300 p-1.5 text-slate-700 transition hover:bg-slate-50"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          ) : (
+            <span className="rounded-lg border border-slate-200 p-1.5 text-slate-300">
+              <ChevronLeft className="h-4 w-4" />
+            </span>
+          )}
+          <span className="text-sm tabular-nums text-slate-600">
+            {page} / {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link
+              href={`/audit?page=${page + 1}&pageSize=${pageSize}`}
+              aria-label="Ďalšia strana"
+              className="rounded-lg border border-slate-300 p-1.5 text-slate-700 transition hover:bg-slate-50"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          ) : (
+            <span className="rounded-lg border border-slate-200 p-1.5 text-slate-300">
+              <ChevronRight className="h-4 w-4" />
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
