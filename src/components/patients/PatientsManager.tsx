@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Search, UserPlus, Users, Loader2, Pencil, CalendarSearch } from "lucide-react";
+import { Search, UserPlus, Users, Loader2, Pencil, CalendarSearch, Printer } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
 import { SlotPickerCalendar } from "./SlotPickerCalendar";
+import { AppointmentSlip, printSlip } from "@/components/booking/AppointmentSlip";
 import {
   clinicTime,
   clinicLongDate,
@@ -226,7 +227,12 @@ function PatientDialog({
 
   return (
     <Modal title={patient ? "Detail o pacientovi" : "Nový pacient"} onClose={onClose}>
-      {patient && <PatientAppointment patientId={patient.id} />}
+      {patient && (
+        <PatientAppointment
+          patientId={patient.id}
+          patientName={`${patient.lastName} ${patient.firstName}`}
+        />
+      )}
       <form onSubmit={save} className="space-y-3">
         {patient && locked && (
           <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
@@ -437,7 +443,13 @@ interface NextSlot {
   date: string;
 }
 
-function PatientAppointment({ patientId }: { patientId: string }) {
+function PatientAppointment({
+  patientId,
+  patientName,
+}: {
+  patientId: string;
+  patientName: string;
+}) {
   const { busy, run } = useAsyncAction();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -457,6 +469,19 @@ function PatientAppointment({ patientId }: { patientId: string }) {
     scope: "deň" | "týždeň" | "mesiac";
     dates: string[];
   } | null>(null);
+  // The single appointment whose slip is mounted for printing. Only one is ever
+  // rendered, so printing never picks up another upcoming appointment's slip.
+  const [printAppt, setPrintAppt] = useState<UpcomingDTO | null>(null);
+
+  // Once the slip is mounted, trigger the print dialog; clear it afterwards so
+  // the hidden slip unmounts again.
+  useEffect(() => {
+    if (!printAppt) return;
+    printSlip();
+    const done = () => setPrintAppt(null);
+    window.addEventListener("afterprint", done, { once: true });
+    return () => window.removeEventListener("afterprint", done);
+  }, [printAppt]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["patient-upcoming", patientId],
@@ -568,6 +593,7 @@ function PatientAppointment({ patientId }: { patientId: string }) {
           appt={appt}
           busy={busy}
           onCancel={(reason) => cancelTermin(appt.id, reason)}
+          onPrint={() => setPrintAppt(appt)}
         />
       ))}
 
@@ -706,6 +732,19 @@ function PatientAppointment({ patientId }: { patientId: string }) {
           onClose={() => setPickerOpen(false)}
         />
       )}
+
+      {printAppt && (
+        <AppointmentSlip
+          patientName={patientName}
+          dayIso={printAppt.date}
+          startAt={printAppt.startAt}
+          endAt={printAppt.endAt}
+          typeLabel={
+            TYPE_META[printAppt.appointmentType as AppointmentTypeLit]?.label ??
+            printAppt.appointmentType
+          }
+        />
+      )}
     </>
   );
 }
@@ -714,13 +753,19 @@ function UpcomingTermin({
   appt,
   busy,
   onCancel,
+  onPrint,
 }: {
   appt: UpcomingDTO;
   busy: boolean;
   onCancel: (reason: string) => void;
+  onPrint: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
+
+  const typeLabel =
+    TYPE_META[appt.appointmentType as AppointmentTypeLit]?.label ??
+    appt.appointmentType;
 
   return (
     <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
@@ -733,19 +778,28 @@ function UpcomingTermin({
             {clinicLongDate(appt.date)}
           </p>
           <p className="text-sm text-slate-600">
-            {clinicTime(appt.startAt)}–{clinicTime(appt.endAt)} ·{" "}
-            {TYPE_META[appt.appointmentType as AppointmentTypeLit]?.label ??
-              appt.appointmentType}
+            {clinicTime(appt.startAt)}–{clinicTime(appt.endAt)} · {typeLabel}
           </p>
         </div>
         {!confirming && (
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            className="shrink-0 rounded-md px-2 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50"
-          >
-            Zrušiť termín
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={onPrint}
+              aria-label="Tlačiť potvrdenie o objednaní"
+              title="Tlačiť potvrdenie o objednaní"
+              className="rounded-md p-1.5 text-emerald-700 transition hover:bg-emerald-100"
+            >
+              <Printer className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              className="rounded-md px-2 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50"
+            >
+              Zrušiť termín
+            </button>
+          </div>
         )}
       </div>
 

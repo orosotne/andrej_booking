@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { TextareaField } from "@/components/ui/Field";
@@ -14,6 +13,7 @@ import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META, apptStatusLabel } from "@/lib/slot-style";
 import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
 import { SlotPickerCalendar } from "@/components/patients/SlotPickerCalendar";
+import { AppointmentSlip, printSlip } from "@/components/booking/AppointmentSlip";
 
 // Appointment kinds the calendar slot picker / /api/slots/available support.
 const PICKER_TYPES = ["DISPENSARY", "ECHO", "PRE_HOSPITAL"] as const;
@@ -133,18 +133,6 @@ export function AppointmentActions({
         },
       },
     );
-  }
-
-  // Print a single-appointment slip for the patient. The slip lives in a portal
-  // on <body>; the body.printing-slip flag swaps the print target to just it.
-  function printSlip() {
-    document.body.classList.add("printing-slip");
-    const cleanup = () => {
-      document.body.classList.remove("printing-slip");
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup);
-    window.print();
   }
 
   return (
@@ -402,43 +390,13 @@ export function AppointmentActions({
           onClose={() => setPickerOpen(false)}
         />
       )}
-      {typeof document !== "undefined" &&
-        createPortal(
-          <section className="appointment-slip-print" aria-hidden="true">
-            <div className="slip-header">
-              <p className="slip-clinic">
-                Pacient objednaný na kardiologickú ambulanciu č. 2 v nemocnici
-                Partizánske
-              </p>
-              <p className="slip-address">
-                Adresa: Nemocničná cesta, 958 03 Malé Kršteňany
-              </p>
-            </div>
-            <table className="slip-table">
-              <thead>
-                <tr>
-                  <th scope="col">Pacient</th>
-                  <th scope="col">Dátum</th>
-                  <th scope="col">Čas</th>
-                  <th scope="col">Typ</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="slip-name">
-                    {appointment.patient.lastName} {appointment.patient.firstName}
-                  </td>
-                  <td>{clinicLongDate(dayIso)}</td>
-                  <td className="slip-time">
-                    {clinicTime(slot.startAt)}–{clinicTime(slot.endAt)}
-                  </td>
-                  <td>{meta.label}</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>,
-          document.body,
-        )}
+      <AppointmentSlip
+        patientName={`${appointment.patient.lastName} ${appointment.patient.firstName}`}
+        dayIso={dayIso}
+        startAt={slot.startAt}
+        endAt={slot.endAt}
+        typeLabel={meta.label}
+      />
     </>
   );
 }
