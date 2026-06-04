@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
 import { TwoFactorSetup } from "@/components/admin/TwoFactorSetup";
+import { ChangeOwnPassword } from "@/components/admin/ChangeOwnPassword";
 import { ROLE_LABEL } from "@/lib/auth/roles";
 
 export default async function ProfilePage() {
@@ -24,6 +25,7 @@ export default async function ProfilePage() {
           {ROLE_LABEL[dbUser.role] ?? dbUser.role}
         </p>
       </div>
+      <ChangeOwnPassword />
       <TwoFactorSetup initiallyEnabled={dbUser.twoFactorEnabled} />
     </div>
   );

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { userPasswordSchema } from "@/lib/validation";
 import { hashPassword } from "@/lib/auth/password";
+import { encryptReadablePassword } from "@/lib/auth/password-readable";
 import { generatePassphrase } from "@/lib/auth/passphrase";
 import { CLEARED_LOCKOUT } from "@/lib/auth/lockout";
 import { recordAudit } from "@/lib/audit/audit";
@@ -25,7 +26,12 @@ export const POST = defineRoute(
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id },
-        data: { passwordHash, ...CLEARED_LOCKOUT },
+        data: {
+          passwordHash,
+          passwordReadable: encryptReadablePassword(password),
+          passwordChangedAt: new Date(),
+          ...CLEARED_LOCKOUT,
+        },
       });
       await recordAudit(tx, {
         entityType: "user",

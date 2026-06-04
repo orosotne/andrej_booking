@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, KeyRound, Copy, Pencil, UserCheck, UserX, Trash2 } from "lucide-react";
+import { Plus, KeyRound, Copy, Pencil, UserCheck, UserX, Trash2, Eye } from "lucide-react";
 import type { AdminUserDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
 import { ROLE_LABEL, type Role } from "@/lib/auth/roles";
@@ -21,7 +21,8 @@ type Dialog =
   | { kind: "edit"; user: AdminUserDTO }
   | { kind: "reset"; user: AdminUserDTO }
   | { kind: "delete"; user: AdminUserDTO }
-  | { kind: "reveal"; name: string; password: string };
+  | { kind: "reveal"; name: string; password: string }
+  | { kind: "view"; name: string; password: string | null };
 
 function ddmmyyyy(iso: string): string {
   const [y, m, d] = iso.split("-");
@@ -67,6 +68,16 @@ export function UsersManager({
     });
   }
 
+  function revealPassword(u: AdminUserDTO) {
+    run(async () => {
+      const res = await apiSend<{ password: string | null }>(
+        `/api/users/${u.id}/reveal-password`,
+        "POST",
+      );
+      setDialog({ kind: "view", name: u.name, password: res.password });
+    });
+  }
+
   function copy(text: string) {
     navigator.clipboard?.writeText(text).then(
       () => toast("Heslo skopírované", "success"),
@@ -86,6 +97,10 @@ export function UsersManager({
         <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: "reset", user: u })}>
           <KeyRound className="h-4 w-4" />
           Heslo
+        </Button>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={() => revealPassword(u)}>
+          <Eye className="h-4 w-4" />
+          Zobraziť heslo
         </Button>
         {!isSelf && (
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => toggleActive(u)}>
@@ -122,6 +137,7 @@ export function UsersManager({
               <th className="px-3 py-2 font-medium">Rola</th>
               <th className="px-3 py-2 font-medium">Stav</th>
               <th className="px-3 py-2 font-medium">2FA</th>
+              <th className="px-3 py-2 font-medium">Heslo zmenené</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -139,6 +155,9 @@ export function UsersManager({
                     </span>
                   </td>
                   <td className="px-3 py-2 text-slate-400">{u.twoFactorEnabled ? "áno" : "—"}</td>
+                  <td className="px-3 py-2 text-slate-400">
+                    {u.passwordChangedAt ? ddmmyyyy(u.passwordChangedAt.slice(0, 10)) : "—"}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-1">{userActions(u)}</div>
                   </td>
@@ -170,6 +189,13 @@ export function UsersManager({
                 <span>{ROLE_LABEL[u.role]}</span>
                 <span aria-hidden="true">·</span>
                 <span>2FA: {u.twoFactorEnabled ? "áno" : "—"}</span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  Heslo:{" "}
+                  {u.passwordChangedAt
+                    ? ddmmyyyy(u.passwordChangedAt.slice(0, 10))
+                    : "—"}
+                </span>
               </div>
               <div className="mt-2 flex flex-wrap gap-1 border-t border-slate-100 pt-2">
                 {userActions(u)}
@@ -184,17 +210,24 @@ export function UsersManager({
           title="Nový používateľ"
           submitLabel="Vytvoriť používateľa"
           busy={busy}
+          withPassword
           onClose={close}
           onSubmit={(form) =>
             run(async () => {
-              const res = await apiSend<{ password: string }>("/api/users", "POST", {
+              const res = await apiSend<{ password: string | null }>("/api/users", "POST", {
                 name: form.name,
                 email: form.email,
                 role: form.role,
                 expiresAt: form.expiresAt || undefined,
+                password: form.password,
               });
               await refresh();
-              setDialog({ kind: "reveal", name: form.name, password: res.password });
+              if (res.password) {
+                setDialog({ kind: "reveal", name: form.name, password: res.password });
+              } else {
+                close();
+                toast("Používateľ vytvorený", "success");
+              }
             })
           }
         />
@@ -268,6 +301,43 @@ export function UsersManager({
         </Modal>
       )}
 
+      {dialog.kind === "view" && (
+        <Modal title="Aktuálne heslo" subtitle={dialog.name} onClose={close}>
+          <div className="space-y-3">
+            {dialog.password ? (
+              <>
+                <p className="text-sm text-slate-600">
+                  Aktuálne heslo používateľa. V databáze je uložené šifrovane;
+                  zobrazenie je len pre teba (admin) a zaznamenané v audite.
+                </p>
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <code className="font-mono text-base text-slate-900">
+                    {dialog.password}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copy(dialog.password as string)}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Kopírovať
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-slate-600">
+                Heslo tohto účtu sa nedá zobraziť — bolo nastavené pred zavedením
+                tejto funkcie alebo preň nie je uložená čitateľná kópia. Môžeš ho
+                resetovať cez „Heslo“.
+              </p>
+            )}
+            <Button fullWidth onClick={close}>
+              Zavrieť
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {dialog.kind === "delete" && (
         <ConfirmDialog
           title="Zmazať používateľa?"
@@ -292,6 +362,7 @@ interface UserForm {
   email: string;
   role: Role;
   expiresAt: string;
+  password?: string;
 }
 
 function UserFormModal({
@@ -300,6 +371,7 @@ function UserFormModal({
   busy,
   initial,
   emailReadOnly,
+  withPassword,
   onClose,
   onSubmit,
   onDelete,
@@ -309,6 +381,7 @@ function UserFormModal({
   busy: boolean;
   initial?: AdminUserDTO;
   emailReadOnly?: boolean;
+  withPassword?: boolean;
   onClose: () => void;
   onSubmit: (form: UserForm) => void;
   onDelete?: () => void;
@@ -317,8 +390,19 @@ function UserFormModal({
   const [email, setEmail] = useState(initial?.email ?? "");
   const [role, setRole] = useState<Role>(initial?.role ?? "NURSE");
   const [expiresAt, setExpiresAt] = useState(initial?.expiresAt ?? "");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
 
-  const valid = name.trim().length > 0 && (emailReadOnly || /\S+@\S+\.\S+/.test(email));
+  const pw = password.trim();
+  const pwTooShort = pw.length > 0 && pw.length < 8;
+  const pwMismatch = confirm.length > 0 && pw !== confirm.trim();
+  // A custom password is optional; when typed it must be valid and confirmed.
+  const pwOk = !withPassword || pw.length === 0 || (pw.length >= 8 && pw === confirm.trim());
+
+  const valid =
+    name.trim().length > 0 &&
+    (emailReadOnly || /\S+@\S+\.\S+/.test(email)) &&
+    pwOk;
 
   return (
     <Modal title={title} onClose={onClose}>
@@ -362,6 +446,30 @@ function UserFormModal({
           onChange={(e) => setExpiresAt(e.target.value)}
           hint="Prázdne = trvalý účet. Dátum = dočasný zaskakujúci prístup."
         />
+        {withPassword && (
+          <>
+            <Field
+              label="Heslo (nepovinné)"
+              type="text"
+              autoComplete="off"
+              value={password}
+              placeholder="Prázdne = vygenerovať"
+              error={pwTooShort ? "Heslo musí mať aspoň 8 znakov" : undefined}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {pw.length > 0 && (
+              <Field
+                label="Zopakujte heslo"
+                type="text"
+                autoComplete="off"
+                value={confirm}
+                placeholder="to isté heslo znova"
+                error={pwMismatch ? "Heslá sa nezhodujú" : undefined}
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+            )}
+          </>
+        )}
         <div className="flex gap-2 pt-1">
           <Button variant="outline" fullWidth onClick={onClose}>
             Zrušiť
@@ -371,7 +479,13 @@ function UserFormModal({
             loading={busy}
             disabled={!valid}
             onClick={() =>
-              onSubmit({ name: name.trim(), email: email.trim(), role, expiresAt })
+              onSubmit({
+                name: name.trim(),
+                email: email.trim(),
+                role,
+                expiresAt,
+                password: withPassword && pw.length >= 8 ? pw : undefined,
+              })
             }
           >
             {submitLabel}

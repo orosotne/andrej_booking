@@ -12,6 +12,7 @@ export const USER_LIST_SELECT = {
   expiresAt: true,
   twoFactorEnabled: true,
   createdAt: true,
+  passwordChangedAt: true,
 } as const;
 
 type AdminUserRow = Pick<
@@ -24,6 +25,7 @@ type AdminUserRow = Pick<
   | "expiresAt"
   | "twoFactorEnabled"
   | "createdAt"
+  | "passwordChangedAt"
 >;
 
 export function toAdminUserDTO(u: AdminUserRow): AdminUserDTO {
@@ -36,6 +38,9 @@ export function toAdminUserDTO(u: AdminUserRow): AdminUserDTO {
     expiresAt: u.expiresAt ? u.expiresAt.toISOString().slice(0, 10) : null,
     twoFactorEnabled: u.twoFactorEnabled,
     createdAt: u.createdAt.toISOString(),
+    passwordChangedAt: u.passwordChangedAt
+      ? u.passwordChangedAt.toISOString()
+      : null,
   };
 }
 

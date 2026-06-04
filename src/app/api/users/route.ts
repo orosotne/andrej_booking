@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { userCreateSchema } from "@/lib/validation";
 import { hashPassword } from "@/lib/auth/password";
+import { encryptReadablePassword } from "@/lib/auth/password-readable";
 import { generatePassphrase } from "@/lib/auth/passphrase";
 import {
   USER_LIST_SELECT,
@@ -32,9 +33,11 @@ export const POST = defineRoute(
       throw new ValidationError("Používateľ s týmto e-mailom už existuje.");
     }
 
-    // New accounts always get a generated passphrase — returned once below so
-    // the admin can hand it over. Only the argon2 hash is stored.
-    const password = generatePassphrase();
+    // Admin may set a custom password; otherwise the server generates one and
+    // returns it once below. Only the argon2 hash is used for login; an
+    // encrypted, admin-viewable copy is stored alongside it.
+    const wasGenerated = !data.password;
+    const password = data.password ?? generatePassphrase();
     const passwordHash = await hashPassword(password);
 
     const user = await prisma.$transaction(async (tx) => {
@@ -44,6 +47,8 @@ export const POST = defineRoute(
           email,
           role: data.role,
           passwordHash,
+          passwordReadable: encryptReadablePassword(password),
+          passwordChangedAt: new Date(),
           expiresAt: data.expiresAt ? expiryEndOfDay(data.expiresAt) : null,
         },
       });
@@ -57,8 +62,10 @@ export const POST = defineRoute(
       return created;
     });
 
+    // Reveal the password only when the server generated it (the admin already
+    // knows a custom one they typed).
     return NextResponse.json(
-      { user: toAdminUserDTO(user), password },
+      { user: toAdminUserDTO(user), password: wasGenerated ? password : null },
       { status: 201 },
     );
   },

@@ -82,6 +82,11 @@ model User {
   email            String   @unique
   role             Role     @default(NURSE)
   passwordHash     String?  @map("password_hash")
+  // Admin-viewable copy of the current password, AES-256-GCM encrypted at rest
+  // with PASSWORD_ENC_KEY (never plaintext). Set whenever the password is set or
+  // changed; null for accounts whose password predates this feature.
+  passwordReadable String?  @map("password_readable")
+  passwordChangedAt DateTime? @map("password_changed_at")
   externalAuthId   String?  @map("external_auth_id")
   totpSecret       String?  @map("totp_secret")
   twoFactorEnabled Boolean  @default(false) @map("two_factor_enabled")

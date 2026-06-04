@@ -61,6 +61,14 @@ export interface VacationDTO {
   createdAt: string;
 }
 
+// An administratively closed day not owned by a vacation (manual closure or a
+// closed public holiday). date is YYYY-MM-DD; holiday is the SK holiday name or null.
+export interface ClosedDayDTO {
+  date: string;
+  note: string | null;
+  holiday: string | null;
+}
+
 // Admin user-management DTO. Never carries passwordHash or totpSecret.
 export interface AdminUserDTO {
   id: string;
@@ -71,4 +79,5 @@ export interface AdminUserDTO {
   expiresAt: string | null; // YYYY-MM-DD, or null for a permanent account
   twoFactorEnabled: boolean;
   createdAt: string; // ISO instant
+  passwordChangedAt: string | null; // ISO instant of last password set/change
 }

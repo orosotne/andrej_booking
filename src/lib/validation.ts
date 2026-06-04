@@ -201,6 +201,15 @@ export const userCreateSchema = z.object({
   role: roleEnum,
   // Optional expiry for temporary stand-in accounts (stored as end of that day).
   expiresAt: isoDate.optional(),
+  // Optional custom password; omit to have the server generate one.
+  password: z.string().min(8, "Heslo musí mať aspoň 8 znakov").max(200).optional(),
+});
+
+// Self-service password change (doctor/nurse changing their own). Current
+// password is verified before the new one is set.
+export const profilePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Súčasné heslo je povinné").max(200),
+  newPassword: z.string().min(8, "Heslo musí mať aspoň 8 znakov").max(200),
 });
 
 export const userUpdateSchema = z.object({
