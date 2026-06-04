@@ -5,8 +5,8 @@ import { defineRoute } from "@/lib/route";
 import { ValidationError } from "@/lib/errors";
 import { calendarRangeSchema } from "@/lib/validation";
 import { dateOnly } from "@/lib/calendar-date";
-import type { CalendarResponse, SlotDTO } from "@/lib/api-types";
-import type { AppointmentTypeLit, SlotStatusLit } from "@/lib/slot-engine/types";
+import { toSlotDTO } from "@/lib/slot-dto";
+import type { CalendarResponse } from "@/lib/api-types";
 import type { AppointmentStatus } from "@/generated/prisma/client";
 
 const ACTIVE_APPOINTMENT_STATUSES: AppointmentStatus[] = [
@@ -68,27 +68,9 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
       dayType: day.dayType,
       status: day.status,
       note: day.note,
-      slots: day.slots.map((slot): SlotDTO => {
-        const active = slot.appointments[0] ?? null;
-        return {
-          id: slot.id,
-          startAt: slot.startAt.toISOString(),
-          endAt: slot.endAt.toISOString(),
-          appointmentType: slot.appointmentType as AppointmentTypeLit,
-          status: slot.status as SlotStatusLit,
-          releaseAt: slot.releaseAt ? slot.releaseAt.toISOString() : null,
-          color: slot.color,
-          lockedReason: slot.lockedReason,
-          appointment: active
-            ? {
-                id: active.id,
-                status: active.status,
-                note: active.note,
-                patient: active.patient,
-              }
-            : null,
-        };
-      }),
+      slots: day.slots.map((slot) =>
+        toSlotDTO(slot, slot.appointments[0] ?? null),
+      ),
     })),
   };
 

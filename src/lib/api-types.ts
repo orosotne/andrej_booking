@@ -30,6 +30,13 @@ export interface SlotDTO {
   appointment: AppointmentLiteDTO | null;
 }
 
+// One row in the admin booked-appointments list: the slot (with its appointment
+// + patient) plus the clinic-local day it falls on, ready for AppointmentActions.
+export interface BookedAppointmentDTO {
+  dayIso: string;
+  slot: SlotDTO;
+}
+
 export interface CalendarDayDTO {
   id: string;
   date: string;
