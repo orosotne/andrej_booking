@@ -404,34 +404,45 @@ function ResetPasswordModal({
   onSubmit: (password?: string) => void;
 }) {
   const [password, setPassword] = useState("");
-  const tooShort = password.length > 0 && password.length < 8;
+  const trimmed = password.trim();
+  const tooShort = trimmed.length > 0 && trimmed.length < 8;
+  const canSet = trimmed.length >= 8;
 
   return (
     <Modal title="Resetovať heslo" subtitle={user.name} onClose={onClose}>
       <div className="space-y-3">
         <p className="text-sm text-slate-600">
-          Vygenerujte nové heslo (zobrazí sa raz) alebo zadajte vlastné.
+          Zadajte vlastné heslo a kliknite „Nastaviť heslo“, alebo nechajte
+          systém vygenerovať náhodné (zobrazí sa iba raz).
         </p>
         <Field
-          label="Vlastné heslo (nepovinné)"
+          label="Vlastné heslo"
           type="text"
           autoComplete="off"
           value={password}
-          placeholder="Prázdne = vygenerovať"
+          placeholder="aspoň 8 znakov"
           error={tooShort ? "Min. 8 znakov" : undefined}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <div className="flex gap-2">
-          <Button variant="outline" fullWidth onClick={onClose}>
-            Zrušiť
-          </Button>
+        <div className="flex flex-col gap-2">
           <Button
             fullWidth
             loading={busy}
-            disabled={tooShort}
-            onClick={() => onSubmit(password.trim() ? password.trim() : undefined)}
+            disabled={!canSet}
+            onClick={() => onSubmit(trimmed)}
           >
-            {password.trim() ? "Nastaviť heslo" : "Vygenerovať"}
+            Nastaviť heslo
+          </Button>
+          <Button
+            variant="outline"
+            fullWidth
+            disabled={busy}
+            onClick={() => onSubmit(undefined)}
+          >
+            Vygenerovať náhodné heslo
+          </Button>
+          <Button variant="ghost" fullWidth onClick={onClose}>
+            Zrušiť
           </Button>
         </div>
       </div>
