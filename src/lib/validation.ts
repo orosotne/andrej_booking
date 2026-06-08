@@ -139,7 +139,9 @@ export const settingsUpdateSchema = z
     retentionMonths: z.number().int().min(1).max(120).optional(),
     enableLateSlot: z.boolean().optional(),
     twoFactorRequired: z.boolean().optional(),
-    storeSensitivePatientData: z.boolean().optional(),
+    // Global red banner shown to all staff at the top of the app. Empty string
+    // clears it (no banner). Admin-authored free text.
+    announcement: z.string().max(500).optional(),
   })
   .catchall(z.unknown());
 

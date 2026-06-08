@@ -32,6 +32,9 @@ function asNumber(v: unknown, fallback: number): number {
 function asBool(v: unknown): boolean {
   return v === true;
 }
+function asText(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
 
 export function SettingsForm({
   initialSettings,
@@ -112,6 +115,24 @@ export function SettingsForm({
         </div>
       </Section>
 
+      <Section title="Upozornenie pre personál">
+        <p className="mb-3 text-sm text-slate-500">
+          Červené upozornenie navrchu aplikácie, viditeľné pre všetkých
+          (admin/lekár/sestra). Necháte prázdne → žiadne upozornenie sa nezobrazí.
+        </p>
+        <textarea
+          value={asText(settings.announcement)}
+          onChange={(e) => setSetting("announcement", e.target.value)}
+          rows={2}
+          maxLength={500}
+          placeholder="napr. Lucka, pridávaj aj e-maily :D"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+        />
+        <p className="mt-1 text-right text-xs text-slate-400 tabular-nums">
+          {asText(settings.announcement).length}/500
+        </p>
+      </Section>
+
       <Section title="Systém">
         <NumberRow
           label="Generovať dopredu (mesiacov)"
@@ -132,11 +153,6 @@ export function SettingsForm({
           label="Vyžadovať 2FA pre všetkých"
           checked={asBool(settings.twoFactorRequired)}
           onChange={(v) => setSetting("twoFactorRequired", v)}
-        />
-        <ToggleRow
-          label="Ukladať citlivé údaje pacienta (rodné číslo, diagnózy)"
-          checked={asBool(settings.storeSensitivePatientData)}
-          onChange={(v) => setSetting("storeSensitivePatientData", v)}
         />
       </Section>
 

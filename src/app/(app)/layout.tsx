@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { Megaphone } from "lucide-react";
 import logo from "@/assets/logo-02.png";
 import { signOut } from "@/lib/auth/auth";
 import { getSessionUser } from "@/lib/auth/rbac";
@@ -10,6 +11,7 @@ import { AdminMenu } from "@/components/layout/AdminMenu";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { MobileQuickNav } from "@/components/layout/MobileQuickNav";
 import { TwoFactorSetup } from "@/components/admin/TwoFactorSetup";
+import { HackPrank } from "@/components/fun/HackPrank"; // DOČASNÝ ŽART — odstrániť neskôr
 import { ROLE_LABEL } from "@/lib/auth/roles";
 
 export default async function AppLayout({
@@ -21,6 +23,14 @@ export default async function AppLayout({
   // (or a role change) is reflected here immediately, not only at next login.
   const user = await getSessionUser();
   if (!user) redirect("/login");
+
+  // Global staff announcement (red bar). Stored as a plain-string Setting; empty
+  // or missing means no banner. Visible to every signed-in role.
+  const announcementRow = await prisma.setting.findUnique({
+    where: { key: "announcement" },
+  });
+  const announcement =
+    typeof announcementRow?.value === "string" ? announcementRow.value.trim() : "";
 
   async function signOutToLogin() {
     "use server";
@@ -67,6 +77,20 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-dvh">
+      <HackPrank />
+      {announcement && (
+        <div role="alert" className="bg-red-600 text-white">
+          <div className="mx-auto flex max-w-6xl items-start gap-2.5 px-4 py-2.5">
+            <Megaphone className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p className="text-sm font-medium">
+              <span className="mr-1.5 font-semibold uppercase tracking-wide">
+                Dôležité upozornenie:
+              </span>
+              <span className="whitespace-pre-wrap">{announcement}</span>
+            </p>
+          </div>
+        </div>
+      )}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-4">
