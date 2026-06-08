@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Search, UserPlus, Users, Loader2, Pencil, CalendarSearch, Printer } from "lucide-react";
+import {
+  Search,
+  UserPlus,
+  Users,
+  Loader2,
+  Pencil,
+  CalendarSearch,
+  Printer,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
@@ -42,21 +52,29 @@ interface Patient {
 
 type Editing = Patient | "new" | null;
 
+const PAGE_SIZES = [20, 50, 100] as const;
+
 export function PatientsManager() {
   const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(20);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Editing>(null);
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
   const load = useCallback(
-    async (q: string) => {
+    async (q: string, p: number, size: number) => {
       setLoading(true);
       try {
-        const r = await apiGet<{ patients: Patient[] }>(
-          `/api/patients?search=${encodeURIComponent(q)}`,
+        const r = await apiGet<{ patients: Patient[]; total: number }>(
+          `/api/patients?search=${encodeURIComponent(q)}&page=${p}&pageSize=${size}`,
         );
         setPatients(r.patients);
+        setTotal(r.total);
       } catch (e) {
         // Without this the empty list would masquerade as "no patients found".
         toast(
@@ -71,9 +89,9 @@ export function PatientsManager() {
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => load(query.trim()), 200);
+    const timer = setTimeout(() => load(query.trim(), page, pageSize), 200);
     return () => clearTimeout(timer);
-  }, [query, load]);
+  }, [query, page, pageSize, load]);
 
   return (
     <div className="max-w-2xl">
@@ -89,7 +107,10 @@ export function PatientsManager() {
         <Search className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" aria-hidden="true" />
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(1);
+          }}
           aria-label="Hľadať pacienta"
           placeholder="Hľadať podľa mena, priezviska, telefónu…"
           className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
@@ -139,13 +160,65 @@ export function PatientsManager() {
         </ul>
       )}
 
+      {!loading && total > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span>Na stránku:</span>
+            <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
+              {PAGE_SIZES.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                  className={`rounded-md px-2.5 py-1 text-sm font-medium tabular-nums transition ${
+                    pageSize === n
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <span className="tabular-nums">· spolu {total}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              aria-label="Predošlá strana"
+              className="rounded-lg border border-slate-300 p-1.5 text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-sm tabular-nums text-slate-600">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              aria-label="Ďalšia strana"
+              className="rounded-lg border border-slate-300 p-1.5 text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {editing && (
         <PatientDialog
           patient={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            load(query.trim());
+            load(query.trim(), page, pageSize);
           }}
         />
       )}

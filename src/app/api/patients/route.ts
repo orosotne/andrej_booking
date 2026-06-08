@@ -5,35 +5,57 @@ import { patientCreateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditPatientSnapshot } from "@/lib/audit/patient-snapshot";
 import { defineRoute } from "@/lib/route";
+import type { Prisma } from "@/generated/prisma/client";
+
+const PAGE_SIZES = [20, 50, 100];
+const DEFAULT_PAGE_SIZE = 20;
 
 export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
-  const q = new URL(req.url).searchParams.get("search")?.trim() ?? "";
-  const patients = await prisma.patient.findMany({
-    where: q
-      ? {
-          OR: [
-            { firstName: { contains: q, mode: "insensitive" } },
-            { lastName: { contains: q, mode: "insensitive" } },
-            { phone: { contains: q } },
-            { externalPatientId: { contains: q, mode: "insensitive" } },
-          ],
-        }
-      : {},
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    take: 20,
-    // Nearest still-scheduled future appointment per patient — same definition
-    // as the patient detail's "upcoming". Lets the list show booked-or-not.
-    include: {
-      appointments: {
-        where: { status: "SCHEDULED", slot: { startAt: { gte: new Date() } } },
-        orderBy: { slot: { startAt: "asc" } },
-        take: 1,
-        select: {
-          slot: { select: { calendarDay: { select: { date: true } } } },
+  const url = new URL(req.url);
+  const q = url.searchParams.get("search")?.trim() ?? "";
+  const pageSizeRaw = Number(url.searchParams.get("pageSize"));
+  const pageSize = PAGE_SIZES.includes(pageSizeRaw)
+    ? pageSizeRaw
+    : DEFAULT_PAGE_SIZE;
+  const pageRaw = Number(url.searchParams.get("page"));
+  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1;
+
+  const where: Prisma.PatientWhereInput = q
+    ? {
+        OR: [
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName: { contains: q, mode: "insensitive" } },
+          { phone: { contains: q } },
+          { externalPatientId: { contains: q, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const [total, patients] = await Promise.all([
+    prisma.patient.count({ where }),
+    prisma.patient.findMany({
+      where,
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      // Nearest still-scheduled future appointment per patient — same definition
+      // as the patient detail's "upcoming". Lets the list show booked-or-not.
+      include: {
+        appointments: {
+          where: {
+            status: "SCHEDULED",
+            slot: { startAt: { gte: new Date() } },
+          },
+          orderBy: { slot: { startAt: "asc" } },
+          take: 1,
+          select: {
+            slot: { select: { calendarDay: { select: { date: true } } } },
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
+
   return NextResponse.json({
     patients: patients.map(({ appointments, ...rest }) => ({
       ...rest,
@@ -41,6 +63,9 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
         appointments[0]?.slot.calendarDay.date.toISOString().slice(0, 10) ??
         null,
     })),
+    total,
+    page,
+    pageSize,
   });
 });
 
