@@ -238,6 +238,7 @@ model AppointmentSlot {
   color           String
   ruleId          String?         @map("rule_id")
   lockedReason    String?         @map("locked_reason")
+  manualLock      Boolean         @default(false) @map("manual_lock")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 

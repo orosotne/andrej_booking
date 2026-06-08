@@ -80,6 +80,11 @@ export function todayIso(): string {
   return clinicIsoDateFmt.format(new Date());
 }
 
+/** YYYY-MM-DD in clinic time from an ISO instant. */
+export function clinicDate(iso: string): string {
+  return clinicIsoDateFmt.format(new Date(iso));
+}
+
 export function startOfMonth(isoDate: string): string {
   return `${isoDate.slice(0, 7)}-01`;
 }

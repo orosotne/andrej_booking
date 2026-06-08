@@ -280,7 +280,7 @@ export async function unlockSlot(input: UnlockInput) {
 
     const updated = await tx.appointmentSlot.update({
       where: { id: slot.id },
-      data: { status: "AVAILABLE", lockedReason: input.reason ?? null },
+      data: { status: "AVAILABLE", lockedReason: input.reason ?? null, manualLock: false },
     });
     await recordAudit(tx, {
       entityType: "slot",
@@ -314,7 +314,7 @@ export async function lockSlot(input: LockInput) {
 
     const updated = await tx.appointmentSlot.update({
       where: { id: slot.id },
-      data: { status: "LOCKED", lockedReason: input.reason ?? null },
+      data: { status: "LOCKED", lockedReason: input.reason ?? null, manualLock: true },
     });
     await recordAudit(tx, {
       entityType: "slot",

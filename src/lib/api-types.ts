@@ -76,6 +76,17 @@ export interface ClosedDayDTO {
   holiday: string | null;
 }
 
+// A slot an admin locked by hand (status LOCKED, manualLock=true) — not the
+// capacity-protection locks the release-rule engine generates. startAt/endAt are
+// ISO instants; appointmentType is the slot's category.
+export interface LockedSlotDTO {
+  id: string;
+  startAt: string;
+  endAt: string;
+  appointmentType: AppointmentTypeLit;
+  lockedReason: string | null;
+}
+
 // Admin user-management DTO. Never carries passwordHash or totpSecret.
 export interface AdminUserDTO {
   id: string;

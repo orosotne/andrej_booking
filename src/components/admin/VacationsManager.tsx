@@ -16,8 +16,20 @@ import { Field, TextareaField } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
-import { clinicShortDate, clinicLongDate, todayIso } from "@/lib/format";
-import type { VacationDTO, ClosedDayDTO } from "@/lib/api-types";
+import {
+  clinicShortDate,
+  clinicLongDate,
+  clinicDate,
+  clinicTime,
+  todayIso,
+} from "@/lib/format";
+import { TYPE_META } from "@/lib/slot-style";
+import type {
+  VacationDTO,
+  ClosedDayDTO,
+  LockedSlotDTO,
+  CalendarResponse,
+} from "@/lib/api-types";
 
 // The list only carries genuine closures (rule-based default-closed days are
 // filtered out server-side), so the reason is either the holiday or a manual close.
@@ -46,11 +58,12 @@ export function VacationsManager() {
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
             <CalendarOff className="h-5 w-5 text-slate-400" />
-            Dovolenky a zatvorené dni
+            Dovolenky, zatvorené dni a sloty
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Naplánované dovolenky aj jednotlivo zatvorené dni ambulancie. Dovolenku
-            nemožno naplánovať na deň s objednaným pacientom — najprv ho presuňte inde.
+            Naplánované dovolenky, jednotlivo zatvorené dni aj ručne zamknuté sloty
+            ambulancie. Dovolenku nemožno naplánovať na deň s objednaným pacientom —
+            najprv ho presuňte inde.
           </p>
         </div>
         <div className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white p-0.5">
@@ -99,6 +112,8 @@ export function VacationsManager() {
       </div>
 
       <ClosedDaysManager year={year} />
+
+      <LockedSlotsManager year={year} />
     </div>
   );
 }
@@ -251,6 +266,212 @@ function ClosedDaysManager({ year }: { year: number }) {
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
               >
                 {busy === d.date ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LockOpen className="h-4 w-4" />
+                )}
+                Odomknúť
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function LockedSlotsManager({ year }: { year: number }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [password, setPassword] = useState("");
+  const [pickDate, setPickDate] = useState("");
+  const [lockReason, setLockReason] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["locked-slots", year],
+    queryFn: () =>
+      apiGet<{ slots: LockedSlotDTO[] }>(`/api/slots/locked?year=${year}`),
+  });
+  const slots = data?.slots ?? [];
+
+  // Slots of the picked day, so the admin can lock a specific one from here.
+  const { data: dayData, isFetching: dayLoading } = useQuery({
+    queryKey: ["day-slots", pickDate],
+    queryFn: () =>
+      apiGet<CalendarResponse>(
+        `/api/calendar?from=${encodeURIComponent(pickDate)}&to=${encodeURIComponent(pickDate)}`,
+      ),
+    enabled: !!pickDate,
+  });
+  const lockable = (dayData?.days[0]?.slots ?? []).filter(
+    (s) => s.status === "AVAILABLE",
+  );
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["locked-slots"] });
+    qc.invalidateQueries({ queryKey: ["day-slots"] });
+  };
+
+  async function unlock(id: string) {
+    if (!password) {
+      setError("Zadajte heslo na odomknutie slotu.");
+      return;
+    }
+    setError(null);
+    setBusy(id);
+    try {
+      await apiSend(`/api/slots/${id}/unlock`, "POST", { password });
+      toast("Slot odomknutý", "success");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operácia zlyhala");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function lock(id: string) {
+    if (!password) {
+      setError("Zadajte heslo na zamknutie slotu.");
+      return;
+    }
+    setError(null);
+    setBusy(id);
+    try {
+      await apiSend(`/api/slots/${id}/lock`, "POST", {
+        password,
+        reason: lockReason.trim() || undefined,
+      });
+      toast("Slot zamknutý", "success");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operácia zlyhala");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="space-y-4 border-t border-slate-200 pt-6">
+      <div>
+        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+          <Lock className="h-4 w-4 text-slate-400" />
+          Ručne zamknuté sloty
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Jednotlivé sloty zamknuté ručne (na ochranu kapacity). Sloty zamknuté
+          automaticky pravidlami sa tu nezobrazujú. Zamykanie aj odomykanie je
+          chránené rovnakým heslom ako v kalendári.
+        </p>
+      </div>
+
+      <Field
+        label="Heslo"
+        type="password"
+        autoComplete="off"
+        placeholder="Heslo na zamknutie/odomknutie slotu"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <Field
+              label="Vybrať deň"
+              type="date"
+              value={pickDate}
+              onChange={(e) => setPickDate(e.target.value)}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <Field
+              label="Dôvod (voliteľné)"
+              value={lockReason}
+              onChange={(e) => setLockReason(e.target.value)}
+              placeholder="napr. blokujem kapacitu"
+            />
+          </div>
+        </div>
+
+        {pickDate &&
+          (dayLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            </div>
+          ) : lockable.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              V tento deň nie je žiadny voľný slot na zamknutie.
+            </p>
+          ) : (
+            <div>
+              <p className="mb-2 text-sm text-slate-500">
+                Kliknutím zamknete vybraný slot:
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {lockable.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => lock(s.id)}
+                    disabled={busy === s.id}
+                    className="flex min-w-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm font-medium text-slate-700 transition hover:border-amber-400 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50"
+                  >
+                    {busy === s.id ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    ) : (
+                      <Lock className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {clinicTime(s.startAt)} · {TYPE_META[s.appointmentType].label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+      </div>
+
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+        </div>
+      ) : slots.length === 0 ? (
+        <EmptyState
+          icon={Lock}
+          title="Žiadne zamknuté sloty"
+          description={`V roku ${year} nie je ručne zamknutý žiadny slot.`}
+        />
+      ) : (
+        <ul className="space-y-2">
+          {slots.map((s) => (
+            <li
+              key={s.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-slate-900 first-letter:uppercase">
+                  {clinicLongDate(clinicDate(s.startAt))}
+                </p>
+                <p className="mt-0.5 truncate text-sm text-slate-500">
+                  {clinicTime(s.startAt)}–{clinicTime(s.endAt)} ·{" "}
+                  {TYPE_META[s.appointmentType].label}
+                  {s.lockedReason ? ` · ${s.lockedReason}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => unlock(s.id)}
+                disabled={busy === s.id}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
+              >
+                {busy === s.id ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <LockOpen className="h-4 w-4" />
