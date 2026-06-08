@@ -34,29 +34,34 @@ async function seedUsers() {
 async function seedRulesAndTemplates() {
   if ((await prisma.scheduleTemplate.count()) > 0) return;
 
-  // Per-slot-time release rules (v2 layout). V otvorených dňoch sú všetky sloty
-  // voľné 14 mesiacov popredu (IMMEDIATE), okrem 7:30, 11:30, 12:00 a 15:00:
-  //   PRE_HOSPITAL_6D  → 7:30 opens 6 days before (7:00 je voľné hneď)
-  //   IMMEDIATE        → 7:00 + 9:00–11:30 dispenzár + ECHO 13:30–14:40 (voľné hneď)
-  //   DISPENSARY_20D   → 11:30 opens 20 days before
-  //   DISPENSARY_13D   → 12:00 opens 13 days before
-  //   ECHO_20D         → ECHO 15:00 opens 20 days before
+  // Per-slot-time release rules (v2 layout). Voľné hneď (14 mesiacov popredu) sú
+  // len 9:00–11:00 a ECHO 13:30–14:40; bookable sloty 7:00/7:30/11:30/12:00/15:00
+  // sa otvárajú vo vlastnom okne:
+  //   PRE_HOSPITAL_5D  → 7:00 opens 5 days before
+  //   PRE_HOSPITAL_12D → 7:30 opens 12 days before
+  //   IMMEDIATE        → 9:00–11:00 dispenzár + ECHO 13:30–14:40 (voľné hneď)
+  //   DISPENSARY_32D   → 11:30 opens 32 days before
+  //   DISPENSARY_93D   → 12:00 opens 93 days before
+  //   ECHO_13D         → ECHO 15:00 opens 13 days before
   //   BLOCKED          → manual only (Porada + ECHO oddelenie)
   const policies = {
-    PRE_HOSPITAL_6D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:30 (6 dní)", releaseType: "DAYS_BEFORE", daysBefore: 6 },
+    PRE_HOSPITAL_5D: await prisma.releasePolicy.create({
+      data: { name: "Predhospitalizačné 7:00 (5 dní)", releaseType: "DAYS_BEFORE", daysBefore: 5 },
+    }),
+    PRE_HOSPITAL_12D: await prisma.releasePolicy.create({
+      data: { name: "Predhospitalizačné 7:30 (12 dní)", releaseType: "DAYS_BEFORE", daysBefore: 12 },
     }),
     IMMEDIATE: await prisma.releasePolicy.create({
       data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
     }),
-    DISPENSARY_20D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 11:30 (20 dní)", releaseType: "DAYS_BEFORE", daysBefore: 20 },
+    DISPENSARY_32D: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 11:30 (32 dní)", releaseType: "DAYS_BEFORE", daysBefore: 32 },
     }),
-    DISPENSARY_13D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 12:00 (13 dní)", releaseType: "DAYS_BEFORE", daysBefore: 13 },
+    DISPENSARY_93D: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 12:00 (93 dní)", releaseType: "DAYS_BEFORE", daysBefore: 93 },
     }),
-    ECHO_20D: await prisma.releasePolicy.create({
-      data: { name: "ECHO 15:00 (20 dní)", releaseType: "DAYS_BEFORE", daysBefore: 20 },
+    ECHO_13D: await prisma.releasePolicy.create({
+      data: { name: "ECHO 15:00 (13 dní)", releaseType: "DAYS_BEFORE", daysBefore: 13 },
     }),
     BLOCKED: await prisma.releasePolicy.create({
       data: { name: "Blokované (Porada / ECHO oddelenie)", releaseType: "MANUAL_ONLY" },
