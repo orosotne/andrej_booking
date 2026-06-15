@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Search,
   UserPlus,
@@ -847,9 +848,14 @@ function UpcomingTermin({
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
             Objednaný termín
           </p>
-          <p className="mt-0.5 text-sm font-medium text-slate-900">
+          <Link
+            href={`/calendar?day=${appt.date}`}
+            title="Zobraziť tento deň v kalendári"
+            className="mt-0.5 inline-flex items-center gap-1 text-sm font-medium text-slate-900 underline decoration-dotted decoration-emerald-400 underline-offset-2 transition hover:text-emerald-700 hover:decoration-emerald-600"
+          >
+            <CalendarSearch className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
             {clinicLongDate(appt.date)}
-          </p>
+          </Link>
           <p className="text-sm text-slate-600">
             {clinicTime(appt.startAt)}–{clinicTime(appt.endAt)} · {typeLabel}
           </p>

@@ -15,14 +15,21 @@ export function CalendarScreen({
   isAdmin,
   canManageDays,
   canManageClosures,
+  initialDay,
 }: {
   isAdmin: boolean;
   canManageDays: boolean;
   canManageClosures: boolean;
+  initialDay?: string;
 }) {
-  const [view, setView] = useState<ViewMode>("week");
-  const [weekAnchor, setWeekAnchor] = useState<string | undefined>(undefined);
-  const [dayAnchor, setDayAnchor] = useState<string | undefined>(undefined);
+  // A deep-linked day (e.g. /calendar?day=2026-06-20 from a patient's
+  // appointment) opens straight into the day view on that date — same effect as
+  // calling pickDay() on mount.
+  const [view, setView] = useState<ViewMode>(initialDay ? "day" : "week");
+  const [weekAnchor, setWeekAnchor] = useState<string | undefined>(
+    initialDay ? startOfWeek(initialDay) : undefined,
+  );
+  const [dayAnchor, setDayAnchor] = useState<string | undefined>(initialDay);
   const [showRangeClose, setShowRangeClose] = useState(false);
   const invalidate = useInvalidateCalendar();
 
