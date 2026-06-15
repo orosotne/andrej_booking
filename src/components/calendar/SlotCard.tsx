@@ -8,9 +8,11 @@ import { clinicTime, clinicDayChip } from "@/lib/format";
 export function SlotCard({
   slot,
   onSelect,
+  highlight,
 }: {
   slot: SlotDTO;
   onSelect: (slot: SlotDTO) => void;
+  highlight?: boolean;
 }) {
   const meta = TYPE_META[slot.appointmentType];
   // LOCKED + BLOCKED slots are not clickable for staff (no override flow exposed).
@@ -29,6 +31,7 @@ export function SlotCard({
   return (
     <button
       type="button"
+      id={`slot-${slot.id}`}
       disabled={!clickable || isHardLocked}
       onClick={() => clickable && !isHardLocked && onSelect(slot)}
       style={{
@@ -47,6 +50,7 @@ export function SlotCard({
           ? "cursor-pointer hover:shadow-sm hover:brightness-[0.99]"
           : "cursor-not-allowed",
         isLocked && !isHardLocked ? "slot-locked-hatch" : "",
+        highlight ? "slot-flash" : "",
       ].join(" ")}
       aria-label={`${clinicTime(slot.startAt)} ${meta.label}`}
     >

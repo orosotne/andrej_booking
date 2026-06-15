@@ -16,11 +16,13 @@ export function CalendarScreen({
   canManageDays,
   canManageClosures,
   initialDay,
+  initialSlotId,
 }: {
   isAdmin: boolean;
   canManageDays: boolean;
   canManageClosures: boolean;
   initialDay?: string;
+  initialSlotId?: string;
 }) {
   // A deep-linked day (e.g. /calendar?day=2026-06-20 from a patient's
   // appointment) opens straight into the day view on that date — same effect as
@@ -104,6 +106,7 @@ export function CalendarScreen({
           canManageClosures={canManageClosures}
           initialWeekStart={weekAnchor}
           initialDay={dayAnchor}
+          highlightSlotId={initialSlotId}
         />
       )}
 

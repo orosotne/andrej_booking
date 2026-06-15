@@ -27,6 +27,7 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ params }) => {
     include: {
       slot: {
         select: {
+          id: true,
           startAt: true,
           endAt: true,
           appointmentType: true,
@@ -61,6 +62,7 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ params }) => {
     patient,
     upcomingList: upcomingList.map((a) => ({
       id: a.id,
+      slotId: a.slot.id,
       startAt: a.slot.startAt.toISOString(),
       endAt: a.slot.endAt.toISOString(),
       appointmentType: a.slot.appointmentType,

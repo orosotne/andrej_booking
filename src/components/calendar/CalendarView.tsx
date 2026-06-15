@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -60,6 +60,7 @@ export function CalendarView({
   mode = "week",
   initialWeekStart,
   initialDay,
+  highlightSlotId,
 }: {
   isAdmin: boolean;
   canManageDays: boolean;
@@ -67,6 +68,7 @@ export function CalendarView({
   mode?: "week" | "day";
   initialWeekStart?: string;
   initialDay?: string;
+  highlightSlotId?: string;
 }) {
   const [weekStart, setWeekStart] = useState(
     () => initialWeekStart ?? startOfWeek(todayIso()),
@@ -82,6 +84,8 @@ export function CalendarView({
   >(null);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
   const [pendingReopen, setPendingReopen] = useState<string | null>(null);
+  // Deep-link from a patient's appointment: the slot to flash green once.
+  const [flashSlotId, setFlashSlotId] = useState(highlightSlotId);
 
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
@@ -90,6 +94,17 @@ export function CalendarView({
     useDayActions();
 
   const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
+
+  // Once the target day's slots are rendered, scroll the booked slot into view
+  // and let it flash green; clear after the animation so the highlight fades.
+  useEffect(() => {
+    if (!flashSlotId || isLoading || !data) return;
+    document
+      .getElementById(`slot-${flashSlotId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setFlashSlotId(undefined), 2400);
+    return () => clearTimeout(t);
+  }, [flashSlotId, isLoading, data]);
 
   // Show only working days (Wed/Thu/Fri). Non-working days are not rendered.
   const weekIsos = useMemo(
@@ -241,6 +256,7 @@ export function CalendarView({
         <div className="mx-auto mt-4 max-w-2xl">
           <DayColumn
             iso={selectedDay}
+            highlightId={flashSlotId}
             day={dayByIso.get(selectedDay)}
             canManage={canManageDays}
             canManageClosures={canManageClosures}
@@ -263,6 +279,7 @@ export function CalendarView({
               <DayColumn
                 key={iso}
                 iso={iso}
+                highlightId={flashSlotId}
                 day={dayByIso.get(iso)}
                 canManage={canManageDays}
                 canManageClosures={canManageClosures}
@@ -299,6 +316,7 @@ export function CalendarView({
             <div className="mt-3">
               <DayColumn
                 iso={mobileDay}
+                highlightId={flashSlotId}
                 day={dayByIso.get(mobileDay)}
                 canManage={canManageDays}
                 canManageClosures={canManageClosures}
@@ -594,6 +612,7 @@ function DayColumn({
   onRequestReopen,
   onSelect,
   stacked,
+  highlightId,
 }: {
   iso: string;
   day: CalendarDayDTO | undefined;
@@ -606,6 +625,7 @@ function DayColumn({
   onRequestReopen: () => void;
   onSelect: (slot: SlotDTO, dayIso: string) => void;
   stacked?: boolean;
+  highlightId?: string;
 }) {
   const isWednesday = weekdayOf(iso) === 3;
   const isLastFriday = weekdayOf(iso) === 5 && isLastFridayOfMonth(dateOnly(iso));
@@ -684,7 +704,12 @@ function DayColumn({
               </div>
             )}
             {day.slots.map((slot) => (
-              <SlotCard key={slot.id} slot={slot} onSelect={(s) => onSelect(s, iso)} />
+              <SlotCard
+                key={slot.id}
+                slot={slot}
+                highlight={slot.id === highlightId}
+                onSelect={(s) => onSelect(s, iso)}
+              />
             ))}
           </>
         ) : !isWorkingDay ? (

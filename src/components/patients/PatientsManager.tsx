@@ -498,6 +498,7 @@ function bookingConflict(
 
 interface UpcomingDTO {
   id: string;
+  slotId: string;
   startAt: string;
   endAt: string;
   appointmentType: string;
@@ -849,8 +850,8 @@ function UpcomingTermin({
             Objednaný termín
           </p>
           <Link
-            href={`/calendar?day=${appt.date}`}
-            title="Zobraziť tento deň v kalendári"
+            href={`/calendar?day=${appt.date}&slot=${appt.slotId}`}
+            title="Zobraziť tento termín v kalendári"
             className="mt-0.5 inline-flex items-center gap-1 text-sm font-medium text-slate-900 underline decoration-dotted decoration-emerald-400 underline-offset-2 transition hover:text-emerald-700 hover:decoration-emerald-600"
           >
             <CalendarSearch className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
