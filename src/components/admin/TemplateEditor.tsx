@@ -29,6 +29,7 @@ interface SyncReport {
   dryRun: boolean;
   days: number;
   created: number;
+  updated: number;
   deleted: number;
   keptBooked: number;
 }
@@ -113,8 +114,9 @@ export function TemplateEditor({
       <p className="mt-0.5 text-sm text-slate-500">
         Bloky určujú, ako sa generuje deň. Nové dni sa generujú podľa šablóny
         automaticky. Pre už vytvorené (budúce) dni použi tlačidlo{" "}
-        <strong>{'„Použiť na nadchádzajúce dni"'}</strong> — pridá nové sloty a
-        odoberie zrušené, rezervované termíny sa nikdy nezmažú.
+        <strong>{'„Použiť na nadchádzajúce dni"'}</strong> — pridá nové sloty,
+        upraví zmenené (čas otvárania, typ, farba) a odoberie zrušené.
+        Rezervované a ručne zamknuté sloty sa nikdy nezmenia.
       </p>
 
       {templates.map((t) => (
@@ -290,7 +292,7 @@ function ApplyToFutureDays({ templateId }: { templateId: string }) {
         { dryRun: false },
       );
       toast(
-        `Hotovo — pridaných ${report.created}, odobraných ${report.deleted}.`,
+        `Hotovo — pridaných ${report.created}, upravených ${report.updated}, odobraných ${report.deleted}.`,
         "success",
       );
       setPreview(null);
@@ -316,7 +318,8 @@ function ApplyToFutureDays({ templateId }: { templateId: string }) {
     );
   }
 
-  const noChanges = preview.created === 0 && preview.deleted === 0;
+  const noChanges =
+    preview.created === 0 && preview.updated === 0 && preview.deleted === 0;
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
       {noChanges ? (
@@ -326,7 +329,8 @@ function ApplyToFutureDays({ templateId }: { templateId: string }) {
       ) : (
         <p className="text-slate-700">
           V <strong>{preview.days}</strong> budúcich dňoch: pridá{" "}
-          <strong>{preview.created}</strong> slotov, odoberie{" "}
+          <strong>{preview.created}</strong> slotov, upraví{" "}
+          <strong>{preview.updated}</strong>, odoberie{" "}
           <strong>{preview.deleted}</strong>
           {preview.keptBooked > 0 && (
             <>

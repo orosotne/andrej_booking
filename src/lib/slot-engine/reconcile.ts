@@ -110,10 +110,29 @@ export interface ExistingSlot {
   id: string;
   startAt: Date;
   hasActiveAppointment: boolean;
+  // Current attributes, so a block that changed but kept the same start time
+  // (a release-rule, type, or colour edit) can be refreshed in place rather
+  // than left stale. manualLock guards the manual-lock feature from being
+  // undone by a template re-apply.
+  manualLock: boolean;
+  appointmentType: AppointmentTypeLit;
+  status: SlotStatusLit;
+  releaseAt: Date | null;
+  color: string;
+}
+
+/** An in-place attribute refresh for a matched, free (unbooked) slot. */
+export interface SlotUpdate {
+  id: string;
+  appointmentType: AppointmentTypeLit;
+  status: SlotStatusLit;
+  releaseAt: Date | null;
+  color: string;
 }
 
 export interface DayDiff {
   toCreate: DesiredSlot[];
+  toUpdate: SlotUpdate[];
   toDeleteIds: string[];
   keptBooked: number;
 }
@@ -121,27 +140,56 @@ export interface DayDiff {
 /**
  * Reconciles one day's existing slots against the template's desired slots,
  * keyed by start instant:
- *   - desired & missing       → create
- *   - existing & not desired   → delete, UNLESS it has an active appointment
- *                                (booked slots are never touched, only counted)
- *   - present in both          → left untouched (no rewrite of live slots)
+ *   - desired & missing        → create
+ *   - existing & not desired    → delete, UNLESS it has an active appointment
+ *                                 (booked slots are never touched, only counted)
+ *   - present in both           → refresh the slot's attributes (type, colour,
+ *                                 release time/status) IN PLACE when the rule
+ *                                 changed without moving the start time.
+ *
+ * A slot is only refreshed when it is genuinely free to reshape: booked and
+ * manually-locked slots are skipped (a template edit must never move a patient
+ * or lift a manual lock), and only AVAILABLE/LOCKED slots are eligible — a
+ * BLOCKED slot may be a closed (vacation) day, which a re-apply must not reopen.
  */
 export function diffDaySlots(
   desired: DesiredSlot[],
   existing: ExistingSlot[],
 ): DayDiff {
+  const desiredByStart = new Map(desired.map((d) => [d.startAt.getTime(), d]));
   const existingStarts = new Set(existing.map((e) => e.startAt.getTime()));
-  const desiredStarts = new Set(desired.map((d) => d.startAt.getTime()));
 
   const toCreate = desired.filter((d) => !existingStarts.has(d.startAt.getTime()));
 
+  const toUpdate: SlotUpdate[] = [];
   const toDeleteIds: string[] = [];
   let keptBooked = 0;
   for (const e of existing) {
-    if (desiredStarts.has(e.startAt.getTime())) continue; // matched → untouched
-    if (e.hasActiveAppointment) keptBooked++; // booked → never delete
-    else toDeleteIds.push(e.id);
+    const want = desiredByStart.get(e.startAt.getTime());
+    if (!want) {
+      // no longer in the template → delete, unless booked
+      if (e.hasActiveAppointment) keptBooked++; // booked → never delete
+      else toDeleteIds.push(e.id);
+      continue;
+    }
+    // Matched. Only refresh free, schedulable slots.
+    if (e.hasActiveAppointment || e.manualLock) continue;
+    if (e.status !== "AVAILABLE" && e.status !== "LOCKED") continue;
+    const changed =
+      e.appointmentType !== want.appointmentType ||
+      e.color !== want.color ||
+      e.status !== want.status ||
+      (e.releaseAt?.getTime() ?? null) !== (want.releaseAt?.getTime() ?? null);
+    if (changed) {
+      toUpdate.push({
+        id: e.id,
+        appointmentType: want.appointmentType,
+        status: want.status,
+        releaseAt: want.releaseAt,
+        color: want.color,
+      });
+    }
   }
 
-  return { toCreate, toDeleteIds, keptBooked };
+  return { toCreate, toUpdate, toDeleteIds, keptBooked };
 }
