@@ -31,6 +31,7 @@ type Mode = "view" | "cancel" | "reschedule" | "note";
 function statusRowClass(status: string) {
   if (status === "ARRIVED") return "border-green-200 bg-green-50 text-green-800";
   if (status === "NO_SHOW") return "border-orange-200 bg-orange-50 text-orange-800";
+  if (status === "COMPLETED") return "border-emerald-300 bg-emerald-50 text-emerald-800";
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
@@ -86,7 +87,7 @@ export function AppointmentActions({
   }
 
   // Clicking the already-active status clears it back to "Objednaný".
-  function changeStatus(clicked: "ARRIVED" | "NO_SHOW") {
+  function changeStatus(clicked: "ARRIVED" | "NO_SHOW" | "COMPLETED") {
     submitStatus(status === clicked ? "SCHEDULED" : clicked);
   }
 
@@ -146,7 +147,11 @@ export function AppointmentActions({
               {status === "NO_SHOW" && (
                 <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
               )}
-              <span className={status === "ARRIVED" ? "line-through" : ""}>
+              <span
+                className={
+                  status === "ARRIVED" || status === "COMPLETED" ? "line-through" : ""
+                }
+              >
                 {appointment.patient.lastName} {appointment.patient.firstName}
               </span>
             </span>
@@ -172,7 +177,7 @@ export function AppointmentActions({
 
           {statusOpen ? (
             <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Button
                   variant={status === "ARRIVED" ? "success" : "secondary"}
                   size="sm"
@@ -190,6 +195,15 @@ export function AppointmentActions({
                   onClick={() => changeStatus("NO_SHOW")}
                 >
                   Neprišiel
+                </Button>
+                <Button
+                  variant={status === "COMPLETED" ? "success" : "secondary"}
+                  size="sm"
+                  disabled={busy}
+                  title={status === "COMPLETED" ? "Zrušiť stav „Vybavený“" : undefined}
+                  onClick={() => changeStatus("COMPLETED")}
+                >
+                  Vybavený
                 </Button>
               </div>
               <button
