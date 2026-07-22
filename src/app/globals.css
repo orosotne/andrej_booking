@@ -21,6 +21,9 @@
   --slot-echo-dept-fg: #ffffff;
   --slot-reserve: #ffedd5;
   --slot-reserve-bd: #fdba74;
+  --slot-penta: #fef9c3;           /* žlté PENTA sloty (13:30–14:10 od 2/2027) */
+  --slot-penta-bd: #facc15;
+  --slot-penta-wm: rgba(161, 98, 7, 0.22); /* vodotlač PENTA */
 
   --accent-available: #16a34a;
   --accent-booked: #1e293b;

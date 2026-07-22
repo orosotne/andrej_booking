@@ -234,12 +234,14 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
   it("before February 2027 an IMMEDIATE 13:30 slot opens right away", () => {
     const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-01-28"), now);
     expect(s.status).toBe("AVAILABLE");
+    expect(s.color).toBe("blue");
   });
 
-  it("from 2027-02-01 the 13:30 slot generates LOCKED with no release time", () => {
+  it("from 2027-02-01 the 13:30 slot generates LOCKED, no release time, yellow", () => {
     const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-02-04"), now);
     expect(s.status).toBe("LOCKED");
     expect(s.releaseAt).toBeNull();
+    expect(s.color).toBe("yellow");
   });
 
   it("the block trumps the last-Friday override", () => {
@@ -253,6 +255,7 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
     const [s] = expandTemplateRules([echo("14:40", "15:00")], dateOnly("2027-02-04"), now);
     expect(s.status).toBe("AVAILABLE");
     expect(s.releaseAt).toEqual(new Date(0));
+    expect(s.color).toBe("blue");
   });
 
   it("a template re-apply locks an existing free slot but never a booked one", () => {
@@ -270,7 +273,12 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
       { id: "free", hasActiveAppointment: false, status: "AVAILABLE", ...base },
     ]);
     expect(free.toUpdate).toHaveLength(1);
-    expect(free.toUpdate[0]).toMatchObject({ id: "free", status: "LOCKED", releaseAt: null });
+    expect(free.toUpdate[0]).toMatchObject({
+      id: "free",
+      status: "LOCKED",
+      releaseAt: null,
+      color: "yellow",
+    });
 
     const booked = diffDaySlots(desired, [
       { id: "booked", hasActiveAppointment: true, status: "BOOKED", ...base },

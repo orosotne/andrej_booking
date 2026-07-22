@@ -97,8 +97,10 @@ export function expandTemplateRules(
     return expandRule(rule.startTime, rule.endTime, rule.slotDurationMinutes).map((s) => {
       // Password-only slots (13:30/13:50/14:10 from Feb 2027) trump every
       // policy, including the last-Friday override: LOCKED until a password
-      // unlock, never released automatically.
-      const slotPolicy: ReleasePolicyInput = isPasswordOnlySlot(date, s.start)
+      // unlock, never released automatically. They also carry the dedicated
+      // "yellow" colour, which the UI renders with the PENTA watermark.
+      const passwordOnly = isPasswordOnlySlot(date, s.start);
+      const slotPolicy: ReleasePolicyInput = passwordOnly
         ? { type: "MANUAL_ONLY" }
         : policyInput;
       const releaseAt = computeReleaseAt(date, slotPolicy, lastFri);
@@ -108,7 +110,7 @@ export function expandTemplateRules(
         appointmentType: rule.appointmentType,
         status: initialSlotStatus(rule.appointmentType, releaseAt, now),
         releaseAt,
-        color: rule.color,
+        color: passwordOnly ? "yellow" : rule.color,
         ruleId: rule.id,
       };
     });

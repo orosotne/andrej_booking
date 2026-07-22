@@ -28,6 +28,10 @@ export function SlotCard({
   // ECHO oddelenie & Porada both render as locked-dark blocks (cannot be opened).
   const isHardLocked = isEchoDept || (isPorada && isBlocked);
 
+  // Žlté PENTA sloty (13:30–14:10 od 2/2027): žlté pozadie aj v zamknutom
+  // stave + vodotlač PENTA. Obsadené sloty spred zmeny ostávajú modré (ECHO).
+  const isPenta = slot.color === "yellow";
+
   return (
     <button
       type="button"
@@ -35,12 +39,14 @@ export function SlotCard({
       disabled={!clickable || isHardLocked}
       onClick={() => clickable && !isHardLocked && onSelect(slot)}
       style={{
-        backgroundColor: isHardLocked
-          ? meta.bg
-          : isLocked
-            ? "var(--surface)"
-            : meta.bg,
-        borderColor: meta.border,
+        backgroundColor: isPenta
+          ? "var(--slot-penta)"
+          : isHardLocked
+            ? meta.bg
+            : isLocked
+              ? "var(--surface)"
+              : meta.bg,
+        borderColor: isPenta ? "var(--slot-penta-bd)" : meta.border,
         color: isEchoDept ? "var(--slot-echo-dept-fg)" : undefined,
       }}
       className={[
@@ -54,7 +60,20 @@ export function SlotCard({
       ].join(" ")}
       aria-label={`${clinicTime(slot.startAt)} ${meta.label}`}
     >
-      <div className="flex items-center justify-between gap-1">
+      {isPenta && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 flex select-none items-center justify-center overflow-hidden"
+        >
+          <span
+            className="-rotate-12 text-[15px] font-black uppercase tracking-[0.25em]"
+            style={{ color: "var(--slot-penta-wm)" }}
+          >
+            PENTA
+          </span>
+        </span>
+      )}
+      <div className="relative flex items-center justify-between gap-1">
         <span
           className="font-mono text-[13px] font-medium tabular-nums"
           style={isEchoDept ? { color: "var(--slot-echo-dept-fg)" } : undefined}
@@ -68,7 +87,7 @@ export function SlotCard({
         />
       </div>
 
-      <div className="mt-1 leading-tight">
+      <div className="relative mt-1 leading-tight">
         {slot.status === "BOOKED" && slot.appointment ? (
           <p
             className={`flex items-center gap-1 truncate text-sm font-semibold ${

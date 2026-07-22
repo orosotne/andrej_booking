@@ -16,11 +16,12 @@ import {
 // LOCKED bez release času, takže ich otvorí len heslo (unlock dialóg). Tento
 // skript dorovná UŽ vygenerované dni od 1.2.2027:
 //   • voľné AVAILABLE/LOCKED sloty (bez manuálneho zámku) → LOCKED, release_at
-//     NULL — release cron ich už nikdy neotvorí,
+//     NULL, farba "yellow" (žltý PENTA slot) — release cron ich už nikdy neotvorí,
 //   • BLOCKED sloty (zatvorený deň / dovolenka) a manuálne zamknuté sloty si
-//     len vynulujú release_at, aby ich prípadné znovuotvorenie dňa nechalo
-//     zamknuté; status, dôvod ani manuálny zámok sa nemenia,
-//   • OBSADENÉ sloty (BOOKED/COMPLETED) a CANCELLED sa NIKDY nedotknú.
+//     len vynulujú release_at a dostanú žltú farbu, aby ich prípadné
+//     znovuotvorenie dňa nechalo zamknuté; status, dôvod ani zámok sa nemenia,
+//   • OBSADENÉ sloty (BOOKED/COMPLETED) a CANCELLED sa NIKDY nedotknú
+//     (existujúce objednávky ostávajú modré ECHO).
 // Idempotentné — bezpečné opakovať. Spúšťať až PO nasadení engine zmeny,
 // inak by admin re-apply šablóny mohol sloty medzitým znova otvoriť.
 //
@@ -47,6 +48,7 @@ async function main() {
       releaseAt: true,
       manualLock: true,
       startAt: true,
+      color: true,
       calendarDay: { select: { date: true } },
     },
     orderBy: { startAt: "asc" },
@@ -57,6 +59,7 @@ async function main() {
     status: string;
     releaseAt: Date | null;
     manualLock: boolean;
+    color: string;
     label: string; // "2027-02-04 13:30" pre výpis
   }
   const targets: Target[] = [];
@@ -72,12 +75,13 @@ async function main() {
       status: s.status,
       releaseAt: s.releaseAt,
       manualLock: s.manualLock,
+      color: s.color,
       label: `${toIsoDate(s.calendarDay.date)} ${hhmm}`,
     });
   }
 
   const toLockIds: string[] = [];
-  const nullReleaseIds: string[] = [];
+  const fixKeepStatusIds: string[] = []; // BLOCKED/manuálny zámok: len release_at + farba
   const keptBooked: string[] = [];
   let fromAvailable = 0;
   let fromLocked = 0;
@@ -96,13 +100,14 @@ async function main() {
       continue;
     }
     if (t.status === "BLOCKED" || t.manualLock) {
-      // Už zamknuté/blokované — len zaisti, že ich nič automaticky neotvorí.
-      if (t.releaseAt !== null) nullReleaseIds.push(t.id);
+      // Už zamknuté/blokované — len zaisti, že ich nič automaticky neotvorí,
+      // a nastav žltú PENTA farbu; status, dôvod ani zámok sa nemenia.
+      if (t.releaseAt !== null || t.color !== "yellow") fixKeepStatusIds.push(t.id);
       else alreadyOk++;
       continue;
     }
     // AVAILABLE alebo LOCKED bez manuálneho zámku
-    if (t.status === "LOCKED" && t.releaseAt === null) {
+    if (t.status === "LOCKED" && t.releaseAt === null && t.color === "yellow") {
       alreadyOk++;
       continue;
     }
@@ -115,8 +120,8 @@ async function main() {
 
   console.log(
     `\nNájdených ${targets.length} slotov 13:30/13:50/14:10 od ${toIsoDate(from)}:` +
-      `\n  → zablokovať (LOCKED, bez release): ${toLockIds.length} (z toho voľných ${fromAvailable}, zamknutých ${fromLocked})` +
-      `\n  → BLOCKED/manuálny zámok, iba vynulovať release_at: ${nullReleaseIds.length}` +
+      `\n  → zablokovať (LOCKED, bez release, žltá): ${toLockIds.length} (z toho voľných ${fromAvailable}, zamknutých ${fromLocked})` +
+      `\n  → BLOCKED/manuálny zámok, iba release_at + žltá farba: ${fixKeepStatusIds.length}` +
       `\n  → už v poriadku: ${alreadyOk}` +
       `\n  → NEDOTKNUTÉ obsadené: ${keptBooked.length}, zrušené: ${keptCancelled}`,
   );
@@ -133,24 +138,24 @@ async function main() {
   // Status guard v where: keby si medzi načítaním a zápisom niekto stihol slot
   // objednať (AVAILABLE → BOOKED), zápis ho preskočí namiesto prepísania.
   let locked = 0;
-  let nulled = 0;
+  let fixed = 0;
   if (toLockIds.length > 0) {
     const r = await prisma.appointmentSlot.updateMany({
       where: { id: { in: toLockIds }, status: { in: ["AVAILABLE", "LOCKED"] } },
-      data: { status: "LOCKED", releaseAt: null },
+      data: { status: "LOCKED", releaseAt: null, color: "yellow" },
     });
     locked = r.count;
   }
-  if (nullReleaseIds.length > 0) {
+  if (fixKeepStatusIds.length > 0) {
     const r = await prisma.appointmentSlot.updateMany({
-      where: { id: { in: nullReleaseIds }, status: { in: ["BLOCKED", "LOCKED"] } },
-      data: { releaseAt: null },
+      where: { id: { in: fixKeepStatusIds }, status: { in: ["BLOCKED", "LOCKED"] } },
+      data: { releaseAt: null, color: "yellow" },
     });
-    nulled = r.count;
+    fixed = r.count;
   }
   console.log(
-    `\n✓ done — zablokovaných ${locked}, release_at vynulovaný ${nulled}. ` +
-      "Sloty 13:30/13:50/14:10 od 1.2.2027 sa dajú otvoriť len heslom.",
+    `\n✓ done — zablokovaných ${locked}, dorovnaných (release_at/farba) ${fixed}. ` +
+      "Sloty 13:30/13:50/14:10 od 1.2.2027 sú žlté (PENTA) a dajú sa otvoriť len heslom.",
   );
 }
 

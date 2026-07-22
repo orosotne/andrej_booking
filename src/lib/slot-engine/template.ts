@@ -46,7 +46,8 @@ export const SLOT_MINUTES = 30;
 //  12:30, 13:00 ECHO oddelenie — manual only (locked, dark blue)
 //  13:30, 13:50, 14:10, 14:40 — ECHO bookable, voľné hneď (4 sloty po 20 min)
 //                (od 1.2.2027 sú 13:30/13:50/14:10 blokované — otvorenie len
-//                 heslom; pozri isPasswordOnlySlot v release-rules.ts)
+//                 heslom, žlté s vodotlačou PENTA; pozri isPasswordOnlySlot
+//                 v release-rules.ts)
 //  15:00        ECHO bookable — otvorí sa 13 dní predtým
 export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
   {
