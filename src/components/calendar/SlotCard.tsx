@@ -66,7 +66,7 @@ export function SlotCard({
           className="pointer-events-none absolute inset-0 flex select-none items-center justify-center overflow-hidden"
         >
           <span
-            className="-rotate-12 text-[15px] font-black uppercase tracking-[0.25em]"
+            className="-rotate-12 text-[22px] font-black uppercase tracking-[0.15em]"
             style={{ color: "var(--slot-penta-wm)" }}
           >
             PENTA
