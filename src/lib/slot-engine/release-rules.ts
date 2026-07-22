@@ -44,6 +44,25 @@ export function computeReleaseAt(
   }
 }
 
+// From 1 Feb 2027 the ECHO slots starting 13:30, 13:50 and 14:10 are blocked:
+// they generate as LOCKED with no release time (MANUAL_ONLY), the release cron
+// never opens them, and staff can open one only through the password-gated
+// unlock dialog. Keyed by calendar-day date + wall-clock start time so that
+// generation, template re-apply and the backfill script
+// (prisma/block-echo-1330-1410-feb2027.ts) all agree. Slots booked before the
+// cutover are never touched — those guards live in the callers (diffDaySlots
+// skips booked slots; the script skips BOOKED/COMPLETED).
+export const PASSWORD_ONLY_FROM = new Date(Date.UTC(2027, 1, 1)); // 2027-02-01
+export const PASSWORD_ONLY_TIMES: readonly string[] = ["13:30", "13:50", "14:10"];
+
+/** True when the slot at `startHhmm` on `dayDate` (@db.Date, midnight UTC) is password-only. */
+export function isPasswordOnlySlot(dayDate: Date, startHhmm: string): boolean {
+  return (
+    dayDate.getTime() >= PASSWORD_ONLY_FROM.getTime() &&
+    PASSWORD_ONLY_TIMES.includes(startHhmm)
+  );
+}
+
 /** Initial status for a freshly generated slot. */
 export function initialSlotStatus(
   type: AppointmentTypeLit,

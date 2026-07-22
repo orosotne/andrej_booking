@@ -1,7 +1,11 @@
 import { isLastFridayOfMonth } from "@/lib/calendar-date";
 import { wallClockToUtc } from "@/lib/clinic-time";
 import { hhmmToMin, minToHhmm, SLOT_MINUTES } from "./template";
-import { computeReleaseAt, initialSlotStatus } from "./release-rules";
+import {
+  computeReleaseAt,
+  initialSlotStatus,
+  isPasswordOnlySlot,
+} from "./release-rules";
 import type { AppointmentTypeLit, ReleasePolicyInput, SlotStatusLit } from "./types";
 
 // Pure slot-reconciliation logic, kept dependency-free (no Prisma) so it can be
@@ -91,7 +95,13 @@ export function expandTemplateRules(
         : toPolicyInput(rule.releasePolicy);
 
     return expandRule(rule.startTime, rule.endTime, rule.slotDurationMinutes).map((s) => {
-      const releaseAt = computeReleaseAt(date, policyInput, lastFri);
+      // Password-only slots (13:30/13:50/14:10 from Feb 2027) trump every
+      // policy, including the last-Friday override: LOCKED until a password
+      // unlock, never released automatically.
+      const slotPolicy: ReleasePolicyInput = isPasswordOnlySlot(date, s.start)
+        ? { type: "MANUAL_ONLY" }
+        : policyInput;
+      const releaseAt = computeReleaseAt(date, slotPolicy, lastFri);
       return {
         startAt: wallClockToUtc(date, s.start),
         endAt: wallClockToUtc(date, s.end),

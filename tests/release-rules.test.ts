@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeReleaseAt,
   initialSlotStatus,
+  isPasswordOnlySlot,
 } from "@/lib/slot-engine/release-rules";
 import { dateOnly } from "@/lib/calendar-date";
 
@@ -48,5 +49,22 @@ describe("initialSlotStatus", () => {
   });
   it("LOCKED when release_at is null (manual only)", () => {
     expect(initialSlotStatus("ACUTE_RESERVE", null, now)).toBe("LOCKED");
+  });
+});
+
+describe("isPasswordOnlySlot (13:30/13:50/14:10 blocked from Feb 2027)", () => {
+  it("applies from 2027-02-01 onwards", () => {
+    expect(isPasswordOnlySlot(dateOnly("2027-02-01"), "13:30")).toBe(true);
+    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "13:50")).toBe(true);
+    expect(isPasswordOnlySlot(dateOnly("2028-06-15"), "14:10")).toBe(true);
+  });
+  it("does not apply before February 2027", () => {
+    expect(isPasswordOnlySlot(dateOnly("2027-01-31"), "13:30")).toBe(false);
+    expect(isPasswordOnlySlot(dateOnly("2026-08-06"), "13:50")).toBe(false);
+  });
+  it("affects only the three listed times", () => {
+    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "14:40")).toBe(false);
+    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "15:00")).toBe(false);
+    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "09:00")).toBe(false);
   });
 });

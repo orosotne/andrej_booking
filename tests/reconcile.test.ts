@@ -220,3 +220,62 @@ describe("diffDaySlots", () => {
     expect(diff.toUpdate).toEqual([]);
   });
 });
+
+describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", () => {
+  const echo = (startTime: string, endTime: string) =>
+    rule({
+      startTime,
+      endTime,
+      slotDurationMinutes: 20,
+      appointmentType: "ECHO",
+      color: "blue",
+    });
+
+  it("before February 2027 an IMMEDIATE 13:30 slot opens right away", () => {
+    const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-01-28"), now);
+    expect(s.status).toBe("AVAILABLE");
+  });
+
+  it("from 2027-02-01 the 13:30 slot generates LOCKED with no release time", () => {
+    const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-02-04"), now);
+    expect(s.status).toBe("LOCKED");
+    expect(s.releaseAt).toBeNull();
+  });
+
+  it("the block trumps the last-Friday override", () => {
+    // 2027-02-26 is the last Friday of February 2027.
+    const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-02-26"), now);
+    expect(s.status).toBe("LOCKED");
+    expect(s.releaseAt).toBeNull();
+  });
+
+  it("the 14:40 ECHO slot stays immediately bookable after the cutover", () => {
+    const [s] = expandTemplateRules([echo("14:40", "15:00")], dateOnly("2027-02-04"), now);
+    expect(s.status).toBe("AVAILABLE");
+    expect(s.releaseAt).toEqual(new Date(0));
+  });
+
+  it("a template re-apply locks an existing free slot but never a booked one", () => {
+    const day = dateOnly("2027-02-04");
+    const desired = expandTemplateRules([echo("13:30", "13:50")], day, now);
+    const base = {
+      startAt: desired[0].startAt,
+      manualLock: false,
+      appointmentType: "ECHO" as const,
+      releaseAt: new Date(0),
+      color: "blue",
+    };
+
+    const free = diffDaySlots(desired, [
+      { id: "free", hasActiveAppointment: false, status: "AVAILABLE", ...base },
+    ]);
+    expect(free.toUpdate).toHaveLength(1);
+    expect(free.toUpdate[0]).toMatchObject({ id: "free", status: "LOCKED", releaseAt: null });
+
+    const booked = diffDaySlots(desired, [
+      { id: "booked", hasActiveAppointment: true, status: "BOOKED", ...base },
+    ]);
+    expect(booked.toUpdate).toEqual([]);
+    expect(booked.toDeleteIds).toEqual([]);
+  });
+});
