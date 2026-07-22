@@ -130,20 +130,27 @@ async function main() {
     return;
   }
 
+  // Status guard v where: keby si medzi načítaním a zápisom niekto stihol slot
+  // objednať (AVAILABLE → BOOKED), zápis ho preskočí namiesto prepísania.
+  let locked = 0;
+  let nulled = 0;
   if (toLockIds.length > 0) {
-    await prisma.appointmentSlot.updateMany({
-      where: { id: { in: toLockIds } },
+    const r = await prisma.appointmentSlot.updateMany({
+      where: { id: { in: toLockIds }, status: { in: ["AVAILABLE", "LOCKED"] } },
       data: { status: "LOCKED", releaseAt: null },
     });
+    locked = r.count;
   }
   if (nullReleaseIds.length > 0) {
-    await prisma.appointmentSlot.updateMany({
-      where: { id: { in: nullReleaseIds } },
+    const r = await prisma.appointmentSlot.updateMany({
+      where: { id: { in: nullReleaseIds }, status: { in: ["BLOCKED", "LOCKED"] } },
       data: { releaseAt: null },
     });
+    nulled = r.count;
   }
   console.log(
-    "\n✓ done — sloty 13:30/13:50/14:10 od 1.2.2027 sú zablokované; otvoriť ich možno len heslom.",
+    `\n✓ done — zablokovaných ${locked}, release_at vynulovaný ${nulled}. ` +
+      "Sloty 13:30/13:50/14:10 od 1.2.2027 sa dajú otvoriť len heslom.",
   );
 }
 
