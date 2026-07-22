@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { TextareaField } from "@/components/ui/Field";
@@ -11,7 +11,7 @@ import { AlertTriangle, CalendarClock, CalendarDays, Loader2, Printer } from "lu
 import type { SlotDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META, apptStatusLabel } from "@/lib/slot-style";
-import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
+import { clinicTime, clinicLongDate, clinicDayChip, todayIso } from "@/lib/format";
 import { SlotPickerCalendar } from "@/components/patients/SlotPickerCalendar";
 import { AppointmentSlip, printSlip } from "@/components/booking/AppointmentSlip";
 
@@ -20,9 +20,6 @@ const PICKER_TYPES = ["DISPENSARY", "ECHO", "PRE_HOSPITAL"] as const;
 type PickerType = (typeof PICKER_TYPES)[number];
 const asPickerType = (t: string): PickerType | null =>
   (PICKER_TYPES as readonly string[]).includes(t) ? (t as PickerType) : null;
-
-// Grace window (min) after slot start before "Neprišiel" (no-show) can be set.
-const NO_SHOW_GRACE_MIN = 10;
 
 export interface RescheduleOption {
   slot: SlotDTO;
@@ -61,30 +58,16 @@ export function AppointmentActions({
   const [statusOpen, setStatusOpen] = useState(false);
   const [options, setOptions] = useState<RescheduleOption[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const meta = TYPE_META[slot.appointmentType];
   const pickerType = asPickerType(slot.appointmentType);
 
-  // Attendance unlocks by time: "Prišiel" from start + 1 min, "Neprišiel" only
-  // after a grace window (a late patient may still walk in). Timer re-renders at each gate.
-  const startMs = new Date(slot.startAt).getTime();
-  const arriveGateMs = startMs + 60_000;
-  const noShowGateMs = startMs + NO_SHOW_GRACE_MIN * 60_000;
-  const canArrive = now >= arriveGateMs;
-  const canNoShow = now >= noShowGateMs;
-  useEffect(() => {
-    const nextGate = [arriveGateMs, noShowGateMs].find((g) => g > now);
-    if (nextGate === undefined) return;
-    const delay = nextGate - Date.now();
-    if (delay > 6 * 60 * 60_000) return;
-    const id = setTimeout(() => setNow(Date.now()), delay + 250);
-    return () => clearTimeout(id);
-  }, [now, arriveGateMs, noShowGateMs]);
+  // Attendance unlocks by DAY, not by exact slot time: patients often come
+  // earlier or later, so "Prišiel"/"Neprišiel" can be set any time on the
+  // appointment day (clinic date) and on any later day.
+  const canChangeStatus = todayIso() >= dayIso;
 
   if (!appointment) return null;
   const apptId = appointment.id;
-  const arriveGateLabel = clinicTime(new Date(arriveGateMs).toISOString());
-  const noShowGateLabel = clinicTime(new Date(noShowGateMs).toISOString());
 
   // Status changes keep the modal open: update the local status, refresh the
   // calendar in the background, and collapse back to the status summary.
@@ -202,24 +185,13 @@ export function AppointmentActions({
                 <Button
                   variant={status === "NO_SHOW" ? "danger" : "secondary"}
                   size="sm"
-                  disabled={busy || !canNoShow}
-                  title={
-                    !canNoShow
-                      ? `„Neprišiel“ bude možné označiť o ${noShowGateLabel}`
-                      : status === "NO_SHOW"
-                        ? "Zrušiť stav „Neprišiel“"
-                        : undefined
-                  }
+                  disabled={busy}
+                  title={status === "NO_SHOW" ? "Zrušiť stav „Neprišiel“" : undefined}
                   onClick={() => changeStatus("NO_SHOW")}
                 >
                   Neprišiel
                 </Button>
               </div>
-              {!canNoShow && (
-                <p className="text-center text-[11px] text-slate-400">
-                  „Neprišiel“ bude možné označiť o {noShowGateLabel}
-                </p>
-              )}
               <button
                 type="button"
                 onClick={() => setStatusOpen(false)}
@@ -228,7 +200,7 @@ export function AppointmentActions({
                 Zavrieť
               </button>
             </div>
-          ) : canArrive ? (
+          ) : canChangeStatus ? (
             <button
               type="button"
               onClick={() => setStatusOpen(true)}
@@ -238,7 +210,7 @@ export function AppointmentActions({
             </button>
           ) : (
             <p className="text-center text-xs text-slate-400">
-              Stav bude možné zmeniť o {arriveGateLabel}
+              Stav bude možné zmeniť v deň termínu ({clinicDayChip(dayIso)})
             </p>
           )}
 
