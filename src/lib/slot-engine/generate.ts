@@ -24,7 +24,8 @@ export interface GenerateDayOptions {
 /**
  * Idempotently generates the calendar day + its slots from the active schedule
  * template. Slot release times come from each rule's policy; on the last Friday
- * of the month every non-blocked slot is overridden to the last-Friday policy.
+ * of the month every non-blocked slot is overridden to the last-Friday policy,
+ * and a day opened by hand (Wednesday / last Friday) opens all of them at once.
  */
 export async function generateDay(
   dateInput: Date | string,
@@ -83,7 +84,14 @@ export async function generateDay(
       },
     });
 
-    const data = expandTemplateRules(template.slotRules, date, now).map((s) => ({
+    // Streda / posledný piatok otvorené heslom = deň navyše, ktorý sa otvára
+    // zámerne — jeho sloty idú von hneď, bez čakania na release okno.
+    const manuallyOpened =
+      opened && (dayType === "MANUAL_WEDNESDAY" || dayType === "LAST_FRIDAY");
+
+    const data = expandTemplateRules(template.slotRules, date, now, {
+      manuallyOpened,
+    }).map((s) => ({
       ...s,
       status: isHolidayClose ? ("BLOCKED" as const) : s.status,
       calendarDayId: calendarDay.id,

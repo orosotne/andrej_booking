@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { nextWorkingDay, countSlots } from "@/lib/calendar-ui";
+import {
+  nextWorkingDay,
+  countSlots,
+  openDayPasswordText,
+} from "@/lib/calendar-ui";
 import type { SlotDTO } from "@/lib/api-types";
 import type { SlotStatusLit } from "@/lib/slot-engine/types";
 
@@ -76,5 +80,33 @@ describe("countSlots", () => {
       slot("BOOKED", "2026-06-03T08:00:00.000Z"), // booked counts regardless of time
     ];
     expect(countSlots(slots, now)).toEqual({ available: 2, booked: 1, locked: 0 });
+  });
+});
+
+describe("openDayPasswordText", () => {
+  it("names the day and promises immediate slots for a Wednesday", () => {
+    const t = openDayPasswordText("2026-06-03"); // Wednesday
+    expect(t.title).toBe("Otvoriť stredu");
+    expect(t.description).toContain("bez časových obmedzení");
+  });
+
+  it("does the same for the last Friday of the month", () => {
+    const t = openDayPasswordText("2026-06-26"); // last Friday of June 2026
+    expect(t.title).toBe("Otvoriť posledný piatok v mesiaci");
+    expect(t.description).toContain("bez časových obmedzení");
+  });
+
+  it("a holiday Thursday keeps its release windows and says so by omission", () => {
+    const t = openDayPasswordText("2026-12-24"); // Štedrý deň, a Thursday
+    expect(t.title).toBe("Otvoriť deň");
+    expect(t.description).toContain("sviatok");
+    expect(t.description).not.toContain("bez časových obmedzení");
+  });
+
+  it("a Wednesday that is also a holiday shows both", () => {
+    const t = openDayPasswordText("2027-01-06"); // Traja králi, a Wednesday
+    expect(t.title).toBe("Otvoriť stredu");
+    expect(t.description).toContain("sviatok");
+    expect(t.description).toContain("bez časových obmedzení");
   });
 });

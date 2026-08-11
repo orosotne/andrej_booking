@@ -28,6 +28,35 @@ export interface RuleForExpansion {
   releasePolicy: PolicyRow | null;
 }
 
+/** Extra context about the day being expanded (beyond its date). */
+export interface ExpandOptions {
+  /**
+   * The day was opened by hand through the password gate — a Wednesday or the
+   * last Friday of the month. Such a day is an extra clinic day the manager
+   * deliberately opens, so its bookable slots carry no release window at all:
+   * they are AVAILABLE from generation instead of waiting out their policy
+   * (30 days for a last Friday, up to 6 months for dispenzár blocks).
+   */
+  manuallyOpened?: boolean;
+}
+
+/**
+ * True when a calendar day was opened by hand behind the password gate. Both
+ * conditions matter: the day type alone is not enough (every Wednesday and
+ * last Friday carries it by default, see defaultDayType), and openedByUserId
+ * alone is not either (a holiday Thu/Fri may also be opened manually, and it
+ * keeps its normal release windows).
+ */
+export function isManuallyOpenedDay(day: {
+  dayType: string;
+  openedByUserId: string | null;
+}): boolean {
+  return (
+    day.openedByUserId !== null &&
+    (day.dayType === "MANUAL_WEDNESDAY" || day.dayType === "LAST_FRIDAY")
+  );
+}
+
 /** A concrete slot a calendar day should contain (minus its calendarDayId). */
 export interface DesiredSlot {
   startAt: Date;
@@ -82,29 +111,38 @@ function expandRule(
 /**
  * Expands a template's slot rules into the concrete slots a given calendar day
  * should contain. Pure: same inputs → same slots, so a day reconciled here is
- * byte-identical to one produced by generateDay (which delegates to this). The
- * last-Friday override mirrors generation: every non-blocked slot uses the
- * last-Friday policy on a last Friday.
+ * byte-identical to one produced by generateDay (which delegates to this).
+ *
+ * Two overrides sit above the rules' own policies, both limited to bookable
+ * slots (blocked types stay blocked either way):
+ *   - a manually opened day (Wednesday / last Friday, opts.manuallyOpened)
+ *     drops every release window — the slots open right away,
+ *   - otherwise a last Friday uses the last-Friday policy for every slot.
  */
 export function expandTemplateRules(
   rules: RuleForExpansion[],
   date: Date,
   now: Date,
+  opts: ExpandOptions = {},
 ): DesiredSlot[] {
   const lastFri = isLastFridayOfMonth(date);
   return rules.flatMap((rule) => {
     const isLocked =
       rule.appointmentType === "CONSULTATION_BLOCKED" ||
       rule.appointmentType === "ECHO_DEPARTMENT_BLOCKED";
-    const policyInput: ReleasePolicyInput =
-      lastFri && !isLocked
-        ? { type: "LAST_FRIDAY_30_DAYS_BEFORE" }
-        : toPolicyInput(rule.releasePolicy);
+    const policyInput: ReleasePolicyInput = isLocked
+      ? toPolicyInput(rule.releasePolicy)
+      : opts.manuallyOpened
+        ? { type: "IMMEDIATE" }
+        : lastFri
+          ? { type: "LAST_FRIDAY_30_DAYS_BEFORE" }
+          : toPolicyInput(rule.releasePolicy);
 
     return expandRule(rule.startTime, rule.endTime, rule.slotDurationMinutes).map((s) => {
       // Password-only slots (13:30/13:50/14:10 from Feb 2027) trump every
-      // policy, including the last-Friday override: LOCKED until a password
-      // unlock, never released automatically. They also carry the dedicated
+      // policy, including the last-Friday and manually-opened overrides: LOCKED
+      // until a per-slot password unlock, never released automatically — those
+      // are reserved capacity, not a time window. They also carry the dedicated
       // "yellow" colour, which the UI renders with the PENTA watermark.
       const passwordOnly = isPasswordOnlySlot(date, s.start);
       const slotPolicy: ReleasePolicyInput = passwordOnly

@@ -41,6 +41,7 @@ import {
   nextWorkingDay,
   countSlots,
   availByType,
+  openDayPasswordText,
 } from "@/lib/calendar-ui";
 import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
 import { holidayName } from "@/lib/holidays-sk";
@@ -374,19 +375,8 @@ export function CalendarView({
 
       {pendingPassword && (
         <ConfirmDialog
-          title={
-            weekdayOf(pendingPassword) === 3
-              ? "Otvoriť stredu"
-              : weekdayOf(pendingPassword) === 5 &&
-                  isLastFridayOfMonth(dateOnly(pendingPassword))
-                ? "Otvoriť posledný piatok v mesiaci"
-                : "Otvoriť deň"
-          }
-          description={
-            holidayName(pendingPassword)
-              ? `Tento deň je sviatok (${holidayName(pendingPassword)}). Otvorenie je výnimočné — zadajte heslo.`
-              : "Tento deň je chránený. Zadajte heslo pre otvorenie."
-          }
+          title={openDayPasswordText(pendingPassword).title}
+          description={openDayPasswordText(pendingPassword).description}
           confirmLabel="Otvoriť deň"
           requirePassword
           passwordLabel="Heslo"

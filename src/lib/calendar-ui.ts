@@ -1,3 +1,5 @@
+import { dateOnly, isLastFridayOfMonth } from "./calendar-date";
+import { holidayName } from "./holidays-sk";
 import type { CalendarDayDTO, SlotDTO, SlotCountsDTO } from "./api-types";
 
 /** Clinic working weekdays (JS getUTCDay): Wed, Thu, Fri. */
@@ -20,6 +22,37 @@ export function nextWorkingDay(iso: string, direction: 1 | -1): string {
     if (WORKING_WEEKDAYS.includes(d.getUTCDay())) break;
   }
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Title + description of the password dialog that opens a protected day
+ * (streda, posledný piatok v mesiaci, sviatok). Shared by the month and day
+ * views so both stay in sync. A Wednesday / last Friday opened this way
+ * releases all its slots at once — the description says so, because that is
+ * exactly what the password buys (see expandTemplateRules, manuallyOpened).
+ */
+export function openDayPasswordText(iso: string): {
+  title: string;
+  description: string;
+} {
+  const dow = weekdayOf(iso);
+  const isWednesday = dow === 3;
+  const isLastFri = dow === 5 && isLastFridayOfMonth(dateOnly(iso));
+  const holiday = holidayName(iso);
+  const base = holiday
+    ? `Tento deň je sviatok (${holiday}). Otvorenie je výnimočné — zadajte heslo.`
+    : "Tento deň je chránený. Zadajte heslo pre otvorenie.";
+  return {
+    title: isWednesday
+      ? "Otvoriť stredu"
+      : isLastFri
+        ? "Otvoriť posledný piatok v mesiaci"
+        : "Otvoriť deň",
+    description:
+      isWednesday || isLastFri
+        ? `${base} Sloty budú voľné hneď, bez časových obmedzení.`
+        : base,
+  };
 }
 
 /** Index calendar days by their ISO date for O(1) lookup in views. */

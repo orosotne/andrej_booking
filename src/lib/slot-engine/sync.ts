@@ -4,6 +4,7 @@ import { NotFoundError } from "@/lib/errors";
 import {
   expandTemplateRules,
   diffDaySlots,
+  isManuallyOpenedDay,
   type DesiredSlot,
   type ExistingSlot,
   type SlotUpdate,
@@ -104,7 +105,12 @@ export async function syncTemplateToFutureDays(
   let keptBooked = 0;
 
   for (const day of targetDays) {
-    const desired = expandTemplateRules(template.slotRules, day.date, now);
+    // Manually opened days keep their "no release window" state across a
+    // template re-apply — otherwise editing the template would silently
+    // re-lock a Wednesday the manager had already opened.
+    const desired = expandTemplateRules(template.slotRules, day.date, now, {
+      manuallyOpened: isManuallyOpenedDay(day),
+    });
     const existing: ExistingSlot[] = day.slots.map((s) => ({
       id: s.id,
       startAt: s.startAt,

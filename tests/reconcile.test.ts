@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   expandTemplateRules,
   diffDaySlots,
+  isManuallyOpenedDay,
   type RuleForExpansion,
   type DesiredSlot,
   type ExistingSlot,
@@ -110,6 +111,106 @@ describe("expandTemplateRules", () => {
     );
     expect(slots).toHaveLength(2);
     expect(slots.every((s) => s.status === "BLOCKED")).toBe(true);
+  });
+});
+
+describe("manually opened days (streda / posledný piatok otvorené heslom)", () => {
+  const wednesday = dateOnly("2026-09-02");
+  const lastFriday = dateOnly("2026-09-25"); // last Friday of September 2026
+  const opened = { manuallyOpened: true };
+
+  it("a 6-month dispenzár block opens right away on an opened Wednesday", () => {
+    const months = rule({
+      startTime: "09:00",
+      endTime: "09:30",
+      releasePolicy: { releaseType: "MONTHS_BEFORE", daysBefore: null, monthsBefore: 6 },
+    });
+    // Without the manual open the window (2026-03-02) has passed by `now`
+    // only because `now` is 2026-06-01 — use a day far enough out to lock it.
+    const far = dateOnly("2027-06-02");
+    expect(expandTemplateRules([months], far, now)[0].status).toBe("LOCKED");
+
+    const [s] = expandTemplateRules([months], far, now, opened);
+    expect(s.status).toBe("AVAILABLE");
+    expect(s.releaseAt).toEqual(new Date(0));
+    // The regular (non-opened) Wednesday still follows its policy.
+    expect(expandTemplateRules([months], wednesday, now)[0].releaseAt).toEqual(
+      new Date("2026-03-02T06:00:00.000Z"),
+    );
+  });
+
+  it("an opened last Friday drops the 30-days-before override", () => {
+    const dispensary = rule({
+      startTime: "10:00",
+      endTime: "10:30",
+      releasePolicy: { releaseType: "IMMEDIATE", daysBefore: null },
+    });
+    // 30 days before 2026-09-25 = 2026-08-26, still after now → LOCKED.
+    const [regular] = expandTemplateRules([dispensary], lastFriday, now);
+    expect(regular.status).toBe("LOCKED");
+
+    const [s] = expandTemplateRules([dispensary], lastFriday, now, opened);
+    expect(s.status).toBe("AVAILABLE");
+    expect(s.releaseAt).toEqual(new Date(0));
+  });
+
+  it("blocked blocks (porada, ECHO oddelenie) stay BLOCKED", () => {
+    const slots = expandTemplateRules(
+      [
+        rule({
+          startTime: "08:00",
+          endTime: "09:00",
+          appointmentType: "CONSULTATION_BLOCKED",
+          color: "grey",
+          releasePolicy: null,
+        }),
+      ],
+      wednesday,
+      now,
+      opened,
+    );
+    expect(slots.every((s) => s.status === "BLOCKED")).toBe(true);
+    expect(slots.every((s) => s.releaseAt === null)).toBe(true);
+  });
+
+  it("password-only PENTA slots stay locked even on an opened day", () => {
+    // 2027-02-24 is a Wednesday after the Feb 2027 cutover.
+    const [s] = expandTemplateRules(
+      [
+        rule({
+          startTime: "13:30",
+          endTime: "13:50",
+          slotDurationMinutes: 20,
+          appointmentType: "ECHO",
+          color: "blue",
+        }),
+      ],
+      dateOnly("2027-02-24"),
+      now,
+      opened,
+    );
+    expect(s.status).toBe("LOCKED");
+    expect(s.releaseAt).toBeNull();
+    expect(s.color).toBe("yellow");
+  });
+});
+
+describe("isManuallyOpenedDay", () => {
+  it("is true only for a Wednesday / last Friday that a user opened", () => {
+    expect(
+      isManuallyOpenedDay({ dayType: "MANUAL_WEDNESDAY", openedByUserId: "u1" }),
+    ).toBe(true);
+    expect(isManuallyOpenedDay({ dayType: "LAST_FRIDAY", openedByUserId: "u1" })).toBe(
+      true,
+    );
+    // Generated, not opened by anyone → normal release windows.
+    expect(
+      isManuallyOpenedDay({ dayType: "MANUAL_WEDNESDAY", openedByUserId: null }),
+    ).toBe(false);
+    // A holiday Thursday opened by hand keeps its windows.
+    expect(
+      isManuallyOpenedDay({ dayType: "REGULAR_THURSDAY", openedByUserId: "u1" }),
+    ).toBe(false);
   });
 });
 
