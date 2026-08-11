@@ -147,6 +147,10 @@ export const settingsUpdateSchema = z
 
 export const releasePolicyUpdateSchema = z.object({
   daysBefore: z.number().int().min(0).max(365).nullable().optional(),
+  // MONTHS_BEFORE policies are edited in whole months. Capped at the slot
+  // generation horizon (14 months) — a longer window could never open a slot
+  // that does not exist yet.
+  monthsBefore: z.number().int().min(0).max(14).nullable().optional(),
   requiresAdminOverride: z.boolean().optional(),
 });
 

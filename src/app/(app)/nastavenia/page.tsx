@@ -23,6 +23,7 @@ export default async function SettingsPage() {
         name: p.name,
         releaseType: p.releaseType,
         daysBefore: p.daysBefore,
+        monthsBefore: p.monthsBefore,
         requiresAdminOverride: p.requiresAdminOverride,
       }))}
     />

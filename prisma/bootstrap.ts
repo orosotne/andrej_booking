@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
-import { DEFAULT_DAY_BLOCKS, type PolicyKey } from "@/lib/slot-engine/template";
+import { dayBlocksFor, type PolicyKey } from "@/lib/slot-engine/template";
 import { WEEKDAY } from "@/lib/calendar-date";
 
 // Production-safe initialization. Unlike prisma/seed.ts (which creates demo
@@ -61,11 +61,17 @@ async function seedReleasePoliciesAndTemplates() {
     IMMEDIATE: await prisma.releasePolicy.create({
       data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
     }),
-    DISPENSARY_32D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 11:30 (32 dní)", releaseType: "DAYS_BEFORE", daysBefore: 32 },
+    DISPENSARY_9_6M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 9:00–9:30 (6 mesiacov)", releaseType: "MONTHS_BEFORE", monthsBefore: 6 },
     }),
-    DISPENSARY_93D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 12:00 (93 dní)", releaseType: "DAYS_BEFORE", daysBefore: 93 },
+    DISPENSARY_1130_6M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 11:30 (6 mesiacov)", releaseType: "MONTHS_BEFORE", monthsBefore: 6 },
+    }),
+    DISPENSARY_12_3M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 12:00 streda+štvrtok (3 mesiace)", releaseType: "MONTHS_BEFORE", monthsBefore: 3 },
+    }),
+    DISPENSARY_12_1M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 12:00 piatok (1 mesiac)", releaseType: "MONTHS_BEFORE", monthsBefore: 1 },
     }),
     ECHO_13D: await prisma.releasePolicy.create({
       data: { name: "ECHO 15:00 (13 dní)", releaseType: "DAYS_BEFORE", daysBefore: 13 },
@@ -92,7 +98,7 @@ async function seedReleasePoliciesAndTemplates() {
       },
     });
     await prisma.slotRule.createMany({
-      data: DEFAULT_DAY_BLOCKS.map((block, i) => ({
+      data: dayBlocksFor(day.dayOfWeek).map((block, i) => ({
         templateId: template.id,
         name: `${block.start}–${block.end} ${block.type}`,
         startTime: block.start,

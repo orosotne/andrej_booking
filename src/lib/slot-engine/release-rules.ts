@@ -23,6 +23,21 @@ function subDaysUtc(d: Date, n: number): Date {
 }
 
 /**
+ * `n` whole calendar months back, keeping the day of month. The day is clamped
+ * to the target month's length so 31 Aug − 6 months is 28/29 Feb rather than
+ * rolling forward into March, which is what a plain Date.UTC() would do.
+ */
+function subMonthsUtc(d: Date, n: number): Date {
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  // Day 0 of the month after the target = last day of the target month.
+  const lastDay = new Date(Date.UTC(year, month - n + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(year, month - n, Math.min(d.getUTCDate(), lastDay)),
+  );
+}
+
+/**
  * When a slot on `slotDate` becomes bookable, per its release policy.
  * Returns null when the slot must stay LOCKED until a manual unlock
  * (MANUAL_ONLY, or LAST_FRIDAY policy on a day that is not a last Friday).
@@ -39,6 +54,8 @@ export function computeReleaseAt(
       return null;
     case "DAYS_BEFORE":
       return atSixUtc(subDaysUtc(slotDate, policy.daysBefore));
+    case "MONTHS_BEFORE":
+      return atSixUtc(subMonthsUtc(slotDate, policy.monthsBefore));
     case "LAST_FRIDAY_30_DAYS_BEFORE":
       return isLastFriday ? atSixUtc(subDaysUtc(slotDate, 30)) : null;
   }

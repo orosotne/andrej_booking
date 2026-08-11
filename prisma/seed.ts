@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
-import { DEFAULT_DAY_BLOCKS, type PolicyKey } from "@/lib/slot-engine/template";
+import { dayBlocksFor, type PolicyKey } from "@/lib/slot-engine/template";
 import { generateForward, generateDay } from "@/lib/slot-engine/generate";
 import { WEEKDAY, weekdaysInMonth } from "@/lib/calendar-date";
 
@@ -39,10 +39,12 @@ async function seedRulesAndTemplates() {
   // sa otvárajú vo vlastnom okne:
   //   PRE_HOSPITAL_5D  → 7:00 opens 5 days before
   //   PRE_HOSPITAL_12D → 7:30 opens 12 days before
-  //   IMMEDIATE        → 9:00–11:00 dispenzár + ECHO 13:30–14:40 (voľné hneď)
-  //   DISPENSARY_32D   → 11:30 opens 32 days before
-  //   DISPENSARY_93D   → 12:00 opens 93 days before
-  //   ECHO_13D         → ECHO 15:00 opens 13 days before
+  //   IMMEDIATE          → 10:00–11:00 dispenzár + ECHO 13:30–14:40 (voľné hneď)
+  //   DISPENSARY_9_6M    → 9:00 + 9:30 open exactly 6 months before
+  //   DISPENSARY_1130_6M → 11:30 opens exactly 6 months before
+  //   DISPENSARY_12_3M   → 12:00 opens 3 months before (Wed + Thu)
+  //   DISPENSARY_12_1M   → 12:00 opens 1 month before (Fri)
+  //   ECHO_13D           → ECHO 15:00 opens 13 days before
   //   BLOCKED          → manual only (Porada + ECHO oddelenie)
   const policies = {
     PRE_HOSPITAL_5D: await prisma.releasePolicy.create({
@@ -54,11 +56,17 @@ async function seedRulesAndTemplates() {
     IMMEDIATE: await prisma.releasePolicy.create({
       data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
     }),
-    DISPENSARY_32D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 11:30 (32 dní)", releaseType: "DAYS_BEFORE", daysBefore: 32 },
+    DISPENSARY_9_6M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 9:00–9:30 (6 mesiacov)", releaseType: "MONTHS_BEFORE", monthsBefore: 6 },
     }),
-    DISPENSARY_93D: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 12:00 (93 dní)", releaseType: "DAYS_BEFORE", daysBefore: 93 },
+    DISPENSARY_1130_6M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 11:30 (6 mesiacov)", releaseType: "MONTHS_BEFORE", monthsBefore: 6 },
+    }),
+    DISPENSARY_12_3M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 12:00 streda+štvrtok (3 mesiace)", releaseType: "MONTHS_BEFORE", monthsBefore: 3 },
+    }),
+    DISPENSARY_12_1M: await prisma.releasePolicy.create({
+      data: { name: "Dispenzár 12:00 piatok (1 mesiac)", releaseType: "MONTHS_BEFORE", monthsBefore: 1 },
     }),
     ECHO_13D: await prisma.releasePolicy.create({
       data: { name: "ECHO 15:00 (13 dní)", releaseType: "DAYS_BEFORE", daysBefore: 13 },
@@ -86,7 +94,7 @@ async function seedRulesAndTemplates() {
       },
     });
     await prisma.slotRule.createMany({
-      data: DEFAULT_DAY_BLOCKS.map((block, i) => ({
+      data: dayBlocksFor(day.dayOfWeek).map((block, i) => ({
         templateId: template.id,
         name: `${block.start}–${block.end} ${block.type}`,
         startTime: block.start,

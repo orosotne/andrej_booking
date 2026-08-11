@@ -61,6 +61,39 @@ describe("expandTemplateRules", () => {
     expect(s.releaseAt?.toISOString().slice(0, 10)).toBe("2026-06-26");
   });
 
+  it("MONTHS_BEFORE opens on the same day of month, 6 months earlier", () => {
+    const [s] = expandTemplateRules(
+      [
+        rule({
+          startTime: "11:30",
+          endTime: "12:00",
+          releasePolicy: { releaseType: "MONTHS_BEFORE", daysBefore: null, monthsBefore: 6 },
+        }),
+      ],
+      thursday,
+      now,
+    );
+    // 6 months before 2026-07-02 = 2026-01-02, already past now → AVAILABLE
+    expect(s.releaseAt?.toISOString().slice(0, 10)).toBe("2026-01-02");
+    expect(s.status).toBe("AVAILABLE");
+  });
+
+  it("a MONTHS_BEFORE policy with no value stays LOCKED rather than opening", () => {
+    const [s] = expandTemplateRules(
+      [
+        rule({
+          startTime: "12:00",
+          endTime: "12:30",
+          releasePolicy: { releaseType: "MONTHS_BEFORE", daysBefore: null, monthsBefore: null },
+        }),
+      ],
+      thursday,
+      now,
+    );
+    expect(s.releaseAt).toBeNull();
+    expect(s.status).toBe("LOCKED");
+  });
+
   it("blocked types stay BLOCKED regardless of policy", () => {
     const slots = expandTemplateRules(
       [

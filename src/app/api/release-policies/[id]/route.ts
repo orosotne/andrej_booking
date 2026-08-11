@@ -19,6 +19,7 @@ export const PATCH = defineRoute(
         where: { id },
         data: {
           daysBefore: data.daysBefore,
+          monthsBefore: data.monthsBefore,
           requiresAdminOverride: data.requiresAdminOverride,
         },
       });

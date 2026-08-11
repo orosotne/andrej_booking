@@ -17,6 +17,47 @@ describe("computeReleaseAt", () => {
     const r = computeReleaseAt(friday, { type: "DAYS_BEFORE", daysBefore: 28 }, false)!;
     expect(r.toISOString().slice(0, 10)).toBe("2026-06-05");
   });
+  it("MONTHS_BEFORE(6) keeps the day of month", () => {
+    const r = computeReleaseAt(friday, { type: "MONTHS_BEFORE", monthsBefore: 6 }, false)!;
+    expect(r.toISOString().slice(0, 10)).toBe("2026-01-03");
+  });
+  it("MONTHS_BEFORE(3) crosses the year boundary", () => {
+    const r = computeReleaseAt(
+      dateOnly("2027-02-11"),
+      { type: "MONTHS_BEFORE", monthsBefore: 3 },
+      false,
+    )!;
+    expect(r.toISOString().slice(0, 10)).toBe("2026-11-11");
+  });
+  it("MONTHS_BEFORE(1) on the 1st of the month", () => {
+    const r = computeReleaseAt(
+      dateOnly("2027-01-01"),
+      { type: "MONTHS_BEFORE", monthsBefore: 1 },
+      false,
+    )!;
+    expect(r.toISOString().slice(0, 10)).toBe("2026-12-01");
+  });
+  it("MONTHS_BEFORE clamps to the target month's last day instead of overflowing", () => {
+    // 31 Aug − 6 months is 31 Feb, which must land on 28 Feb (2027 is not a leap year).
+    const r = computeReleaseAt(
+      dateOnly("2027-08-31"),
+      { type: "MONTHS_BEFORE", monthsBefore: 6 },
+      false,
+    )!;
+    expect(r.toISOString().slice(0, 10)).toBe("2027-02-28");
+  });
+  it("MONTHS_BEFORE clamp honours a leap February", () => {
+    const r = computeReleaseAt(
+      dateOnly("2028-08-31"),
+      { type: "MONTHS_BEFORE", monthsBefore: 6 },
+      false,
+    )!;
+    expect(r.toISOString().slice(0, 10)).toBe("2028-02-29");
+  });
+  it("MONTHS_BEFORE is normalised to 06:00 UTC like every other policy", () => {
+    const r = computeReleaseAt(friday, { type: "MONTHS_BEFORE", monthsBefore: 6 }, false)!;
+    expect(r.toISOString()).toBe("2026-01-03T06:00:00.000Z");
+  });
   it("MANUAL_ONLY → null", () => {
     expect(computeReleaseAt(friday, { type: "MANUAL_ONLY" }, false)).toBeNull();
   });

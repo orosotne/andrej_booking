@@ -1,3 +1,4 @@
+import { WEEKDAY } from "@/lib/calendar-date";
 import type { AppointmentTypeLit, ColorKey } from "./types";
 
 // A policy key references a named ReleasePolicy seeded in the DB. The pure
@@ -6,8 +7,10 @@ export type PolicyKey =
   | "PRE_HOSPITAL_5D"
   | "PRE_HOSPITAL_12D"
   | "IMMEDIATE"
-  | "DISPENSARY_32D"
-  | "DISPENSARY_93D"
+  | "DISPENSARY_9_6M"
+  | "DISPENSARY_1130_6M"
+  | "DISPENSARY_12_3M"
+  | "DISPENSARY_12_1M"
   | "ECHO_13D"
   | "BLOCKED";
 
@@ -40,9 +43,11 @@ export const SLOT_MINUTES = 30;
 //   7:00        PRE_HOSPITAL (predhospitalizačné) — otvorí sa 5 dní predtým
 //   7:30        PRE_HOSPITAL (predhospitalizačné) — otvorí sa 12 dní predtým
 //   8:00, 8:30  Porada — manual only (locked, grey)
-//   9:00–11:00  Dispenzár — voľné hneď (14 mesiacov popredu), 30-min sloty
-//   11:30       Dispenzár — otvorí sa 32 dní predtým
-//   12:00       Dispenzár — otvorí sa 93 dní predtým
+//   9:00, 9:30  Dispenzár — otvorí sa presne 6 mesiacov predtým
+//   10:00–11:00 Dispenzár — voľné hneď (14 mesiacov popredu), 30-min sloty
+//   11:30       Dispenzár — otvorí sa presne 6 mesiacov predtým
+//   12:00       Dispenzár — okno závisí od dňa v týždni (pozri dayBlocksFor):
+//               streda + štvrtok 3 mesiace, piatok 1 mesiac predtým
 //  12:30, 13:00 ECHO oddelenie — manual only (locked, dark blue)
 //  13:30, 13:50, 14:10, 14:40 — ECHO bookable, voľné hneď (4 sloty po 20 min)
 //                (od 1.2.2027 sú 13:30/13:50/14:10 blokované — otvorenie len
@@ -76,6 +81,14 @@ export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
   },
   {
     start: "09:00",
+    end: "10:00",
+    type: "DISPENSARY",
+    colorKey: "white",
+    policyKey: "DISPENSARY_9_6M",
+    bookable: true,
+  },
+  {
+    start: "10:00",
     end: "11:30",
     type: "DISPENSARY",
     colorKey: "white",
@@ -87,15 +100,17 @@ export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
     end: "12:00",
     type: "DISPENSARY",
     colorKey: "white",
-    policyKey: "DISPENSARY_32D",
+    policyKey: "DISPENSARY_1130_6M",
     bookable: true,
   },
   {
+    // Overridden per weekday by dayBlocksFor() — Friday's 12:00 opens 1 month
+    // before instead of 3. This entry carries the Wed/Thu default.
     start: "12:00",
     end: "12:30",
     type: "DISPENSARY",
     colorKey: "white",
-    policyKey: "DISPENSARY_93D",
+    policyKey: "DISPENSARY_12_3M",
     bookable: true,
   },
   {
@@ -115,6 +130,21 @@ export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
   { start: "15:00", end: "15:20", type: "ECHO", colorKey: "blue", policyKey: "ECHO_13D", bookable: true, slotDurationMinutes: 20 },
 ];
 
+/**
+ * The canonical day layout for one weekday. Identical to DEFAULT_DAY_BLOCKS
+ * except on Friday, where the 12:00 dispenzár opens 1 month before the
+ * appointment instead of 3 — the only block whose release window differs by
+ * day of week. Callers that seed slot_rules must use this, not the raw array.
+ */
+export function dayBlocksFor(dayOfWeek: number): BlockDef[] {
+  if (dayOfWeek !== WEEKDAY.FRI) return DEFAULT_DAY_BLOCKS;
+  return DEFAULT_DAY_BLOCKS.map((b) =>
+    b.start === "12:00" && b.type === "DISPENSARY"
+      ? { ...b, policyKey: "DISPENSARY_12_1M" as PolicyKey }
+      : b,
+  );
+}
+
 export function hhmmToMin(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
@@ -127,9 +157,9 @@ export function minToHhmm(min: number): string {
 }
 
 /** Expands the day's blocks into individual slot definitions. */
-export function buildDayTemplate(): SlotDef[] {
+export function buildDayTemplate(dayOfWeek: number = WEEKDAY.THU): SlotDef[] {
   const slots: SlotDef[] = [];
-  for (const b of DEFAULT_DAY_BLOCKS) {
+  for (const b of dayBlocksFor(dayOfWeek)) {
     const dur = b.slotDurationMinutes ?? SLOT_MINUTES;
     for (let m = hhmmToMin(b.start); m + dur <= hhmmToMin(b.end); m += dur) {
       slots.push({

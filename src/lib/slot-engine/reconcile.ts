@@ -14,6 +14,7 @@ import type { AppointmentTypeLit, ReleasePolicyInput, SlotStatusLit } from "./ty
 interface PolicyRow {
   releaseType: string;
   daysBefore: number | null;
+  monthsBefore?: number | null;
 }
 
 /** A template's slot rule, reduced to what slot generation needs. */
@@ -46,6 +47,12 @@ function toPolicyInput(policy: PolicyRow | null): ReleasePolicyInput {
       return { type: "IMMEDIATE" };
     case "DAYS_BEFORE":
       return { type: "DAYS_BEFORE", daysBefore: policy.daysBefore ?? 0 };
+    case "MONTHS_BEFORE":
+      // A months policy with no value would silently mean "opens immediately",
+      // which is the unsafe direction — fall through to MANUAL_ONLY instead.
+      return policy.monthsBefore == null
+        ? { type: "MANUAL_ONLY" }
+        : { type: "MONTHS_BEFORE", monthsBefore: policy.monthsBefore };
     case "LAST_FRIDAY_30_DAYS_BEFORE":
       return { type: "LAST_FRIDAY_30_DAYS_BEFORE" };
     case "MANUAL_ONLY":

@@ -23,8 +23,15 @@ interface PolicyDTO {
   name: string;
   releaseType: string;
   daysBefore: number | null;
+  monthsBefore: number | null;
   requiresAdminOverride: boolean;
 }
+
+// The two editable release units. IMMEDIATE / MANUAL_ONLY / last-Friday policies
+// carry no number and are intentionally not listed.
+const EDITABLE_RELEASE_TYPES = ["DAYS_BEFORE", "MONTHS_BEFORE"] as const;
+const isEditablePolicy = (p: PolicyDTO) =>
+  (EDITABLE_RELEASE_TYPES as readonly string[]).includes(p.releaseType);
 
 function asNumber(v: unknown, fallback: number): number {
   return typeof v === "number" ? v : fallback;
@@ -61,21 +68,31 @@ export function SettingsForm({
 
   const setSetting = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
-  const setDays = (id: string, days: number) =>
-    setPolicies((ps) => ps.map((p) => (p.id === id ? { ...p, daysBefore: days } : p)));
+  const setAmount = (id: string, amount: number) =>
+    setPolicies((ps) =>
+      ps.map((p) =>
+        p.id !== id
+          ? p
+          : p.releaseType === "MONTHS_BEFORE"
+            ? { ...p, monthsBefore: amount }
+            : { ...p, daysBefore: amount },
+      ),
+    );
 
   function save() {
     run(
       async () => {
         await apiSend("/api/settings", "PATCH", settings);
         await Promise.all(
-          policies
-            .filter((p) => p.releaseType === "DAYS_BEFORE")
-            .map((p) =>
-              apiSend(`/api/release-policies/${p.id}`, "PATCH", {
-                daysBefore: p.daysBefore,
-              }),
+          policies.filter(isEditablePolicy).map((p) =>
+            apiSend(
+              `/api/release-policies/${p.id}`,
+              "PATCH",
+              p.releaseType === "MONTHS_BEFORE"
+                ? { monthsBefore: p.monthsBefore }
+                : { daysBefore: p.daysBefore },
             ),
+          ),
         );
       },
       { success: "Nastavenia uložené" },
@@ -91,27 +108,31 @@ export function SettingsForm({
 
       <Section title="Pravidlá otvárania slotov">
         <p className="mb-3 text-sm text-slate-500">
-          Počet dní pred termínom, kedy sa sloty otvoria na objednávanie.
+          Ako dlho pred termínom sa sloty otvoria na objednávanie. Mesiace sú
+          kalendárne — termín 15. marca sa pri 6 mesiacoch otvorí 15. septembra.
         </p>
         <div className="space-y-2">
-          {policies
-            .filter((p) => p.releaseType === "DAYS_BEFORE")
-            .map((p) => (
+          {policies.filter(isEditablePolicy).map((p) => {
+            const months = p.releaseType === "MONTHS_BEFORE";
+            return (
               <div key={p.id} className="flex items-center justify-between gap-3">
                 <span className="text-sm text-slate-700">{p.name}</span>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     min={0}
-                    max={365}
-                    value={p.daysBefore ?? 0}
-                    onChange={(e) => setDays(p.id, Number(e.target.value))}
+                    max={months ? 14 : 365}
+                    value={(months ? p.monthsBefore : p.daysBefore) ?? 0}
+                    onChange={(e) => setAmount(p.id, Number(e.target.value))}
                     className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-right text-slate-900 outline-none focus:border-slate-900"
                   />
-                  <span className="text-sm text-slate-400">dní</span>
+                  <span className="w-14 text-sm text-slate-400">
+                    {months ? "mesiacov" : "dní"}
+                  </span>
                 </div>
               </div>
-            ))}
+            );
+          })}
         </div>
       </Section>
 

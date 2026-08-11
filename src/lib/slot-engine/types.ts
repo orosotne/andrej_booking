@@ -31,6 +31,7 @@ export type AppointmentStatusLit =
 export type ReleaseTypeLit =
   | "IMMEDIATE"
   | "DAYS_BEFORE"
+  | "MONTHS_BEFORE"
   | "MANUAL_ONLY"
   | "LAST_FRIDAY_30_DAYS_BEFORE";
 
@@ -54,4 +55,5 @@ export type ReleasePolicyInput =
   | { type: "IMMEDIATE" }
   | { type: "MANUAL_ONLY" }
   | { type: "DAYS_BEFORE"; daysBefore: number }
+  | { type: "MONTHS_BEFORE"; monthsBefore: number }
   | { type: "LAST_FRIDAY_30_DAYS_BEFORE" };

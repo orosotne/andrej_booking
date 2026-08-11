@@ -72,6 +72,10 @@ enum AppointmentStatus {
 enum ReleaseType {
   IMMEDIATE
   DAYS_BEFORE
+  // Calendar months, not a day count: a slot on 15 Mar opens on 15 Sep for
+  // MONTHS_BEFORE 6. Day-of-month is clamped to the target month's length
+  // (31 Aug − 6 months → 28/29 Feb), see computeReleaseAt.
+  MONTHS_BEFORE
   MANUAL_ONLY
   LAST_FRIDAY_30_DAYS_BEFORE
 }
@@ -175,6 +179,9 @@ model ReleasePolicy {
   name                  String
   releaseType           ReleaseType @map("release_type")
   daysBefore            Int?        @map("days_before")
+  // Set only for MONTHS_BEFORE policies (daysBefore stays null there, and vice
+  // versa) — the two are alternative units for the same "how early" question.
+  monthsBefore          Int?        @map("months_before")
   requiresAdminOverride Boolean     @default(false) @map("requires_admin_override")
   createdAt             DateTime    @default(now()) @map("created_at")
   updatedAt             DateTime    @updatedAt @map("updated_at")
