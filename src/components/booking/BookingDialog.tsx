@@ -11,7 +11,13 @@ import type { SlotDTO } from "@/lib/api-types";
 import type { PatientCategoryLit } from "@/lib/slot-engine/types";
 import { apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
-import { clinicTime, clinicLongDate } from "@/lib/format";
+import {
+  clinicTime,
+  clinicLongDate,
+  clinicDayChip,
+  todayIso,
+  isoAddDays,
+} from "@/lib/format";
 import {
   PATIENT_CATEGORIES,
   PATIENT_CATEGORY_HELP,
@@ -39,6 +45,10 @@ export function BookingDialog({
   const [note, setNote] = useState("");
   const [lockMode, setLockMode] = useState(false);
   const [lockPassword, setLockPassword] = useState("");
+  // PASSWORD = zamknuté až do odomknutia heslom; DATE = v ráno zvoleného dňa
+  // slot odomkne release cron sám.
+  const [lockKind, setLockKind] = useState<"PASSWORD" | "DATE">("PASSWORD");
+  const [lockUntil, setLockUntil] = useState("");
   const meta = TYPE_META[slot.appointmentType];
 
   const categoryFits = category
@@ -69,13 +79,22 @@ export function BookingDialog({
     );
   }
 
+  const canLock =
+    !!lockPassword && (lockKind === "PASSWORD" || !!lockUntil);
+
   function lock() {
-    if (!lockPassword) return;
+    if (!canLock) return;
     run(
       () =>
-        apiSend(`/api/slots/${slot.id}/lock`, "POST", { password: lockPassword }),
+        apiSend(`/api/slots/${slot.id}/lock`, "POST", {
+          password: lockPassword,
+          until: lockKind === "DATE" ? lockUntil : undefined,
+        }),
       {
-        success: "Slot zamknutý",
+        success:
+          lockKind === "DATE"
+            ? `Slot zamknutý do ${clinicDayChip(lockUntil)}`
+            : "Slot zamknutý",
         onDone: onBooked,
       },
     );
@@ -94,6 +113,69 @@ export function BookingDialog({
             <div className="border-t border-slate-100 pt-3">
               {lockMode ? (
                 <div className="space-y-2">
+                  <fieldset>
+                    <legend className="text-sm font-medium text-slate-700">
+                      Ako dlho má byť slot zamknutý?
+                    </legend>
+                    <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setLockKind("PASSWORD")}
+                        aria-pressed={lockKind === "PASSWORD"}
+                        className={`rounded-lg border px-3 py-2 text-left text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 ${
+                          lockKind === "PASSWORD"
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-300 bg-white text-slate-900 hover:border-slate-400"
+                        }`}
+                      >
+                        <span className="block font-medium">Až do odomknutia heslom</span>
+                        <span
+                          className={`block text-[11px] leading-snug ${
+                            lockKind === "PASSWORD" ? "text-white/70" : "text-slate-500"
+                          }`}
+                        >
+                          Otvorí sa len ručne cez heslo
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLockKind("DATE")}
+                        aria-pressed={lockKind === "DATE"}
+                        className={`rounded-lg border px-3 py-2 text-left text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 ${
+                          lockKind === "DATE"
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-300 bg-white text-slate-900 hover:border-slate-400"
+                        }`}
+                      >
+                        <span className="block font-medium">Do dátumu</span>
+                        <span
+                          className={`block text-[11px] leading-snug ${
+                            lockKind === "DATE" ? "text-white/70" : "text-slate-500"
+                          }`}
+                        >
+                          V ten deň sa odomkne sám
+                        </span>
+                      </button>
+                    </div>
+                  </fieldset>
+                  {lockKind === "DATE" && (
+                    <>
+                      <Field
+                        label="Automaticky odomknúť dňa"
+                        type="date"
+                        required
+                        min={isoAddDays(todayIso(), 1)}
+                        max={dayIso}
+                        value={lockUntil}
+                        onChange={(e) => setLockUntil(e.target.value)}
+                      />
+                      {lockUntil && (
+                        <p className="text-xs text-slate-500">
+                          Slot sa automaticky odomkne ráno {clinicDayChip(lockUntil)}.
+                        </p>
+                      )}
+                    </>
+                  )}
                   <Field
                     label="Heslo na zamknutie slotu"
                     type="password"
@@ -109,6 +191,8 @@ export function BookingDialog({
                       onClick={() => {
                         setLockMode(false);
                         setLockPassword("");
+                        setLockKind("PASSWORD");
+                        setLockUntil("");
                       }}
                     >
                       Zrušiť
@@ -117,7 +201,7 @@ export function BookingDialog({
                       variant="primary"
                       fullWidth
                       loading={busy}
-                      disabled={!lockPassword}
+                      disabled={!canLock}
                       onClick={lock}
                     >
                       <Lock className="h-4 w-4" />

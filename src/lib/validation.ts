@@ -84,6 +84,16 @@ export const unlockSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+// Zamknutie slotu. Heslo ostáva nepovinné v schéme, aby chýbajúce/zlé heslo
+// hlásil assertUnlockPassword jednotnou hláškou. `until` = dátum, v ktorého
+// ráno sa slot odomkne sám (release cron); bez neho ostáva zamknutý až do
+// odomknutia heslom.
+export const lockSchema = z.object({
+  password: z.string().max(200).optional(),
+  reason: z.string().max(500).optional(),
+  until: isoDate.optional(),
+});
+
 // PATCH may only set "presence" outcomes. CANCELLED and RESCHEDULED are omitted
 // on purpose: they must also free or move the underlying slot atomically, which
 // is exactly what the dedicated /cancel and /reschedule endpoints do. Accepting

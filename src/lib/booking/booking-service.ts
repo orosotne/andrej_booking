@@ -11,6 +11,7 @@ import {
   PATIENT_CATEGORY_LABEL,
 } from "@/lib/patient-category";
 import { BLOCKING_STATUSES } from "@/lib/appointment-status";
+import { atSixUtc } from "@/lib/slot-engine/release-rules";
 
 /** When a slot is freed, return it to AVAILABLE only if its release window is open. */
 function statusAfterFreeing(
@@ -298,23 +299,51 @@ export async function unlockSlot(input: UnlockInput) {
 export interface LockInput {
   slotId: string;
   reason?: string;
+  /**
+   * Midnight-UTC date on which the lock expires by itself: release_at is
+   * stamped 06:00 UTC that day and the morning release cron opens the slot.
+   * Omitted/null → the slot stays locked until a password unlock
+   * (release_at = null, the cron never touches it).
+   */
+  until?: Date | null;
   ctx: AuditContext;
+  now?: Date;
 }
 
 /** Re-locks an open (AVAILABLE) slot, e.g. to protect capacity. Booked slots are untouched. */
 export async function lockSlot(input: LockInput) {
+  const now = input.now ?? new Date();
   return prisma.$transaction(async (tx) => {
     const slot = await tx.appointmentSlot.findUnique({
       where: { id: input.slotId },
+      include: { calendarDay: { select: { date: true } } },
     });
     if (!slot) throw new NotFoundError("Slot neexistuje.");
     if (slot.status !== "AVAILABLE") {
       throw new ConflictError("Zamknúť možno len voľný slot.");
     }
 
+    let releaseAt: Date | null = null;
+    if (input.until) {
+      releaseAt = atSixUtc(input.until);
+      if (releaseAt.getTime() <= now.getTime()) {
+        throw new ValidationError("Dátum automatického odomknutia už uplynul.");
+      }
+      if (input.until.getTime() > slot.calendarDay.date.getTime()) {
+        throw new ValidationError(
+          "Dátum automatického odomknutia musí byť najneskôr v deň termínu.",
+        );
+      }
+    }
+
     const updated = await tx.appointmentSlot.update({
       where: { id: slot.id },
-      data: { status: "LOCKED", lockedReason: input.reason ?? null, manualLock: true },
+      data: {
+        status: "LOCKED",
+        lockedReason: input.reason ?? null,
+        manualLock: true,
+        releaseAt,
+      },
     });
     await recordAudit(tx, {
       entityType: "slot",

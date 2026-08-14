@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { assertUnlockPassword } from "@/lib/auth/unlock-password";
 import { lockSlot } from "@/lib/booking/booking-service";
+import { dateOnly } from "@/lib/calendar-date";
+import { lockSchema } from "@/lib/validation";
 import { defineRoute } from "@/lib/route";
-
-// Locking a slot only needs the shared unlock password + optional reason; both
-// stay optional so the missing/wrong password is reported by
-// assertUnlockPassword with the same message as before.
-const lockSchema = z.object({
-  password: z.string().max(200).optional(),
-  reason: z.string().max(500).optional(),
-});
 
 export const POST = defineRoute(
   { roles: ADMIN_ONLY, body: lockSchema },
@@ -21,6 +14,7 @@ export const POST = defineRoute(
     const slot = await lockSlot({
       slotId: params.id,
       reason: body.reason,
+      until: body.until ? dateOnly(body.until) : null,
       ctx: audit,
     });
     return NextResponse.json({ slot });

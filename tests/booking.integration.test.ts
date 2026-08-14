@@ -5,7 +5,9 @@ import {
   cancelAppointment,
   updateAppointment,
   deletePatient,
+  lockSlot,
 } from "@/lib/booking/booking-service";
+import { releaseDueSlots } from "@/lib/slot-engine/release";
 import { ConflictError, ValidationError } from "@/lib/errors";
 
 // Requires a REAL (throwaway/test) Postgres. Run with:
@@ -139,6 +141,106 @@ describe.skipIf(!RUN)("booking integration (requires DB)", () => {
       await prisma.appointment.deleteMany({ where: { slotId: slot.id } });
       await prisma.appointmentSlot.deleteMany({ where: { id: slot.id } });
       await prisma.patient.deleteMany({ where: { id: p.id } });
+    }
+  });
+
+  // Manual-lock modes: without `until` the lock survives the release cron
+  // (release_at = null); with `until` the cron opens the slot that morning.
+  it("locks until password unlock: release cron never reopens it", async () => {
+    const slot = await prisma.appointmentSlot.create({
+      data: {
+        calendarDayId: dayId,
+        startAt: new Date("2099-12-31T10:00:00.000Z"),
+        endAt: new Date("2099-12-31T10:30:00.000Z"),
+        appointmentType: "DISPENSARY",
+        status: "AVAILABLE",
+        releaseAt: new Date("2000-01-01T00:00:00.000Z"),
+        color: "white",
+      },
+    });
+    try {
+      const locked = await lockSlot({ slotId: slot.id, reason: "test", ctx });
+      expect(locked.status).toBe("LOCKED");
+      expect(locked.manualLock).toBe(true);
+      expect(locked.releaseAt).toBeNull();
+
+      await releaseDueSlots();
+      const after = await prisma.appointmentSlot.findUniqueOrThrow({
+        where: { id: slot.id },
+      });
+      expect(after.status).toBe("LOCKED");
+    } finally {
+      await prisma.appointmentSlot.deleteMany({ where: { id: slot.id } });
+    }
+  });
+
+  it("locks until a date: stamps 06:00 UTC and the cron auto-unlocks", async () => {
+    const slot = await prisma.appointmentSlot.create({
+      data: {
+        calendarDayId: dayId,
+        startAt: new Date("2099-12-31T10:30:00.000Z"),
+        endAt: new Date("2099-12-31T11:00:00.000Z"),
+        appointmentType: "DISPENSARY",
+        status: "AVAILABLE",
+        releaseAt: new Date("2000-01-01T00:00:00.000Z"),
+        color: "white",
+      },
+    });
+    try {
+      const locked = await lockSlot({
+        slotId: slot.id,
+        until: new Date("2099-12-30T00:00:00.000Z"),
+        ctx,
+      });
+      expect(locked.status).toBe("LOCKED");
+      expect(locked.releaseAt?.toISOString()).toBe("2099-12-30T06:00:00.000Z");
+
+      // Before the date: the cron leaves it locked.
+      await releaseDueSlots(new Date("2099-12-29T07:00:00.000Z"));
+      expect(
+        (await prisma.appointmentSlot.findUniqueOrThrow({ where: { id: slot.id } }))
+          .status,
+      ).toBe("LOCKED");
+
+      // The morning it arrives: opened, manual-lock marker cleared.
+      await releaseDueSlots(new Date("2099-12-30T07:00:00.000Z"));
+      const after = await prisma.appointmentSlot.findUniqueOrThrow({
+        where: { id: slot.id },
+      });
+      expect(after.status).toBe("AVAILABLE");
+      expect(after.manualLock).toBe(false);
+      expect(after.lockedReason).toBeNull();
+    } finally {
+      await prisma.appointmentSlot.deleteMany({ where: { id: slot.id } });
+    }
+  });
+
+  it("rejects an auto-unlock date in the past or after the slot's day", async () => {
+    const slot = await prisma.appointmentSlot.create({
+      data: {
+        calendarDayId: dayId,
+        startAt: new Date("2099-12-31T11:00:00.000Z"),
+        endAt: new Date("2099-12-31T11:30:00.000Z"),
+        appointmentType: "DISPENSARY",
+        status: "AVAILABLE",
+        releaseAt: new Date("2000-01-01T00:00:00.000Z"),
+        color: "white",
+      },
+    });
+    try {
+      await expect(
+        lockSlot({ slotId: slot.id, until: new Date("2000-01-02T00:00:00.000Z"), ctx }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        lockSlot({ slotId: slot.id, until: new Date("2100-01-01T00:00:00.000Z"), ctx }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      // Both rejections happen before any write: the slot is still AVAILABLE.
+      expect(
+        (await prisma.appointmentSlot.findUniqueOrThrow({ where: { id: slot.id } }))
+          .status,
+      ).toBe("AVAILABLE");
+    } finally {
+      await prisma.appointmentSlot.deleteMany({ where: { id: slot.id } });
     }
   });
 });

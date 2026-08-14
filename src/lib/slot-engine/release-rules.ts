@@ -9,8 +9,10 @@ import type {
 // otherwise a slot whose release_at falls on day D is only picked up by the
 // next day's run and opens one day late. Cron is set to 07:00 UTC to clear
 // this threshold with a margin. Keeping the hour fixed in UTC also keeps this
-// function pure and timezone-free.
-function atSixUtc(d: Date): Date {
+// function pure and timezone-free. Exported because manual locks with an
+// auto-unlock date (lockSlot's `until`) stamp release_at with the same
+// convention, so the same cron opens them.
+export function atSixUtc(d: Date): Date {
   return new Date(
     Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 6, 0, 0),
   );
