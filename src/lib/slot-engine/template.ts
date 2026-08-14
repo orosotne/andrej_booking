@@ -4,8 +4,8 @@ import type { AppointmentTypeLit, ColorKey } from "./types";
 // A policy key references a named ReleasePolicy seeded in the DB. The pure
 // template only carries the key; generate.ts resolves it to a real policy.
 export type PolicyKey =
-  | "PRE_HOSPITAL_5D"
-  | "PRE_HOSPITAL_12D"
+  | "PRE_HOSPITAL_14D"
+  | "PRE_HOSPITAL_21D"
   | "IMMEDIATE"
   | "DISPENSARY_9_6M"
   | "DISPENSARY_1130_6M"
@@ -40,8 +40,8 @@ export const SLOT_MINUTES = 30;
 //
 // Day shape — v otvorených dňoch sú voľné hneď (14 mesiacov popredu) len
 // 9:00–11:00 a ECHO 13:30–14:40; ostatné bookable sloty sa otvárajú vo vlastnom okne:
-//   7:00        PRE_HOSPITAL (predhospitalizačné) — otvorí sa 5 dní predtým
-//   7:30        PRE_HOSPITAL (predhospitalizačné) — otvorí sa 12 dní predtým
+//   7:00        PRE_HOSPITAL (predhospitalizačné) — otvorí sa 14 dní (2 týždne) predtým
+//   7:30        PRE_HOSPITAL (predhospitalizačné) — otvorí sa 21 dní (3 týždne) predtým
 //   8:00, 8:30  Porada — manual only (locked, grey)
 //   9:00, 9:30  Dispenzár — otvorí sa presne 6 mesiacov predtým
 //   10:00–11:00 Dispenzár — voľné hneď (14 mesiacov popredu), 30-min sloty
@@ -60,7 +60,7 @@ export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
     end: "07:30",
     type: "PRE_HOSPITAL",
     colorKey: "pink",
-    policyKey: "PRE_HOSPITAL_5D",
+    policyKey: "PRE_HOSPITAL_14D",
     bookable: true,
   },
   {
@@ -68,7 +68,7 @@ export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
     end: "08:00",
     type: "PRE_HOSPITAL",
     colorKey: "pink",
-    policyKey: "PRE_HOSPITAL_12D",
+    policyKey: "PRE_HOSPITAL_21D",
     bookable: true,
   },
   {
