@@ -627,6 +627,19 @@ function PatientAppointment({
     });
   }
 
+  function rescheduleTermin(id: string, newSlotId: string) {
+    run(
+      () => apiSend(`/api/appointments/${id}/reschedule`, "POST", { newSlotId }),
+      {
+        success: "Termín presunutý",
+        onDone: () => {
+          qc.invalidateQueries({ queryKey: ["patient-upcoming", patientId] });
+          qc.invalidateQueries({ queryKey: ["calendar"] });
+        },
+      },
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="mb-4 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
@@ -668,6 +681,7 @@ function PatientAppointment({
           appt={appt}
           busy={busy}
           onCancel={(reason) => cancelTermin(appt.id, reason)}
+          onReschedule={(newSlotId) => rescheduleTermin(appt.id, newSlotId)}
           onPrint={() => setPrintAppt(appt)}
         />
       ))}
@@ -824,23 +838,65 @@ function PatientAppointment({
   );
 }
 
+// Appointment kinds the calendar slot picker / reschedule flow support.
+const PICKER_TYPES = ["DISPENSARY", "ECHO", "PRE_HOSPITAL"] as const;
+type PickerType = (typeof PICKER_TYPES)[number];
+
+interface RescheduleOptionLite {
+  slot: { id: string; startAt: string };
+  dayIso: string;
+}
+
 function UpcomingTermin({
   appt,
   busy,
   onCancel,
+  onReschedule,
   onPrint,
 }: {
   appt: UpcomingDTO;
   busy: boolean;
   onCancel: (reason: string) => void;
+  onReschedule: (newSlotId: string) => void;
   onPrint: () => void;
 }) {
-  const [confirming, setConfirming] = useState(false);
+  const { toast } = useToast();
+  const [mode, setMode] = useState<"view" | "cancel" | "reschedule">("view");
   const [reason, setReason] = useState("");
+  const [options, setOptions] = useState<RescheduleOptionLite[] | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const typeLabel =
     TYPE_META[appt.appointmentType as AppointmentTypeLit]?.label ??
     appt.appointmentType;
+  const pickerType = (PICKER_TYPES as readonly string[]).includes(
+    appt.appointmentType,
+  )
+    ? (appt.appointmentType as PickerType)
+    : null;
+
+  async function openReschedule() {
+    setMode("reschedule");
+    setOptions(null);
+    try {
+      const r = await apiGet<{ options: RescheduleOptionLite[] }>(
+        `/api/appointments/${appt.id}/reschedule-options`,
+      );
+      setOptions(r.options);
+    } catch (e) {
+      setOptions([]);
+      toast(
+        e instanceof Error ? e.message : "Načítanie termínov zlyhalo",
+        "error",
+      );
+    }
+  }
+
+  function pick(newSlotId: string) {
+    setMode("view");
+    setPickerOpen(false);
+    onReschedule(newSlotId);
+  }
 
   return (
     <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
@@ -861,7 +917,7 @@ function UpcomingTermin({
             {clinicTime(appt.startAt)}–{clinicTime(appt.endAt)} · {typeLabel}
           </p>
         </div>
-        {!confirming && (
+        {mode === "view" && (
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
@@ -874,7 +930,14 @@ function UpcomingTermin({
             </button>
             <button
               type="button"
-              onClick={() => setConfirming(true)}
+              onClick={openReschedule}
+              className="rounded-md px-2 py-1 text-sm font-medium text-slate-700 transition hover:bg-emerald-100"
+            >
+              Presunúť
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("cancel")}
               className="rounded-md px-2 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50"
             >
               Zrušiť termín
@@ -883,7 +946,7 @@ function UpcomingTermin({
         )}
       </div>
 
-      {confirming && (
+      {mode === "cancel" && (
         <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
           <TextareaField
             label="Dôvod zrušenia"
@@ -899,7 +962,7 @@ function UpcomingTermin({
               fullWidth
               disabled={busy}
               onClick={() => {
-                setConfirming(false);
+                setMode("view");
                 setReason("");
               }}
             >
@@ -917,6 +980,72 @@ function UpcomingTermin({
             </Button>
           </div>
         </div>
+      )}
+
+      {mode === "reschedule" && (
+        <div className="mt-2 space-y-2 border-t border-emerald-200 pt-2">
+          <p className="text-sm text-slate-600">
+            Najbližšie voľné termíny rovnakého typu ({typeLabel}):
+          </p>
+          {options === null ? (
+            <div className="flex justify-center py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+            </div>
+          ) : options.length === 0 ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              Pre tento typ nie je žiadny voľný termín.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {options.map((opt) => (
+                <li key={opt.slot.id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => pick(opt.slot.id)}
+                    className="flex w-full items-center justify-between rounded-lg border border-emerald-200 bg-white px-3 py-2 text-left text-sm transition hover:border-emerald-400 hover:bg-emerald-50/50 disabled:opacity-50"
+                  >
+                    <span className="font-medium text-slate-800">
+                      {clinicDayChip(opt.dayIso)}
+                    </span>
+                    <span className="font-mono tabular-nums text-slate-600">
+                      {clinicTime(opt.slot.startAt)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {pickerType && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setPickerOpen(true)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-500 transition hover:border-slate-400 hover:text-slate-700 disabled:opacity-50"
+            >
+              <CalendarSearch className="h-3.5 w-3.5" />
+              Vybrať termín z kalendára
+            </button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            fullWidth
+            disabled={busy}
+            onClick={() => setMode("view")}
+          >
+            Späť
+          </Button>
+        </div>
+      )}
+
+      {pickerOpen && pickerType && (
+        <SlotPickerCalendar
+          type={pickerType}
+          typeLabel={typeLabel}
+          onPick={(slot) => pick(slot.id)}
+          onClose={() => setPickerOpen(false)}
+        />
       )}
     </div>
   );
