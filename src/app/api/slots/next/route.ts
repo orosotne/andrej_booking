@@ -9,9 +9,11 @@ import type { AppointmentTypeLit } from "@/lib/slot-engine/types";
 const querySchema = z.object({
   type: z.enum(["DISPENSARY", "ECHO", "PRE_HOSPITAL"]),
   // 0 = "najbližší termín" (od zajtra ďalej, nie dnes);
-  // 3/6/11 = prvý voľný termín o N mesiacov a neskôr.
-  months: z.coerce.number().int().refine((n) => [0, 3, 6, 11].includes(n), {
-    message: "months musí byť 0, 3, 6 alebo 11",
+  // 3/5.5/11 = prvý voľný termín o N mesiacov a neskôr. 5.5 stojí za tlačidlom
+  // "o 6 mes." — polročná kontrola sa smie objednať už od 5½ mesiaca. 6 už
+  // žiadny klient neposiela, ostáva platné kvôli záložkám otvoreným pred zmenou.
+  months: z.coerce.number().refine((n) => [0, 3, 5.5, 6, 11].includes(n), {
+    message: "months musí byť 0, 3, 5.5, 6 alebo 11",
   }),
   // Voliteľný horný strop "do N mesiacov" (zrkadlí dolný `months`). Keď je
   // zadaný, slot musí začať pred dnes+N mesiacov. Bez neho je horizont
@@ -45,8 +47,19 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
     months === 0
       ? { status: { not: "CLOSED" as const }, date: { gt: dateOnly(toIsoDate(now)) } }
       : { status: { not: "CLOSED" as const } };
-  const monthOffset = (n: number) =>
-    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + n, now.getUTCDate()));
+  // Celé mesiace posunieme cez UTC mesiac, zlomok mesiaca ako dni (5.5 → 5 mes.
+  // + 15 dní), aby horizont "o 6 mes." mohol siahať na 5½ mesiaca.
+  const monthOffset = (n: number) => {
+    const whole = Math.floor(n);
+    const days = Math.round((n - whole) * 30);
+    return new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + whole,
+        now.getUTCDate() + days,
+      ),
+    );
+  };
   const startAt =
     months === 0 && maxMonths === undefined
       ? undefined

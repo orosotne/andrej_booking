@@ -454,6 +454,7 @@ const BOOK_TYPES: ReadonlyArray<{
   { type: "PRE_HOSPITAL", label: "Akútne", category: "AKUTNE" },
 ];
 
+// Polročná kontrola sa hľadá od 5½ mesiaca, tlačidlo pritom zostáva "o 6 mes.".
 const HORIZONS: ReadonlyArray<{
   months: number;
   maxMonths?: number;
@@ -461,7 +462,7 @@ const HORIZONS: ReadonlyArray<{
 }> = [
   { months: 0, maxMonths: 1, label: "do 1 mes." },
   { months: 3, label: "o 3 mes." },
-  { months: 6, label: "o 6 mes." },
+  { months: 5.5, label: "o 6 mes." },
   { months: 11, label: "o 11 mes." },
 ];
 

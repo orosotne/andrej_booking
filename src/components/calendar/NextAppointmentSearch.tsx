@@ -40,11 +40,12 @@ const CATEGORIES: { key: NextType; label: string; color: string }[] = [
 ];
 
 // months=0 → najbližší voľný termín (od zajtra, nie dnes);
-// 3/6/11 → prvý voľný termín o aspoň toľko mesiacov.
+// 3/5.5/11 → prvý voľný termín o aspoň toľko mesiacov. Polročná kontrola sa
+// hľadá od 5½ mesiaca, tlačidlo pritom zostáva "o 6 mes.".
 const WINDOWS: { months: number; label: string }[] = [
   { months: 0, label: "Najbližší" },
   { months: 3, label: "o 3 mes." },
-  { months: 6, label: "o 6 mes." },
+  { months: 5.5, label: "o 6 mes." },
   { months: 11, label: "o 11 mes." },
 ];
 
