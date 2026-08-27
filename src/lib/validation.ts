@@ -26,6 +26,15 @@ export const calendarRangeSchema = z.object({
   to: isoDate,
 });
 
+// Štatistika objednávok. `from`/`to` sú voliteľné — keď chýbajú, API použije
+// celý rozsah dát (od prvej objednávky po dnešok), čo potrebuje ročný pohľad,
+// ktorý dopredu nevie, odkedy sa objednáva.
+export const statisticsQuerySchema = z.object({
+  granularity: z.enum(["day", "week", "month", "year"]),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+});
+
 // Dovolenka (rozsah zatvorených dní). Spravuje ju ADMIN, preto bez hesla;
 // dôvod je nepovinný. Rovnaká schéma slúži na vytvorenie aj zmenu dátumov.
 export const vacationCreateSchema = z

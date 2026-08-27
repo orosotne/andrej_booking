@@ -1,4 +1,5 @@
 import type { AppointmentTypeLit, SlotStatusLit } from "./slot-engine/types";
+import type { Granularity, StatCounts } from "./statistics";
 
 // Serialized DTOs returned by the API (Dates become ISO strings over JSON).
 // This is the contract between the API routes and the calendar UI.
@@ -98,4 +99,23 @@ export interface AdminUserDTO {
   twoFactorEnabled: boolean;
   createdAt: string; // ISO instant
   passwordChangedAt: string | null; // ISO instant of last password set/change
+}
+
+// Booking statistics for one period (day / week / month / year). `key` is the
+// bucket id ("2026-07", "2026-W31", …), `label` its clinic-locale name, and
+// `counts` the five reported categories; see lib/statistics.ts.
+export interface StatBucketDTO {
+  key: string;
+  label: string;
+  counts: StatCounts;
+  total: number;
+}
+
+export interface StatisticsResponse {
+  granularity: Granularity;
+  from: string; // YYYY-MM-DD, clinic-local booking date
+  to: string;
+  buckets: StatBucketDTO[];
+  totals: StatCounts;
+  total: number;
 }

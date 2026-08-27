@@ -2,6 +2,7 @@
 export const ADMIN_ITEMS = [
   { href: "/sablona", label: "Šablóna" },
   { href: "/objednavky", label: "Objednaní ľudia" },
+  { href: "/statistika", label: "Štatistika" },
   { href: "/dovolenky", label: "Dovolenky, zatvorené dni a sloty" },
   { href: "/nastavenia", label: "Nastavenia" },
   { href: "/pouzivatelia", label: "Používatelia" },
