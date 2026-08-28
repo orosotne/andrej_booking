@@ -154,6 +154,13 @@ describe("booking-day averages (Thursdays + Fridays)", () => {
     expect(isBookingDay("2026-08-31")).toBe(false); // Monday
   });
 
+  it("excludes public holidays even when they fall on Thu/Fri", () => {
+    expect(isBookingDay("2026-12-24")).toBe(false); // Štedrý deň, a Thursday
+    expect(isBookingDay("2026-04-03")).toBe(false); // Veľký piatok
+    // Thu 2. 4. counts, Good Friday 3. 4. does not.
+    expect(bookingDayPeriods("day", "2026-04-02", "2026-04-03")).toBe(1);
+  });
+
   it("counts periods by the booking days a range contains", () => {
     // July 2026 has 5 Thursdays and 5 Fridays.
     expect(bookingDayPeriods("day", "2026-07-01", "2026-07-31")).toBe(10);

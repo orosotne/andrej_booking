@@ -182,9 +182,9 @@ export function StatReport({
         </div>
         {averages && (
           <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
-            Priemer je počítaný len z ambulantných dní (štvrtok a piatok) — z
-            objednávok zadaných vo štvrtok alebo piatok; načatý týždeň či
-            mesiac sa započíta pomerne podľa počtu týchto dní.
+            Priemer je počítaný len z ambulantných dní — štvrtkov a piatkov;
+            štátne sviatky sú z priemeru vylúčené. Načatý týždeň či mesiac sa
+            započíta pomerne podľa počtu týchto dní.
           </p>
         )}
       </section>

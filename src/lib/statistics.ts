@@ -18,6 +18,7 @@ import {
   isoWeekStart,
   isoWeekYear,
 } from "./format";
+import { holidayName } from "./holidays-sk";
 import type {
   AppointmentTypeLit,
   PatientCategoryLit,
@@ -303,12 +304,17 @@ export function aggregate(
 // ---------------------------------------------------------------------------
 // Averages. The clinic books patients on Thursdays and Fridays, so a fair
 // "average per day/week/month/year" must be measured in those booking days:
-// a Monday with zero bookings is not a slow day, it is no day at all.
+// a Monday with zero bookings is not a slow day, it is no day at all. The
+// same goes for a public holiday falling on a Thursday or Friday — the
+// clinic is closed, so holidays are excluded from the averages entirely.
 
-/** True for Thursday and Friday — the clinic's booking days. */
+/**
+ * True for Thursday and Friday — the clinic's booking days — unless the day
+ * is a Slovak public holiday, when the clinic is closed.
+ */
 export function isBookingDay(isoDate: string): boolean {
   const dow = new Date(`${isoDate}T00:00:00.000Z`).getUTCDay();
-  return dow === 4 || dow === 5;
+  return (dow === 4 || dow === 5) && holidayName(isoDate) === null;
 }
 
 function countBookingDays(fromIso: string, toIso: string): number {
