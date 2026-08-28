@@ -9,6 +9,7 @@
 
 import {
   CLINIC_MONTHS_SHORT,
+  addMonths,
   clinicDate,
   clinicMonthLabel,
   clinicShortDate,
@@ -33,12 +34,23 @@ export const STAT_CATEGORIES = [
 export type StatCategory = (typeof STAT_CATEGORIES)[number];
 
 export const STAT_CATEGORY_LABEL: Record<StatCategory, string> = {
-  LEAD_0_100: "Termín do 100 dní",
-  LEAD_100_250: "Termín 100 – 250 dní",
-  LEAD_250_PLUS: "Termín nad 250 dní",
+  LEAD_0_100: "Dispenzár do 100 dní",
+  LEAD_100_250: "Dispenzár 100 – 250 dní",
+  LEAD_250_PLUS: "Dispenzár nad 250 dní",
   ECHO: "Echo",
   AKUTNE: "Akútne vyšetrenie",
 };
+
+/**
+ * The three lead-time bands together form the "dispensary" subtotal reported
+ * next to the grand total. (Strictly they also carry the rare first-visit and
+ * "iné" bookings — see classifyAppointment.)
+ */
+export const DISPENSARY_CATEGORIES = [
+  "LEAD_0_100",
+  "LEAD_100_250",
+  "LEAD_250_PLUS",
+] as const satisfies readonly StatCategory[];
 
 /** Short forms for the chart legend and narrow table headers. */
 export const STAT_CATEGORY_SHORT: Record<StatCategory, string> = {
@@ -252,6 +264,10 @@ export function sumCounts(counts: StatCounts): number {
   return STAT_CATEGORIES.reduce((n, c) => n + counts[c], 0);
 }
 
+export function sumDispensary(counts: StatCounts): number {
+  return DISPENSARY_CATEGORIES.reduce((n, c) => n + counts[c], 0);
+}
+
 /**
  * Groups appointments into a continuous series of buckets over [from, to].
  * Rows outside the range are ignored, so the caller can pass a slightly wider
@@ -282,4 +298,113 @@ export function aggregate(
     counts,
     total: sumCounts(counts),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Averages. The clinic books patients on Thursdays and Fridays, so a fair
+// "average per day/week/month/year" must be measured in those booking days:
+// a Monday with zero bookings is not a slow day, it is no day at all.
+
+/** True for Thursday and Friday — the clinic's booking days. */
+export function isBookingDay(isoDate: string): boolean {
+  const dow = new Date(`${isoDate}T00:00:00.000Z`).getUTCDay();
+  return dow === 4 || dow === 5;
+}
+
+function countBookingDays(fromIso: string, toIso: string): number {
+  let n = 0;
+  for (let d = fromIso; d <= toIso; d = isoAddDays(d, 1)) {
+    if (isBookingDay(d)) n += 1;
+  }
+  return n;
+}
+
+/**
+ * How many periods of the given granularity the range [from, to] covers,
+ * measured in booking days. A day period is one Thursday or Friday; longer
+ * periods only partially inside the range count fractionally by how many of
+ * their booking days the range contains — a month with 4 of its 8 booking
+ * days in range counts as half a month, so partial periods do not dilute
+ * the average.
+ */
+export function bookingDayPeriods(
+  granularity: Granularity,
+  fromIso: string,
+  toIso: string,
+): number {
+  if (fromIso > toIso) return 0;
+  if (granularity === "day") return countBookingDays(fromIso, toIso);
+  if (granularity === "week") return countBookingDays(fromIso, toIso) / 2;
+
+  const fullBucket = new Map<string, number>();
+  let periods = 0;
+  for (let d = fromIso; d <= toIso; d = isoAddDays(d, 1)) {
+    if (!isBookingDay(d)) continue;
+    const key = bucketKey(granularity, d);
+    let full = fullBucket.get(key);
+    if (full === undefined) {
+      full =
+        granularity === "month"
+          ? countBookingDays(`${key}-01`, isoAddDays(addMonths(`${key}-01`, 1), -1))
+          : countBookingDays(`${key}-01-01`, `${key}-12-31`);
+      fullBucket.set(key, full);
+    }
+    periods += 1 / full;
+  }
+  return periods;
+}
+
+/**
+ * Category counts of the bookings made on a Thursday or Friday inside
+ * [from, to] — the numerator of the booking-day averages.
+ */
+export function bookingDayTotals(
+  appointments: StatInput[],
+  fromIso: string,
+  toIso: string,
+): StatCounts {
+  const counts = emptyCounts();
+  for (const a of appointments) {
+    const bookedOn = clinicDate(a.createdAt);
+    if (bookedOn < fromIso || bookedOn > toIso || !isBookingDay(bookedOn)) {
+      continue;
+    }
+    counts[classifyAppointment(a)] += 1;
+  }
+  return counts;
+}
+
+/** Average bookings per period, computed from booking days (Thu + Fri) only. */
+export interface StatAverages {
+  /** The window the averages actually cover — the requested range clamped to
+   * the first booking ever made and to today. */
+  from: string;
+  to: string;
+  /** Booking-day periods inside the window; fractional for partial periods. */
+  periods: number;
+  counts: StatCounts;
+  dispensary: number;
+  total: number;
+}
+
+export function computeAverages(
+  appointments: StatInput[],
+  granularity: Granularity,
+  fromIso: string,
+  toIso: string,
+): StatAverages | null {
+  const periods = bookingDayPeriods(granularity, fromIso, toIso);
+  if (periods <= 0) return null;
+
+  const totals = bookingDayTotals(appointments, fromIso, toIso);
+  const counts = emptyCounts();
+  for (const c of STAT_CATEGORIES) counts[c] = totals[c] / periods;
+  return {
+    from: fromIso,
+    to: toIso,
+    periods,
+    counts,
+    dispensary: sumDispensary(totals) / periods,
+    total: sumCounts(totals) / periods,
+  };
 }

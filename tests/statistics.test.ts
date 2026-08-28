@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   aggregate,
+  bookingDayPeriods,
+  bookingDayTotals,
   bucketKey,
   bucketKeys,
   classifyAppointment,
+  computeAverages,
+  isBookingDay,
   leadDays,
   type StatInput,
 } from "@/lib/statistics";
@@ -139,5 +143,53 @@ describe("aggregate", () => {
     const days = aggregate(rows, "day", "2026-07-20", "2026-07-20");
     expect(days).toHaveLength(1);
     expect(days[0].total).toBe(4);
+  });
+});
+
+describe("booking-day averages (Thursdays + Fridays)", () => {
+  it("recognises Thursday and Friday as booking days", () => {
+    expect(isBookingDay("2026-08-27")).toBe(true); // Thursday
+    expect(isBookingDay("2026-08-28")).toBe(true); // Friday
+    expect(isBookingDay("2026-08-29")).toBe(false); // Saturday
+    expect(isBookingDay("2026-08-31")).toBe(false); // Monday
+  });
+
+  it("counts periods by the booking days a range contains", () => {
+    // July 2026 has 5 Thursdays and 5 Fridays.
+    expect(bookingDayPeriods("day", "2026-07-01", "2026-07-31")).toBe(10);
+    // One full ISO week = both its booking days.
+    expect(bookingDayPeriods("week", "2026-07-06", "2026-07-12")).toBe(1);
+    // Mon–Thu covers only the Thursday: half a week.
+    expect(bookingDayPeriods("week", "2026-07-06", "2026-07-09")).toBe(0.5);
+    // August 2026 has 8 booking days; the first fortnight holds 4 of them.
+    expect(bookingDayPeriods("month", "2026-08-01", "2026-08-31")).toBe(1);
+    expect(bookingDayPeriods("month", "2026-08-01", "2026-08-14")).toBe(0.5);
+    expect(bookingDayPeriods("year", "2026-01-01", "2026-12-31")).toBeCloseTo(1);
+    expect(bookingDayPeriods("day", "2026-07-10", "2026-07-09")).toBe(0);
+  });
+
+  it("only counts bookings made on a Thursday or Friday", () => {
+    const rows = [
+      appt("2026-07-09", "2026-07-30"), // Thursday
+      appt("2026-07-10", "2026-07-30"), // Friday
+      appt("2026-07-06", "2026-07-30"), // Monday — ignored
+    ];
+    const totals = bookingDayTotals(rows, "2026-07-01", "2026-07-31");
+    expect(totals.LEAD_0_100).toBe(2);
+  });
+
+  it("averages over booking-day periods and skips barren ranges", () => {
+    const rows = [
+      ...Array.from({ length: 3 }, () => appt("2026-07-09", "2026-08-01")),
+      appt("2026-07-10", "2027-06-01"),
+    ];
+    // Two booking days (Thu 9. and Fri 10.) → 2 bookings a day on average.
+    const daily = computeAverages(rows, "day", "2026-07-06", "2026-07-12");
+    expect(daily?.periods).toBe(2);
+    expect(daily?.total).toBe(2);
+    expect(daily?.counts.LEAD_0_100).toBe(1.5);
+    expect(daily?.dispensary).toBe(2);
+    // Mon–Wed holds no booking day at all.
+    expect(computeAverages(rows, "day", "2026-07-06", "2026-07-08")).toBeNull();
   });
 });

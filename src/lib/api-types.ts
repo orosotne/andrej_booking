@@ -1,5 +1,5 @@
 import type { AppointmentTypeLit, SlotStatusLit } from "./slot-engine/types";
-import type { Granularity, StatCounts } from "./statistics";
+import type { Granularity, StatAverages, StatCounts } from "./statistics";
 
 // Serialized DTOs returned by the API (Dates become ISO strings over JSON).
 // This is the contract between the API routes and the calendar UI.
@@ -118,4 +118,7 @@ export interface StatisticsResponse {
   buckets: StatBucketDTO[];
   totals: StatCounts;
   total: number;
+  /** Per-period averages from booking days (Thu + Fri) only; null when the
+   * range contains none. */
+  averages: StatAverages | null;
 }

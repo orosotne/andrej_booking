@@ -9,6 +9,7 @@ import { clinicDate, isoAddDays, todayIso } from "@/lib/format";
 import {
   STAT_CATEGORIES,
   aggregate,
+  computeAverages,
   emptyCounts,
   sumCounts,
   type StatInput,
@@ -31,14 +32,16 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
   });
 
   const today = todayIso();
-  // A missing range means "everything we have" — the year view cannot know the
-  // first booking's date before asking for it.
-  const fallbackFrom = from
-    ? null
-    : (
-        await prisma.appointment.aggregate({ _min: { createdAt: true } })
-      )._min.createdAt;
-  const fromIso = from ?? (fallbackFrom ? clinicDate(fallbackFrom.toISOString()) : today);
+  // The first booking ever made bounds both the "everything we have" fallback
+  // range and the averaging window (empty months before go-live must not
+  // dilute the averages).
+  const firstCreatedAt = (
+    await prisma.appointment.aggregate({ _min: { createdAt: true } })
+  )._min.createdAt;
+  const firstIso = firstCreatedAt
+    ? clinicDate(firstCreatedAt.toISOString())
+    : null;
+  const fromIso = from ?? firstIso ?? today;
   const toIso = to ?? today;
 
   const rows =
@@ -74,6 +77,16 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
     for (const c of STAT_CATEGORIES) totals[c] += b.counts[c];
   }
 
+  // Averages run over the requested range clamped to the first booking ever
+  // and to today, so months before go-live and days yet to come count for
+  // nothing.
+  const avgFrom = firstIso && firstIso > fromIso ? firstIso : fromIso;
+  const avgTo = toIso < today ? toIso : today;
+  const averages =
+    avgFrom <= avgTo
+      ? computeAverages(inputs, granularity, avgFrom, avgTo)
+      : null;
+
   const body: StatisticsResponse = {
     granularity,
     from: fromIso,
@@ -81,6 +94,7 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
     buckets,
     totals,
     total: sumCounts(totals),
+    averages,
   };
   return NextResponse.json(body);
 });
