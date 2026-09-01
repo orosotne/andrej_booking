@@ -17,6 +17,9 @@ export async function releaseDueSlots(now: Date = new Date()): Promise<number> {
       releaseAt: { not: null, lte: now },
       appointmentType: { notIn: ["CONSULTATION_BLOCKED", "ECHO_DEPARTMENT_BLOCKED"] },
     },
+    // typeOverride is deliberately NOT cleared: a hand-picked "určenie" is not
+    // a lock, and clearing it would silently re-expose the slot to the next
+    // template re-apply.
     data: { status: "AVAILABLE", manualLock: false, lockedReason: null },
   });
   return result.count;

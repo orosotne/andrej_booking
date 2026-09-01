@@ -246,6 +246,10 @@ model AppointmentSlot {
   ruleId          String?         @map("rule_id")
   lockedReason    String?         @map("locked_reason")
   manualLock      Boolean         @default(false) @map("manual_lock")
+  // Set when the type was changed by hand (PATCH /api/slots/[id]). Like
+  // manualLock it shields the slot from diffDaySlots, so a template re-apply
+  // never reverts the designation.
+  typeOverride    Boolean         @default(false) @map("type_override")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 

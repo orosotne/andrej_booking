@@ -170,8 +170,10 @@ export interface ExistingSlot {
   // Current attributes, so a block that changed but kept the same start time
   // (a release-rule, type, or colour edit) can be refreshed in place rather
   // than left stale. manualLock guards the manual-lock feature from being
-  // undone by a template re-apply.
+  // undone by a template re-apply; typeOverride does the same for a slot whose
+  // "určenie" was changed by hand (PATCH /api/slots/[id]).
   manualLock: boolean;
+  typeOverride: boolean;
   appointmentType: AppointmentTypeLit;
   status: SlotStatusLit;
   releaseAt: Date | null;
@@ -204,10 +206,16 @@ export interface DayDiff {
  *                                 release time/status) IN PLACE when the rule
  *                                 changed without moving the start time.
  *
- * A slot is only refreshed when it is genuinely free to reshape: booked and
- * manually-locked slots are skipped (a template edit must never move a patient
- * or lift a manual lock), and only AVAILABLE/LOCKED slots are eligible — a
- * BLOCKED slot may be a closed (vacation) day, which a re-apply must not reopen.
+ * A slot is only refreshed when it is genuinely free to reshape: booked,
+ * manually-locked and manually re-designated slots are skipped (a template edit
+ * must never move a patient, lift a manual lock, or undo a hand-picked
+ * "určenie"), and only AVAILABLE/LOCKED slots are eligible — a BLOCKED slot may
+ * be a closed (vacation) day, which a re-apply must not reopen.
+ *
+ * Note this covers the refresh branch only: a re-designated slot whose time
+ * block disappears from the template is still deleted, exactly as a
+ * manually-locked one is. That only happens on a deliberate, dry-run-previewed
+ * template edit, which reports the deletion count.
  */
 export function diffDaySlots(
   desired: DesiredSlot[],
@@ -230,7 +238,7 @@ export function diffDaySlots(
       continue;
     }
     // Matched. Only refresh free, schedulable slots.
-    if (e.hasActiveAppointment || e.manualLock) continue;
+    if (e.hasActiveAppointment || e.manualLock || e.typeOverride) continue;
     if (e.status !== "AVAILABLE" && e.status !== "LOCKED") continue;
     const changed =
       e.appointmentType !== want.appointmentType ||

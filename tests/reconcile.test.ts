@@ -236,6 +236,7 @@ describe("diffDaySlots", () => {
     startAt,
     hasActiveAppointment: false,
     manualLock: false,
+    typeOverride: false,
     appointmentType: "DISPENSARY",
     status: "AVAILABLE",
     releaseAt: new Date(0),
@@ -345,6 +346,31 @@ describe("diffDaySlots", () => {
     expect(diff.toUpdate).toEqual([]);
   });
 
+  it("never refreshes a matched slot whose type was changed by hand", () => {
+    const start = at("2026-07-02T05:00:00Z");
+    const diff = diffDaySlots(
+      [desiredAt(start)], // template still says DISPENSARY / white
+      [
+        existingAt("t", start, {
+          typeOverride: true,
+          appointmentType: "PRE_HOSPITAL",
+          color: "pink",
+        }),
+      ],
+    );
+    expect(diff.toUpdate).toEqual([]);
+  });
+
+  it("still deletes a re-designated slot dropped from the template", () => {
+    // Deliberate parity with manualLock: typeOverride guards the refresh
+    // branch, not the delete branch.
+    const diff = diffDaySlots(
+      [],
+      [existingAt("t", at("2026-07-02T05:00:00Z"), { typeOverride: true })],
+    );
+    expect(diff.toDeleteIds).toEqual(["t"]);
+  });
+
   it("never reopens a BLOCKED (closed-day) matched slot", () => {
     const start = at("2026-07-02T05:00:00Z");
     const diff = diffDaySlots(
@@ -398,6 +424,7 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
     const base = {
       startAt: desired[0].startAt,
       manualLock: false,
+      typeOverride: false,
       appointmentType: "ECHO" as const,
       releaseAt: new Date(0),
       color: "blue",
@@ -419,5 +446,31 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
     ]);
     expect(booked.toUpdate).toEqual([]);
     expect(booked.toDeleteIds).toEqual([]);
+  });
+
+  it("a hand-picked designation survives a re-apply, PENTA rule included", () => {
+    // isPasswordOnlySlot shapes the DESIRED slot, so the template still wants
+    // {ECHO, yellow, LOCKED}. diffDaySlots must skip the row anyway: the PENTA
+    // rule trumps every release policy, but not an explicit human decision
+    // about a slot that already exists.
+    const day = dateOnly("2027-02-04");
+    const desired = expandTemplateRules([echo("13:30", "13:50")], day, now);
+    expect(desired[0].color).toBe("yellow"); // guard: the rule really did fire
+
+    const diff = diffDaySlots(desired, [
+      {
+        id: "redesignated",
+        startAt: desired[0].startAt,
+        hasActiveAppointment: false,
+        manualLock: false,
+        typeOverride: true,
+        appointmentType: "DISPENSARY",
+        status: "LOCKED",
+        releaseAt: null,
+        color: "white",
+      },
+    ]);
+    expect(diff.toUpdate).toEqual([]);
+    expect(diff.toDeleteIds).toEqual([]);
   });
 });

@@ -89,6 +89,7 @@ export async function syncTemplateToFutureDays(
           appointmentType: true,
           color: true,
           manualLock: true,
+      typeOverride: true,
           appointments: {
             where: { status: { notIn: ["CANCELLED", "RESCHEDULED"] } },
             select: { id: true },
@@ -116,6 +117,7 @@ export async function syncTemplateToFutureDays(
       startAt: s.startAt,
       hasActiveAppointment: s.appointments.length > 0,
       manualLock: s.manualLock,
+    typeOverride: s.typeOverride,
       appointmentType: s.appointmentType as AppointmentTypeLit,
       status: s.status as SlotStatusLit,
       releaseAt: s.releaseAt,

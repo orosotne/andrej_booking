@@ -47,6 +47,7 @@ async function main() {
       status: true,
       releaseAt: true,
       manualLock: true,
+      typeOverride: true,
       startAt: true,
       color: true,
       calendarDay: { select: { date: true } },
@@ -59,6 +60,7 @@ async function main() {
     status: string;
     releaseAt: Date | null;
     manualLock: boolean;
+    typeOverride: boolean;
     color: string;
     label: string; // "2027-02-04 13:30" pre výpis
   }
@@ -75,6 +77,7 @@ async function main() {
       status: s.status,
       releaseAt: s.releaseAt,
       manualLock: s.manualLock,
+      typeOverride: s.typeOverride,
       color: s.color,
       label: `${toIsoDate(s.calendarDay.date)} ${hhmm}`,
     });
@@ -86,6 +89,7 @@ async function main() {
   let fromAvailable = 0;
   let fromLocked = 0;
   let keptCancelled = 0;
+  let keptOverridden = 0;
   let alreadyOk = 0;
   let firstLabel: string | null = null;
   let lastLabel: string | null = null;
@@ -97,6 +101,12 @@ async function main() {
     }
     if (t.status === "CANCELLED") {
       keptCancelled++;
+      continue;
+    }
+    if (t.typeOverride) {
+      // Určenie tohto slotu niekto zmenil ručne (PATCH /api/slots/[id]) —
+      // rovnako ako pri re-apply šablóny má ručné rozhodnutie prednosť.
+      keptOverridden++;
       continue;
     }
     if (t.status === "BLOCKED" || t.manualLock) {
@@ -123,7 +133,8 @@ async function main() {
       `\n  → zablokovať (LOCKED, bez release, žltá): ${toLockIds.length} (z toho voľných ${fromAvailable}, zamknutých ${fromLocked})` +
       `\n  → BLOCKED/manuálny zámok, iba release_at + žltá farba: ${fixKeepStatusIds.length}` +
       `\n  → už v poriadku: ${alreadyOk}` +
-      `\n  → NEDOTKNUTÉ obsadené: ${keptBooked.length}, zrušené: ${keptCancelled}`,
+      `\n  → NEDOTKNUTÉ obsadené: ${keptBooked.length}, zrušené: ${keptCancelled}` +
+      `, ručne preurčené: ${keptOverridden}`,
   );
   if (firstLabel) console.log(`  → prvý menený slot: ${firstLabel}, posledný: ${lastLabel}`);
   if (keptBooked.length > 0) {

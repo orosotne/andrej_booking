@@ -281,6 +281,8 @@ export async function unlockSlot(input: UnlockInput) {
 
     const updated = await tx.appointmentSlot.update({
       where: { id: slot.id },
+      // typeOverride is deliberately left alone — opening a re-designated slot
+      // must keep its designation.
       data: { status: "AVAILABLE", lockedReason: input.reason ?? null, manualLock: false },
     });
     await recordAudit(tx, {
