@@ -10,6 +10,7 @@ import {
   type DaySummary,
   type CapacitySlot,
 } from "@/lib/dashboard";
+import { plural } from "@/lib/format";
 
 // Reference: 2026-06-01 Mon … 03 Wed, 04 Thu, 05 Fri. Clinic works Wed/Thu/Fri.
 const day = (date: string, p: Partial<DaySummary> = {}): DaySummary => ({
@@ -253,5 +254,24 @@ describe("trendRange", () => {
       from: "2025-02-01",
       to: "2026-01-05",
     });
+  });
+});
+
+describe("plural (Slovak count-noun agreement)", () => {
+  const slot = (n: number) => `${n} ${plural(n, "slot", "sloty", "slotov")}`;
+
+  it("uses the singular for exactly one", () => {
+    expect(slot(1)).toBe("1 slot");
+  });
+
+  it("uses the nominative plural for two to four", () => {
+    expect(slot(2)).toBe("2 sloty");
+    expect(slot(4)).toBe("4 sloty");
+  });
+
+  it("uses the genitive plural for five and up, and for zero", () => {
+    expect(slot(5)).toBe("5 slotov");
+    expect(slot(11)).toBe("11 slotov");
+    expect(slot(0)).toBe("0 slotov");
   });
 });

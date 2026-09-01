@@ -151,3 +151,18 @@ export const CLINIC_MONTHS_SHORT = Array.from({ length: 12 }, (_, i) =>
     new Date(Date.UTC(2021, i, 1)),
   ),
 );
+
+/**
+ * Slovak count-noun agreement: 1 → nominative singular, 2–4 → nominative
+ * plural, 5+ (and 0) → genitive plural. Without this "1 slotov" reads as a bug.
+ */
+export function plural(
+  n: number,
+  one: string,
+  few: string,
+  many: string,
+): string {
+  const abs = Math.abs(n);
+  if (abs === 1) return one;
+  return abs >= 2 && abs <= 4 ? few : many;
+}

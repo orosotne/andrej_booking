@@ -3,7 +3,7 @@
 import { Unlock, Lock } from "lucide-react";
 import type { DashboardReleaseDTO, LockedSlotDTO } from "@/lib/api-types";
 import { TYPE_META } from "@/lib/slot-style";
-import { clinicDayChip, clinicTime } from "@/lib/format";
+import { clinicDayChip, clinicTime, plural } from "@/lib/format";
 
 export function ReleaseCard({
   release,
@@ -46,7 +46,7 @@ export function ReleaseCard({
                 {clinicDayChip(nextAt.slice(0, 10))} o {clinicTime(nextAt)}
               </p>
               <p className="mt-0.5 text-xs text-slate-500 tabular-nums">
-                {nextCount} slotov
+                {nextCount} {plural(nextCount, "slot", "sloty", "slotov")}
               </p>
             </>
           ) : (

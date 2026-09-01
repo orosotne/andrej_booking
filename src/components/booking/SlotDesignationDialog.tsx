@@ -104,13 +104,15 @@ export function SlotDesignationDialog({
                   onClick={() => setDesignation(d)}
                   aria-pressed={selected}
                   className={[
-                    "rounded-lg border px-3 py-2 text-left text-sm capitalize transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30",
+                    "rounded-lg border px-3 py-2 text-left text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30",
                     selected
                       ? "border-slate-900 bg-slate-900 text-white"
                       : "border-slate-300 bg-white text-slate-900 hover:border-slate-400",
                   ].join(" ")}
                 >
-                  <span className="block font-medium">{DESIGNATION_LABEL[d]}</span>
+                  <span className="block font-medium first-letter:uppercase">
+                    {DESIGNATION_LABEL[d]}
+                  </span>
                   {isCurrent && (
                     <span
                       className={[

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { DashboardAttentionDTO } from "@/lib/api-types";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { clinicDayChip, clinicShortDate } from "@/lib/format";
+import { clinicDayChip, clinicShortDate, plural } from "@/lib/format";
 
 type Row = {
   key: string;
@@ -36,10 +36,22 @@ function buildRows(a: DashboardAttentionDTO): Row[] {
       text: (
         <>
           <span className="font-medium">
-            {a.missingDays.length} nevygenerovaných dní
+            {a.missingDays.length}{" "}
+            {plural(
+              a.missingDays.length,
+              "nevygenerovaný deň",
+              "nevygenerované dni",
+              "nevygenerovaných dní",
+            )}
           </span>{" "}
           — {a.missingDays.slice(0, 4).map(clinicDayChip).join(", ")}
-          {a.missingDays.length > 4 && ` a ${a.missingDays.length - 4} ďalších`}
+          {a.missingDays.length > 4 &&
+            ` a ${a.missingDays.length - 4} ${plural(
+              a.missingDays.length - 4,
+              "ďalší",
+              "ďalšie",
+              "ďalších",
+            )}`}
         </>
       ),
     });
