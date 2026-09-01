@@ -122,3 +122,98 @@ export interface StatisticsResponse {
    * range contains none. */
   averages: StatAverages | null;
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard (/prehlad). One aggregate payload for the whole page; see
+// lib/dashboard.ts for the pure logic and app/api/dashboard for the queries.
+// ---------------------------------------------------------------------------
+
+/** One booked patient on the focus day, in start-time order. */
+export interface DashboardAppointmentDTO {
+  id: string;
+  startAt: string; // ISO instant
+  appointmentType: AppointmentTypeLit;
+  /** Same widened type as AppointmentLiteDTO.status; render via apptStatusLabel. */
+  status: string;
+  patientName: string;
+  phone: string | null;
+}
+
+/** The day the dashboard leads with, or the compact card for the day after. */
+export interface DashboardDayDTO {
+  date: string; // YYYY-MM-DD
+  status: string;
+  note: string | null;
+  holiday: string | null;
+  counts: SlotCountsDTO;
+  /** Free slots that have not started yet — the "ešte voľných dnes" number. */
+  freeRemaining: number;
+  byType: { akut: TypeAvailDTO; disp: TypeAvailDTO; echo: TypeAvailDTO; custom: TypeAvailDTO };
+  arrived: number;
+  noShow: number;
+  completed: number;
+  /** Past appointments on this day with no attendance recorded yet. */
+  unresolved: number;
+  appointments: DashboardAppointmentDTO[];
+}
+
+/** Mirrors calendar-ui's TypeAvail so SlotAvailByType can render it directly. */
+export interface TypeAvailDTO {
+  free: number;
+  total: number;
+}
+
+export interface DashboardCapacityDTO {
+  free14: number;
+  free30: number;
+  total30: number;
+  /** ISO instant of the nearest free slot of this kind, or null if none. */
+  nextFreeAt: string | null;
+}
+
+export interface DashboardAttentionDTO {
+  /** Thu/Fri in the next 8 weeks with no slots — a silent cron-failure signal. */
+  missingDays: string[];
+  holidays: { iso: string; name: string; handled: boolean }[];
+  vacations: VacationDTO[];
+  openedWednesdays: string[];
+  /** Manually closed days (not owned by a vacation). */
+  closedDays: ClosedDayDTO[];
+}
+
+export interface DashboardReleaseDTO {
+  /** Slots opened by the cron in the last 24 h, by kind. */
+  last24h: { akut: number; disp: number; echo: number; total: number };
+  /** The next release instant and how many slots it will open. */
+  nextAt: string | null;
+  nextCount: number;
+}
+
+export interface DashboardNoShowDTO {
+  /** 0–1, or null when nothing in the window has been resolved yet. */
+  rate: number | null;
+  previousRate: number | null;
+  noShow: number;
+  resolved: number;
+  /** Past appointments still sitting on SCHEDULED — nobody marked them. */
+  unresolved: number;
+  days: number;
+}
+
+export interface DashboardResponse {
+  generatedAt: string; // ISO instant
+  today: string; // YYYY-MM-DD, clinic time
+  focus: DashboardDayDTO | null;
+  focusIsToday: boolean;
+  next: DashboardDayDTO | null;
+  capacity: {
+    akut: DashboardCapacityDTO;
+    disp: DashboardCapacityDTO;
+    echo: DashboardCapacityDTO;
+  };
+  attention: DashboardAttentionDTO;
+  release: DashboardReleaseDTO;
+  noShow: DashboardNoShowDTO;
+  /** ADMIN only — omitted entirely for other roles. */
+  manualLocks?: { total: number; upcoming: LockedSlotDTO[] };
+}

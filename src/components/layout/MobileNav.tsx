@@ -5,12 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { ADMIN_ITEMS } from "./nav-items";
-
-const PRIMARY_ITEMS = [
-  { href: "/calendar", label: "Kalendár" },
-  { href: "/pacienti", label: "Pacienti" },
-];
+import { ADMIN_ITEMS, PRIMARY_ITEMS } from "./nav-items";
 
 const isOn = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);

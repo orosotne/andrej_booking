@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Users } from "lucide-react";
+import { CalendarDays, LayoutDashboard, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITEMS = [
+  { href: "/prehlad", label: "Prehľad", Icon: LayoutDashboard },
   { href: "/calendar", label: "Kalendár", Icon: CalendarDays },
   { href: "/pacienti", label: "Pacienti", Icon: Users },
 ];
@@ -18,7 +19,7 @@ export function MobileQuickNav() {
 
   return (
     <nav
-      className="no-print grid grid-cols-2 gap-2 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden"
+      className="no-print grid grid-cols-3 gap-2 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden"
       aria-label="Rýchly prístup"
     >
       {ITEMS.map(({ href, label, Icon }) => {
@@ -29,14 +30,14 @@ export function MobileQuickNav() {
             href={href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition",
+              "flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-xs font-medium transition sm:text-sm",
               active
                 ? "bg-slate-900 text-white"
                 : "bg-slate-100 text-slate-700 hover:bg-slate-200",
             )}
           >
-            <Icon className="h-4 w-4" />
-            {label}
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{label}</span>
           </Link>
         );
       })}

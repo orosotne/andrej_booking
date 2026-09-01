@@ -1,4 +1,27 @@
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+
+/**
+ * The single definition of "a locked slot the cron will open at `now`".
+ * Shared with the dashboard so its "najbližšie uvoľnenie" can never drift from
+ * what releaseDueSlots actually opens.
+ */
+export function releasableWhere(now: Date): Prisma.AppointmentSlotWhereInput {
+  return {
+    status: "LOCKED",
+    releaseAt: { not: null, lte: now },
+    appointmentType: { notIn: ["CONSULTATION_BLOCKED", "ECHO_DEPARTMENT_BLOCKED"] },
+  };
+}
+
+/** Same predicate, but for locks that have NOT come due yet (what's next). */
+export function pendingReleaseWhere(now: Date): Prisma.AppointmentSlotWhereInput {
+  return {
+    status: "LOCKED",
+    releaseAt: { gt: now },
+    appointmentType: { notIn: ["CONSULTATION_BLOCKED", "ECHO_DEPARTMENT_BLOCKED"] },
+  };
+}
 
 /**
  * Daily release job: opens every slot whose release time has arrived.
@@ -12,11 +35,7 @@ import { prisma } from "@/lib/db";
  */
 export async function releaseDueSlots(now: Date = new Date()): Promise<number> {
   const result = await prisma.appointmentSlot.updateMany({
-    where: {
-      status: "LOCKED",
-      releaseAt: { not: null, lte: now },
-      appointmentType: { notIn: ["CONSULTATION_BLOCKED", "ECHO_DEPARTMENT_BLOCKED"] },
-    },
+    where: releasableWhere(now),
     // typeOverride is deliberately NOT cleared: a hand-picked "určenie" is not
     // a lock, and clearing it would silently re-expose the slot to the next
     // template re-apply.

@@ -112,6 +112,7 @@ export default async function AppLayout({
               className="hidden items-center gap-4 text-sm md:flex"
               aria-label="Hlavná navigácia"
             >
+              <NavLink href="/prehlad">Prehľad</NavLink>
               <NavLink href="/calendar">Kalendár</NavLink>
               <NavLink href="/pacienti">Pacienti</NavLink>
               {user.role === "ADMIN" && (
