@@ -2,10 +2,15 @@ import { describe, it, expect } from "vitest";
 import {
   nextWorkingDay,
   countSlots,
+  availByType,
+  tallyDayByType,
   openDayPasswordText,
 } from "@/lib/calendar-ui";
 import type { SlotDTO } from "@/lib/api-types";
-import type { SlotStatusLit } from "@/lib/slot-engine/types";
+import type {
+  AppointmentTypeLit,
+  SlotStatusLit,
+} from "@/lib/slot-engine/types";
 
 // Reference week (UTC): 2026-06-01 Mon, 02 Tue, 03 Wed, 04 Thu, 05 Fri,
 // 06 Sat, 07 Sun, 08 Mon ... Clinic works Wed/Thu/Fri only.
@@ -35,19 +40,33 @@ describe("nextWorkingDay", () => {
   });
 });
 
-// Only `status` and `startAt` matter to countSlots; the rest is filler.
-function slot(status: SlotStatusLit, startAt = "2026-06-03T08:00:00.000Z"): SlotDTO {
+// countSlots only reads `status` and `startAt`; availByType and tallyDayByType
+// also read `appointmentType` and `color`. The rest is filler.
+function slot(
+  status: SlotStatusLit,
+  startAt = "2026-06-03T08:00:00.000Z",
+  opts: { type?: AppointmentTypeLit; color?: string } = {},
+): SlotDTO {
   return {
     id: "s",
     startAt,
     endAt: "2026-06-03T08:30:00.000Z",
-    appointmentType: "PRE_HOSPITAL",
+    appointmentType: opts.type ?? "PRE_HOSPITAL",
     status,
     releaseAt: null,
-    color: "#000",
+    color: opts.color ?? "#000",
     lockedReason: null,
     appointment: null,
   };
+}
+
+/** Shorthand: a slot of a given type/colour, start time irrelevant. */
+function typed(
+  status: SlotStatusLit,
+  type: AppointmentTypeLit,
+  color = "blue",
+): SlotDTO {
+  return slot(status, "2026-06-03T08:00:00.000Z", { type, color });
 }
 
 describe("countSlots", () => {
@@ -108,5 +127,121 @@ describe("openDayPasswordText", () => {
     expect(t.title).toBe("Otvoriť stredu");
     expect(t.description).toContain("sviatok");
     expect(t.description).toContain("bez časových obmedzení");
+  });
+});
+
+describe("tallyDayByType", () => {
+  const empty = { free: 0, locked: 0, booked: 0 };
+
+  it("rolls PRE_HOSPITAL and ACUTE_RESERVE together under akútne", () => {
+    const t = tallyDayByType([
+      typed("AVAILABLE", "PRE_HOSPITAL"),
+      typed("AVAILABLE", "ACUTE_RESERVE"),
+      typed("LOCKED", "PRE_HOSPITAL"),
+      typed("BOOKED", "ACUTE_RESERVE"),
+    ]);
+    expect(t.akut).toEqual({ free: 2, locked: 1, booked: 1 });
+    expect(t.disp).toEqual(empty);
+    expect(t.echo).toEqual(empty);
+  });
+
+  it("splits DISPENSARY across free / locked / booked", () => {
+    const t = tallyDayByType([
+      typed("AVAILABLE", "DISPENSARY"),
+      typed("LOCKED", "DISPENSARY"),
+      typed("LOCKED", "DISPENSARY"),
+      typed("BOOKED", "DISPENSARY"),
+    ]);
+    expect(t.disp).toEqual({ free: 1, locked: 2, booked: 1 });
+    expect(t.akut).toEqual(empty);
+  });
+
+  it("counts plain ECHO under echo", () => {
+    const t = tallyDayByType([
+      typed("AVAILABLE", "ECHO", "blue"),
+      typed("LOCKED", "ECHO", "blue"),
+      typed("BOOKED", "ECHO", "blue"),
+    ]);
+    expect(t.echo).toEqual({ free: 1, locked: 1, booked: 1 });
+  });
+
+  it("excludes yellow PENTA slots from the echo free count", () => {
+    const t = tallyDayByType([
+      typed("AVAILABLE", "ECHO", "blue"),
+      typed("AVAILABLE", "ECHO", "yellow"),
+    ]);
+    expect(t.echo.free).toBe(1);
+  });
+
+  it("excludes yellow PENTA slots from the echo locked count", () => {
+    const t = tallyDayByType([
+      typed("LOCKED", "ECHO", "blue"),
+      typed("LOCKED", "ECHO", "yellow"),
+      typed("LOCKED", "ECHO", "yellow"),
+      typed("LOCKED", "ECHO", "yellow"),
+    ]);
+    expect(t.echo.locked).toBe(1);
+  });
+
+  it("excludes yellow PENTA slots from the echo booked count", () => {
+    const t = tallyDayByType([
+      typed("BOOKED", "ECHO", "blue"),
+      typed("BOOKED", "ECHO", "yellow"),
+    ]);
+    expect(t.echo.booked).toBe(1);
+  });
+
+  it("never counts ECHO_DEPARTMENT_BLOCKED, whatever its status", () => {
+    const t = tallyDayByType([
+      typed("BLOCKED", "ECHO_DEPARTMENT_BLOCKED", "navy"),
+      typed("AVAILABLE", "ECHO_DEPARTMENT_BLOCKED", "navy"),
+      typed("LOCKED", "ECHO_DEPARTMENT_BLOCKED", "navy"),
+    ]);
+    expect(t.echo).toEqual(empty);
+  });
+
+  it("never counts CONSULTATION_BLOCKED or CUSTOM", () => {
+    const t = tallyDayByType([
+      typed("BLOCKED", "CONSULTATION_BLOCKED", "grey"),
+      typed("AVAILABLE", "CONSULTATION_BLOCKED", "grey"),
+      typed("AVAILABLE", "CUSTOM", "white"),
+      typed("BOOKED", "CUSTOM", "white"),
+    ]);
+    expect(t).toEqual({ akut: empty, disp: empty, echo: empty });
+  });
+
+  it("ignores BLOCKED / CANCELLED / COMPLETED slot statuses", () => {
+    // A closed day: every bookable slot has been flipped to BLOCKED.
+    const t = tallyDayByType([
+      typed("BLOCKED", "PRE_HOSPITAL", "pink"),
+      typed("BLOCKED", "DISPENSARY", "white"),
+      typed("CANCELLED", "ECHO", "blue"),
+      typed("COMPLETED", "ECHO", "blue"),
+    ]);
+    expect(t).toEqual({ akut: empty, disp: empty, echo: empty });
+  });
+
+  it("returns three zeroed tallies for an empty list", () => {
+    expect(tallyDayByType([])).toEqual({ akut: empty, disp: empty, echo: empty });
+  });
+});
+
+// Regression lock: the PENTA rule belongs to the month cells only. The summary
+// strip above the grid must keep reporting total echo capacity.
+describe("availByType is unchanged by the PENTA rule", () => {
+  it("still counts a yellow ECHO slot under echo", () => {
+    const r = availByType([
+      typed("AVAILABLE", "ECHO", "yellow"),
+      typed("BOOKED", "ECHO", "yellow"),
+    ]);
+    expect(r.echo).toEqual({ free: 1, total: 2 });
+  });
+
+  it("still rolls the blocked types under custom", () => {
+    const r = availByType([
+      typed("AVAILABLE", "ECHO_DEPARTMENT_BLOCKED", "navy"),
+      typed("AVAILABLE", "CUSTOM", "white"),
+    ]);
+    expect(r.custom).toEqual({ free: 2, total: 2 });
   });
 });

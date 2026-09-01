@@ -42,8 +42,11 @@ import {
   buildDayMap,
   countSlots,
   availByType,
+  tallyDayByType,
   openDayPasswordText,
+  type TypeTally,
 } from "@/lib/calendar-ui";
+import { cn } from "@/lib/cn";
 import { TYPE_META } from "@/lib/slot-style";
 import { holidayName } from "@/lib/holidays-sk";
 import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
@@ -61,48 +64,6 @@ type AttendanceEntry = {
 
 // Ambulancia pracuje len v stredu/štvrtok/piatok — ostatné dni sa nezobrazujú.
 const WEEKDAY_HEADERS = ["St", "Št", "Pi"];
-
-function summarize(day: CalendarDayDTO) {
-  let available = 0;
-  let booked = 0;
-  let locked = 0;
-  let arrived = 0;
-  let noShow = 0;
-  let completed = 0;
-  // Available slots split by the three bookable kinds (akútne / dispenzárne /
-  // echo) so a month cell shows what's still free per type, not just a total.
-  let akut = 0;
-  let disp = 0;
-  let echo = 0;
-  for (const s of day.slots) {
-    if (s.status === "AVAILABLE") {
-      available++;
-      if (s.appointmentType === "PRE_HOSPITAL" || s.appointmentType === "ACUTE_RESERVE")
-        akut++;
-      else if (s.appointmentType === "DISPENSARY") disp++;
-      else if (s.appointmentType === "ECHO") echo++;
-    } else if (s.status === "BOOKED") {
-      booked++;
-      if (s.appointment?.status === "ARRIVED") arrived++;
-      else if (s.appointment?.status === "NO_SHOW") noShow++;
-      else if (s.appointment?.status === "COMPLETED") completed++;
-    } else if (s.status === "LOCKED") locked++;
-  }
-  const earliestLocked = day.slots
-    .filter((s) => s.status === "LOCKED" && s.releaseAt)
-    .map((s) => s.releaseAt!.slice(0, 10))
-    .sort()[0];
-  return {
-    available,
-    booked,
-    locked,
-    arrived,
-    noShow,
-    completed,
-    earliestLocked,
-    avail: { akut, disp, echo },
-  };
-}
 
 export function MonthView({
   canManageDays,
@@ -141,6 +102,14 @@ export function MonthView({
     useDayActions();
 
   const dayByIso = useMemo(() => buildDayMap(data?.days), [data]);
+
+  // Per-day per-type counts for the cells, computed once per payload instead of
+  // once per cell per render.
+  const tallyByIso = useMemo(() => {
+    const m = new Map<string, DayTally>();
+    (data?.days ?? []).forEach((d) => m.set(d.date, tallyDayByType(d.slots)));
+    return m;
+  }, [data]);
 
   const openWednesdaysThisMonth = useMemo(
     () =>
@@ -318,6 +287,14 @@ export function MonthView({
             )}
           </div>
         )}
+        <span className="inline-flex items-center gap-2 text-sm text-slate-500">
+          <span className="inline-flex items-center gap-0.5">
+            <Lock aria-hidden className="h-3.5 w-3.5 text-slate-400" /> zamknuté
+          </span>
+          <span className="inline-flex items-center gap-0.5">
+            <Check aria-hidden className="h-3.5 w-3.5 text-slate-400" /> obsadené
+          </span>
+        </span>
         <span className="text-sm text-slate-500">
           Za rok {year}:{" "}
           <span className="font-semibold text-slate-700">
@@ -328,31 +305,38 @@ export function MonthView({
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-1 text-center text-xs font-medium uppercase tracking-wide text-slate-400">
-        {WEEKDAY_HEADERS.map((h) => (
-          <div key={h} className="py-1">
-            {h}
-          </div>
-        ))}
-      </div>
+      {/* Wednesday is a narrow vertical cell, Thu/Fri wide horizontal ones, so
+          the columns run 1:3:3. Header and grid must share the template or the
+          St/Št/Pi labels drift off their columns. The width cap keeps the fixed
+          aspect ratios from making the month absurdly tall on a wide screen. */}
+      <div className="mx-auto mt-3 w-full max-w-[640px]">
+        <div className={`grid ${MONTH_GRID_COLS} gap-1 text-center text-xs font-medium uppercase tracking-wide text-slate-400`}>
+          {WEEKDAY_HEADERS.map((h) => (
+            <div key={h} className="py-1">
+              {h}
+            </div>
+          ))}
+        </div>
 
-      <div className="mt-1 grid grid-cols-3 gap-1">
-        {cells.map((iso) => (
-          <DayCell
-            key={iso}
-            iso={iso}
-            inMonth={monthOf(iso) === monthOf(anchor)}
-            day={dayByIso.get(iso)}
-            canManage={canManageDays}
-            canManageClosures={canManageClosures}
-            opening={pendingIso === iso}
-            loading={isLoading}
-            onOpen={() => requestOpen(iso)}
-            onPick={() => onPickDay(iso)}
-            onRequestClose={() => setPendingClose(iso)}
-            onRequestReopen={() => setPendingReopen(iso)}
-          />
-        ))}
+        <div className={`mt-1 grid ${MONTH_GRID_COLS} gap-1`}>
+          {cells.map((iso) => (
+            <DayCell
+              key={iso}
+              iso={iso}
+              inMonth={monthOf(iso) === monthOf(anchor)}
+              day={dayByIso.get(iso)}
+              tally={tallyByIso.get(iso)}
+              canManage={canManageDays}
+              canManageClosures={canManageClosures}
+              opening={pendingIso === iso}
+              loading={isLoading}
+              onOpen={() => requestOpen(iso)}
+              onPick={() => onPickDay(iso)}
+              onRequestClose={() => setPendingClose(iso)}
+              onRequestReopen={() => setPendingReopen(iso)}
+            />
+          ))}
+        </div>
       </div>
 
       {pendingPassword && (
@@ -619,10 +603,90 @@ function AttendanceListDialog({
   );
 }
 
+/**
+ * Aspect ratios that pair with MONTH_GRID_COLS: with columns at 1:3:3, a
+ * Wednesday at 1:2 and a Thu/Fri at 3:2 resolve to exactly the same height
+ * (2 fr units), for any gap — so every grid row lines up. minmax(0,…) stops a
+ * wide child from inflating a track and breaking the ratio.
+ */
+const MONTH_GRID_COLS =
+  "grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,3fr)]";
+
+/** Shared cell surface. min-h-0 + overflow-hidden keep content inside the aspect box. */
+function cellShell(inMonth: boolean): string {
+  return cn(
+    "flex h-full w-full min-h-0 overflow-hidden rounded-lg border p-1 text-left transition sm:p-1.5",
+    inMonth ? "bg-white" : "bg-transparent",
+  );
+}
+
+type DayTally = ReturnType<typeof tallyDayByType>;
+
+const EMPTY_TALLY: DayTally = {
+  akut: { free: 0, locked: 0, booked: 0 },
+  disp: { free: 0, locked: 0, booked: 0 },
+  echo: { free: 0, locked: 0, booked: 0 },
+};
+
+/**
+ * One type row of a month cell: free count (hidden at zero, coloured by type),
+ * then still-locked and already-booked counts in grey — those two always show,
+ * zero included, so the three rows keep a stable shape. The icons are
+ * decorative; the row's title carries the meaning.
+ */
+function TypeRow({
+  tally,
+  freeClass,
+  label,
+}: {
+  tally: TypeTally;
+  freeClass: string;
+  label: string;
+}) {
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1 text-[11px] leading-none sm:gap-1.5 sm:text-base"
+      title={`${label}: ${tally.free} voľné, ${tally.locked} zamknuté, ${tally.booked} obsadené`}
+    >
+      {tally.free > 0 && (
+        <span className={cn("font-bold tabular-nums", freeClass)}>{tally.free}</span>
+      )}
+      <span className="inline-flex items-center gap-0.5 text-slate-500">
+        <Lock aria-hidden className="h-3 w-3 shrink-0 text-slate-400 sm:h-4 sm:w-4" />
+        <span className="tabular-nums">{tally.locked}</span>
+      </span>
+      <span className="inline-flex items-center gap-0.5 text-slate-500">
+        <Check aria-hidden className="h-3 w-3 shrink-0 text-slate-400 sm:h-4 sm:w-4" />
+        <span className="tabular-nums">{tally.booked}</span>
+      </span>
+    </div>
+  );
+}
+
+/** The three rows of an open Thu/Fri cell, in fixed order (position = type). */
+function TypeRows({ tally }: { tally: DayTally }) {
+  return (
+    <div className="grid h-full grid-rows-3 items-center">
+      <TypeRow tally={tally.akut} freeClass="text-red-700" label="Akútne" />
+      <TypeRow tally={tally.disp} freeClass="text-emerald-700" label="Dispenzárne" />
+      <TypeRow tally={tally.echo} freeClass="text-blue-700" label="ECHO" />
+    </div>
+  );
+}
+
+/** Screen-reader summary — the raw digits would otherwise read as noise. */
+function tallyAriaLabel(iso: string, t: DayTally): string {
+  return (
+    `${clinicLongDate(iso)} — akútne ${t.akut.free} voľné, ` +
+    `dispenzárne ${t.disp.free} voľné, echo ${t.echo.free} voľné`
+  );
+}
+
 function DayCell({
   iso,
   inMonth,
   day,
+  tally,
   canManage,
   canManageClosures,
   opening,
@@ -635,6 +699,7 @@ function DayCell({
   iso: string;
   inMonth: boolean;
   day: CalendarDayDTO | undefined;
+  tally: DayTally | undefined;
   canManage: boolean;
   canManageClosures: boolean;
   opening: boolean;
@@ -645,12 +710,10 @@ function DayCell({
   onRequestReopen: () => void;
 }) {
   const dow = weekdayOf(iso);
-  const isWorking = WORKING_WEEKDAYS.includes(dow);
   const isToday = iso === todayIso();
-  const lastFriday = dow === 5 && isLastFridayOfMonth(dateOnly(iso));
-  const holiday = isWorking ? holidayName(iso) : null;
   // Mirror the week/day view: a generated day (not a manual Wednesday) can be
-  // closed for holidays/vacation; a CLOSED one can be reopened.
+  // closed for holidays/vacation; a CLOSED one can be reopened. Both conditions
+  // exclude Wednesdays, so the narrow cell never has to host these buttons.
   const canClose =
     canManageClosures &&
     !!day &&
@@ -662,198 +725,304 @@ function DayCell({
     day.dayType !== "MANUAL_WEDNESDAY" &&
     day.status === "CLOSED";
 
-  // Graphically mark the current day in the month grid (only ever set when today
-  // is one of the rendered Wed/Thu/Fri cells, so non-working days highlight nothing).
-  const todayRing = isToday ? " ring-2 ring-slate-900 ring-offset-1" : "";
+  return (
+    <div
+      className={cn(
+        "relative rounded-lg",
+        dow === 3 ? "aspect-[1/2]" : "aspect-[3/2]",
+        !inMonth && "opacity-50",
+        isToday && "ring-2 ring-slate-900 ring-offset-1",
+      )}
+    >
+      {dow === 3 ? (
+        <WednesdayCell
+          iso={iso}
+          inMonth={inMonth}
+          day={day}
+          canManage={canManage}
+          opening={opening}
+          loading={loading}
+          onOpen={onOpen}
+          onPick={onPick}
+        />
+      ) : (
+        <WorkdayCell
+          iso={iso}
+          inMonth={inMonth}
+          day={day}
+          tally={tally ?? EMPTY_TALLY}
+          canManage={canManage}
+          opening={opening}
+          loading={loading}
+          onOpen={onOpen}
+          onPick={onPick}
+        />
+      )}
+      {canReopen && (
+        <button
+          type="button"
+          onClick={onRequestReopen}
+          aria-label="Znovu otvoriť deň"
+          title="Znovu otvoriť deň"
+          className="absolute bottom-1 left-1 z-10 rounded-md bg-white/80 p-1 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
+        >
+          <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        </button>
+      )}
+      {canClose && (
+        <button
+          type="button"
+          onClick={onRequestClose}
+          aria-label="Zatvoriť deň"
+          title="Zatvoriť deň (sviatok / dovolenka)"
+          className="absolute bottom-1 left-1 z-10 rounded-md bg-white/80 p-1 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
+        >
+          <Ban className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
 
-  // Tighter padding/height on phones (the 3-col grid leaves little width, so the
-  // dense per-type tallies were cramped); roomier from sm: upward.
-  const base = `min-h-[72px] p-1 sm:min-h-[84px] sm:p-1.5 rounded-lg border text-left transition ${
-    inMonth ? "bg-white" : "bg-transparent opacity-40"
-  }`;
+/**
+ * A Wednesday shows nothing but its date: light grey while the day is still
+ * closed, dark purple once it has been opened by password. The number is
+ * centred rather than left-aligned — in a 40–90px wide cell the "left third"
+ * is narrower than a two-digit number.
+ */
+function WednesdayCell({
+  iso,
+  inMonth,
+  day,
+  canManage,
+  opening,
+  loading,
+  onOpen,
+  onPick,
+}: {
+  iso: string;
+  inMonth: boolean;
+  day: CalendarDayDTO | undefined;
+  canManage: boolean;
+  opening: boolean;
+  loading: boolean;
+  onOpen: () => void;
+  onPick: () => void;
+}) {
+  const hasSlots = !!day && day.slots.length > 0;
+  const closed = day?.status === "CLOSED";
+  const opened = hasSlots && !closed;
 
-  if (!isWorking) {
+  if (hasSlots) {
     return (
-      <div className={`${base} border-slate-100`}>
-        <DayNumber iso={iso} isToday={isToday} muted />
-      </div>
+      <button
+        type="button"
+        onClick={onPick}
+        title={closed ? (day?.note ?? "Zatvorené") : undefined}
+        aria-label={`${clinicLongDate(iso)} — ${closed ? "zatvorená streda" : "otvorená streda"}`}
+        className={cn(
+          cellShell(inMonth),
+          "items-center justify-center",
+          closed
+            ? "border-amber-200 bg-amber-50/50"
+            : "border-purple-300 bg-purple-50/40 hover:border-purple-400 hover:shadow-sm",
+        )}
+      >
+        <DayNumber iso={iso} tone={opened ? "open" : "muted"} />
+      </button>
     );
   }
 
-  // Working day with generated slots → clickable summary (+ close/reopen control).
+  // Not opened yet. For a manager the whole cell is the "Otvoriť" target; the
+  // Plus only surfaces on hover/focus so the resting cell stays bare.
+  if (loading || !canManage) {
+    return (
+      <div
+        className={cn(
+          cellShell(inMonth),
+          "items-center justify-center border-dashed border-slate-200",
+        )}
+      >
+        <DayNumber iso={iso} tone="muted" />
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={opening}
+      title="Otvoriť stredu"
+      aria-label={`Otvoriť stredu ${clinicLongDate(iso)}`}
+      className={cn(
+        cellShell(inMonth),
+        "group relative items-center justify-center border-dashed border-slate-200",
+        "hover:border-purple-300 hover:bg-purple-50/50 disabled:opacity-50",
+      )}
+    >
+      <DayNumber iso={iso} tone="muted" />
+      <span
+        className={cn(
+          "absolute inset-x-0 bottom-1 flex justify-center text-slate-400 transition",
+          opening
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
+        )}
+      >
+        {opening ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Plus className="h-3.5 w-3.5" />
+        )}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Thursday / Friday: the date in the left third, and in the right two thirds
+ * either the three per-type rows (open day), the closure note, or the
+ * generate/open affordance.
+ */
+function WorkdayCell({
+  iso,
+  inMonth,
+  day,
+  tally,
+  canManage,
+  opening,
+  loading,
+  onOpen,
+  onPick,
+}: {
+  iso: string;
+  inMonth: boolean;
+  day: CalendarDayDTO | undefined;
+  tally: DayTally;
+  canManage: boolean;
+  opening: boolean;
+  loading: boolean;
+  onOpen: () => void;
+  onPick: () => void;
+}) {
+  const dow = weekdayOf(iso);
+  const lastFriday = dow === 5 && isLastFridayOfMonth(dateOnly(iso));
+  const holiday = holidayName(iso);
+
   if (day && day.slots.length > 0) {
-    const s = summarize(day);
     const closed = day.status === "CLOSED";
     return (
-      <div className="relative">
-        <button
-          type="button"
-          onClick={onPick}
-          className={`${base} w-full${todayRing} ${
-            closed
-              ? "border-amber-200 bg-amber-50/50"
-              : "border-emerald-300 bg-emerald-50/40 hover:border-emerald-400 hover:shadow-sm"
-          }`}
-        >
-          <DayNumber iso={iso} isToday={isToday} muted={closed} open={!closed} />
-          <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
-            {closed ? (
-              <>
-                <p
-                  className="flex items-center gap-0.5 font-medium text-amber-700"
-                  title={day.note ?? "Zatvorené"}
-                >
-                  <Ban className="h-3 w-3 shrink-0" />
-                  <span className="line-clamp-2 break-words">
-                    {day.note?.replace(/^Sviatok:\s*/, "") ?? "Zatvorené"}
-                  </span>
-                </p>
-                {s.booked > 0 && <p className="text-slate-500">{s.booked} obj.</p>}
-              </>
-            ) : (
-              <>
-                {s.available > 0 && (
-                  <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 font-medium">
-                    {s.avail.akut > 0 && (
-                      <span className="text-pink-700">{s.avail.akut} ak.</span>
-                    )}
-                    {s.avail.disp > 0 && (
-                      <span className="text-emerald-700">{s.avail.disp} disp.</span>
-                    )}
-                    {s.avail.echo > 0 && (
-                      <span className="text-blue-700">{s.avail.echo} echo</span>
-                    )}
-                  </div>
-                )}
-                {s.booked > 0 && (
-                  <p className="flex flex-wrap items-center gap-x-1 text-slate-600">
-                    <span>{s.booked} obj.</span>
-                    {s.completed > 0 && (
-                      <span
-                        className="text-emerald-800"
-                        title={`${s.completed} × vybavený`}
-                      >
-                        {s.completed}✓✓
-                      </span>
-                    )}
-                    {s.arrived > 0 && (
-                      <span
-                        className="text-emerald-700"
-                        title={`${s.arrived} × prišiel`}
-                      >
-                        {s.arrived}✓
-                      </span>
-                    )}
-                    {s.noShow > 0 && (
-                      <span
-                        className="text-orange-700"
-                        title={`${s.noShow} × neprišiel`}
-                      >
-                        {s.noShow}✗
-                      </span>
-                    )}
-                  </p>
-                )}
-                {s.locked > 0 && (
-                  <p className="flex items-center gap-0.5 text-slate-400">
-                    <Lock className="h-3 w-3" />
-                    {s.locked}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </button>
-        {canReopen && (
-          <button
-            type="button"
-            onClick={onRequestReopen}
-            aria-label="Znovu otvoriť deň"
-            title="Znovu otvoriť deň"
-            className="absolute right-1 top-1 z-10 rounded-md bg-white/80 p-1 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </button>
+      <button
+        type="button"
+        onClick={onPick}
+        aria-label={
+          closed
+            ? `${clinicLongDate(iso)} — zatvorené${day.note ? `: ${day.note}` : ""}`
+            : tallyAriaLabel(iso, tally)
+        }
+        className={cn(
+          cellShell(inMonth),
+          `grid ${CELL_INNER_COLS} gap-1`,
+          closed
+            ? "border-amber-200 bg-amber-50/50"
+            : "border-emerald-300 bg-emerald-50/40 hover:border-emerald-400 hover:shadow-sm",
         )}
-        {canClose && (
-          <button
-            type="button"
-            onClick={onRequestClose}
-            aria-label="Zatvoriť deň"
-            title="Zatvoriť deň (sviatok / dovolenka)"
-            className="absolute right-1 top-1 z-10 rounded-md bg-white/80 p-1 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
-          >
-            <Ban className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
+      >
+        <div className="flex min-w-0 items-center pl-0.5">
+          <DayNumber iso={iso} tone={closed ? "closed" : "open"} />
+        </div>
+        <div className="col-span-2 flex min-w-0 flex-col justify-center">
+          {closed ? (
+            <p
+              className="flex items-start gap-0.5 text-[10px] font-medium leading-tight text-amber-700 sm:text-xs"
+              title={day.note ?? "Zatvorené"}
+            >
+              <Ban className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+              <span className="line-clamp-3 break-words">
+                {day.note?.replace(/^Sviatok:\s*/, "") ?? "Zatvorené"}
+              </span>
+            </p>
+          ) : (
+            <TypeRows tally={tally} />
+          )}
+        </div>
+      </button>
     );
   }
 
   // Working day, not generated yet (incl. holidays — shown but openable only under password).
   return (
     <div
-      className={`${base} border-dashed${todayRing} ${holiday ? "border-amber-200 bg-amber-50/40" : "border-slate-200"}`}
+      className={cn(
+        cellShell(inMonth),
+        `grid ${CELL_INNER_COLS} gap-1 border-dashed`,
+        holiday ? "border-amber-200 bg-amber-50/40" : "border-slate-200",
+      )}
     >
-      <DayNumber iso={iso} isToday={isToday} muted={!!holiday} />
-      {holiday && (
-        <p
-          className="mt-1 flex items-center gap-0.5 text-[10px] font-medium leading-tight text-amber-700"
-          title={`Sviatok: ${holiday}`}
-        >
-          <Ban className="h-3 w-3 shrink-0" />
-          <span className="line-clamp-2 break-words">{holiday}</span>
-        </p>
-      )}
-      {loading ? null : canManage ? (
-        <button
-          type="button"
-          onClick={onOpen}
-          disabled={opening}
-          className="ml-1.5 mt-1 inline-flex items-center gap-0.5 rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-        >
-          {opening ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Plus className="h-3 w-3" />
-          )}
-          {holiday || dow === 3 || lastFriday ? "Otvoriť" : "Generovať"}
-        </button>
-      ) : holiday ? null : (
-        <p className="mt-1 text-[10px] text-slate-300">
-          {dow === 3 || lastFriday ? "zatvorená" : "—"}
-        </p>
-      )}
+      <div className="flex min-w-0 items-center pl-0.5">
+        <DayNumber iso={iso} tone={holiday ? "closed" : "muted"} />
+      </div>
+      <div className="col-span-2 flex min-w-0 flex-col justify-center gap-1">
+        {holiday && (
+          <p
+            className="flex items-start gap-0.5 text-[10px] font-medium leading-tight text-amber-700 sm:text-xs"
+            title={`Sviatok: ${holiday}`}
+          >
+            <Ban className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+            <span className="line-clamp-2 break-words">{holiday}</span>
+          </p>
+        )}
+        {loading ? null : canManage ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            disabled={opening}
+            className="inline-flex w-fit items-center gap-0.5 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 sm:text-xs"
+          >
+            {opening ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Plus className="h-3 w-3" />
+            )}
+            {holiday || lastFriday ? "Otvoriť" : "Generovať"}
+          </button>
+        ) : holiday ? null : (
+          <p className="text-[10px] text-slate-300 sm:text-xs">
+            {lastFriday ? "zatvorená" : "—"}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
+/** Inner split of a Thu/Fri cell: date in the left third, counts in the rest. */
+const CELL_INNER_COLS = "grid-cols-3";
+
+/**
+ * The date, large and bold. Dark purple marks a day that is open for booking,
+ * grey one that is not, amber a closed one. Today is marked by the cell's ring,
+ * so the number keeps its type colour.
+ */
 function DayNumber({
   iso,
-  isToday,
-  muted,
-  open,
+  tone,
 }: {
   iso: string;
-  isToday: boolean;
-  muted?: boolean;
-  open?: boolean;
+  tone: "open" | "muted" | "closed";
 }) {
-  // Today wins (dark chip); an open day gets an emerald chip so working days
-  // and their date stand out; otherwise a plain number.
-  const tone = isToday
-    ? "bg-slate-900 text-white"
-    : open
-      ? "bg-emerald-600 text-white"
-      : muted
-        ? "text-slate-400"
-        : "text-slate-700";
+  const toneClass =
+    tone === "open"
+      ? "text-purple-800"
+      : tone === "closed"
+        ? "text-amber-700"
+        : "text-slate-400";
   return (
     <span
-      className={[
-        "inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",
-        tone,
-      ].join(" ")}
+      className={cn(
+        "text-xl font-bold leading-none tabular-nums sm:text-4xl",
+        toneClass,
+      )}
     >
       {dayOfMonth(iso)}
     </span>

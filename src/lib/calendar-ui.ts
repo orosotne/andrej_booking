@@ -1,6 +1,7 @@
 import { dateOnly, isLastFridayOfMonth } from "./calendar-date";
 import { holidayName } from "./holidays-sk";
 import type { CalendarDayDTO, SlotDTO, SlotCountsDTO } from "./api-types";
+import type { AppointmentTypeLit } from "./slot-engine/types";
 
 /** Clinic working weekdays (JS getUTCDay): Wed, Thu, Fri. */
 export const WORKING_WEEKDAYS: readonly number[] = [3, 4, 5];
@@ -90,6 +91,31 @@ export interface TypeAvail {
   total: number;
 }
 
+/** The bookable kinds a slot type rolls up to in the calendar UI. */
+export type BookableKind = "akut" | "disp" | "echo" | "custom";
+
+/**
+ * Slot type → the bucket the calendar UI reports it under. PRE_HOSPITAL and
+ * ACUTE_RESERVE both roll up under "akútne"; the blocked types (porada, ECHO
+ * oddelenie) and CUSTOM land in "custom", which every caller either reports as
+ * "iné" or drops.
+ */
+function bookableKind(type: AppointmentTypeLit): BookableKind {
+  if (type === "PRE_HOSPITAL" || type === "ACUTE_RESERVE") return "akut";
+  if (type === "DISPENSARY") return "disp";
+  if (type === "ECHO") return "echo";
+  return "custom";
+}
+
+/**
+ * True for the password-only ECHO slots (13:30/13:50/14:10 from Feb 2027),
+ * which carry the dedicated "yellow" colour and render with the PENTA
+ * watermark. The type stays ECHO, so colour is the only discriminator.
+ */
+export function isPentaSlot(slot: { color: string }): boolean {
+  return slot.color === "yellow";
+}
+
 /**
  * Break down slots by their appointment kind (akútne / dispenzárne / echo /
  * iné), reporting both the free count and the total bookable capacity
@@ -98,6 +124,8 @@ export interface TypeAvail {
  * but `total` always reflects the period's full capacity.
  * PRE_HOSPITAL and ACUTE_RESERVE both roll up under "akútne"; bookable CUSTOM
  * slots roll up under "iné". The four `free` buckets sum to countSlots().available.
+ * PENTA slots are NOT excluded here — the summary strip reports total echo
+ * capacity; only the month cells apply that rule (see tallyDayByType).
  */
 export function availByType(
   slots: SlotDTO[],
@@ -107,17 +135,45 @@ export function availByType(
   const r = { akut: mk(), disp: mk(), echo: mk(), custom: mk() };
   for (const s of slots) {
     if (s.status !== "AVAILABLE" && s.status !== "BOOKED") continue;
-    const kind =
-      s.appointmentType === "PRE_HOSPITAL" || s.appointmentType === "ACUTE_RESERVE"
-        ? "akut"
-        : s.appointmentType === "DISPENSARY"
-          ? "disp"
-          : s.appointmentType === "ECHO"
-            ? "echo"
-            : "custom";
+    const kind = bookableKind(s.appointmentType);
     r[kind].total++;
     if (s.status === "AVAILABLE" && (nowIso === undefined || s.startAt > nowIso))
       r[kind].free++;
+  }
+  return r;
+}
+
+export interface TypeTally {
+  free: number;
+  locked: number;
+  booked: number;
+}
+
+/**
+ * Per-type free / locked / booked counts for one day, as shown in a month cell.
+ * Two rules the summary strip does NOT apply:
+ *   - "iné" (CUSTOM and the blocked types) is dropped entirely — the cell has
+ *     exactly three rows,
+ *   - PENTA slots (ECHO + yellow) are excluded from all three counters, because
+ *     the echo row means plain echo only: neither ECHO oddelenie nor PENTA.
+ * BLOCKED / CANCELLED / COMPLETED slots are ignored, matching countSlots.
+ */
+export function tallyDayByType(slots: SlotDTO[]): {
+  akut: TypeTally;
+  disp: TypeTally;
+  echo: TypeTally;
+} {
+  const mk = (): TypeTally => ({ free: 0, locked: 0, booked: 0 });
+  const r = { akut: mk(), disp: mk(), echo: mk() };
+  for (const s of slots) {
+    if (s.status !== "AVAILABLE" && s.status !== "LOCKED" && s.status !== "BOOKED")
+      continue;
+    const kind = bookableKind(s.appointmentType);
+    if (kind === "custom") continue;
+    if (kind === "echo" && isPentaSlot(s)) continue;
+    if (s.status === "AVAILABLE") r[kind].free++;
+    else if (s.status === "LOCKED") r[kind].locked++;
+    else r[kind].booked++;
   }
   return r;
 }

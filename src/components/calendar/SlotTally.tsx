@@ -43,7 +43,7 @@ export function SlotTally({
 }
 
 // Companion pill: free / total capacity by appointment kind. Same colour
-// language as the month grid cells (pink/emerald/blue). Renders nothing when
+// language as the month grid cells (red/emerald/blue). Renders nothing when
 // there are no bookable slots of any kind.
 function AvailItem({
   stat,
@@ -75,7 +75,7 @@ export function SlotAvailByType({
   return (
     <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
       <span className="font-medium text-slate-500">{label}:</span>
-      <AvailItem stat={counts.akut} colorClass="text-pink-700" label="akútne" />
+      <AvailItem stat={counts.akut} colorClass="text-red-700" label="akútne" />
       <span aria-hidden className="text-slate-300">·</span>
       <AvailItem stat={counts.disp} colorClass="text-emerald-700" label="dispenzárne" />
       <span aria-hidden className="text-slate-300">·</span>
