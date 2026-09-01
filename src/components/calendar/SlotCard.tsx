@@ -9,16 +9,27 @@ export function SlotCard({
   slot,
   onSelect,
   highlight,
+  canRedesignate,
 }: {
   slot: SlotDTO;
   onSelect: (slot: SlotDTO) => void;
   highlight?: boolean;
+  /**
+   * Doctor/admin may change this slot's "určenie". The only thing it changes
+   * here is reachability: a BLOCKED slot (porada / ECHO oddelenie) is otherwise
+   * un-clickable, so there would be no way back from those designations. The
+   * card keeps its blocked styling either way.
+   */
+  canRedesignate?: boolean;
 }) {
   const meta = TYPE_META[slot.appointmentType];
   // LOCKED + BLOCKED slots are not clickable for staff (no override flow exposed).
   // Admin still has unlock dialog for LOCKED via slot-actions menu.
   const clickable =
-    slot.status === "AVAILABLE" || slot.status === "BOOKED" || slot.status === "LOCKED";
+    slot.status === "AVAILABLE" ||
+    slot.status === "BOOKED" ||
+    slot.status === "LOCKED" ||
+    (!!canRedesignate && slot.status === "BLOCKED");
 
   const isLocked = slot.status === "LOCKED";
   const isBlocked = slot.status === "BLOCKED";
@@ -36,8 +47,10 @@ export function SlotCard({
     <button
       type="button"
       id={`slot-${slot.id}`}
-      disabled={!clickable || isHardLocked}
-      onClick={() => clickable && !isHardLocked && onSelect(slot)}
+      disabled={!clickable || (isHardLocked && !canRedesignate)}
+      onClick={() =>
+        clickable && (!isHardLocked || canRedesignate) && onSelect(slot)
+      }
       style={{
         backgroundColor: isPenta
           ? "var(--slot-penta)"
@@ -52,7 +65,7 @@ export function SlotCard({
       className={[
         "group relative w-full rounded-lg border border-l-4 px-2.5 py-2 text-left transition",
         "min-h-[56px] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30",
-        clickable && !isHardLocked
+        clickable && (!isHardLocked || canRedesignate)
           ? "cursor-pointer hover:shadow-sm hover:brightness-[0.99]"
           : "cursor-not-allowed",
         isLocked && !isHardLocked ? "slot-locked-hatch" : "",

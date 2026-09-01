@@ -10,8 +10,18 @@ import {
   categoryAllowsSlot,
   PATIENT_CATEGORY_LABEL,
 } from "@/lib/patient-category";
-import { BLOCKING_STATUSES } from "@/lib/appointment-status";
+import {
+  BLOCKING_STATUSES,
+  SLOT_OCCUPYING_STATUSES,
+} from "@/lib/appointment-status";
 import { atSixUtc } from "@/lib/slot-engine/release-rules";
+import { dateOnly, toIsoDate } from "@/lib/calendar-date";
+import {
+  resolveDesignation,
+  designationOf,
+  DESIGNATION_LABEL,
+  type SlotDesignation,
+} from "@/lib/slot-designation";
 
 /** When a slot is freed, return it to AVAILABLE only if its release window is open. */
 function statusAfterFreeing(
@@ -354,6 +364,109 @@ export async function lockSlot(input: LockInput) {
       before: slot,
       after: updated,
       reason: input.reason ?? null,
+      ctx: input.ctx,
+    });
+    return updated;
+  });
+}
+
+export interface ChangeDesignationInput {
+  slotId: string;
+  designation: SlotDesignation;
+  reason?: string;
+  ctx: AuditContext;
+  now?: Date;
+}
+
+/**
+ * Admin/doctor override: changes a single slot's "určenie" (what the slot is
+ * for). Password-gated at the route layer, like lock/unlock.
+ *
+ * Status and release window are carried over untouched for bookable targets —
+ * changing what a slot is for must not change when it opens. The exceptions
+ * belong to the target, not the source: blocked types force BLOCKED, "echo
+ * penta" forces LOCKED + yellow, and a slot coming from BLOCKED lands on a
+ * manual LOCKED (see resolveDesignation).
+ *
+ * Sets typeOverride so a later "Použiť na nadchádzajúce dni" never reverts it.
+ */
+export async function changeSlotDesignation(input: ChangeDesignationInput) {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (tx) => {
+    const slot = await tx.appointmentSlot.findUnique({
+      where: { id: input.slotId },
+      include: {
+        calendarDay: { select: { date: true, status: true } },
+        appointments: {
+          where: { status: { in: SLOT_OCCUPYING_STATUSES } },
+          select: { id: true },
+        },
+      },
+    });
+    if (!slot) throw new NotFoundError("Slot neexistuje.");
+
+    // Both checks are needed. A NO_SHOW appointment still occupies its slot
+    // (the slot stays BOOKED), and conversely a slot left BOOKED without an
+    // active appointment must not quietly become re-designable.
+    if (slot.status === "BOOKED" || slot.appointments.length > 0) {
+      throw new ConflictError(
+        "Obsadený slot nemožno zmeniť — najprv zrušte alebo presuňte objednávku.",
+      );
+    }
+    if (slot.calendarDay.status === "CLOSED") {
+      throw new ConflictError("Deň je zatvorený — určenie slotu nemožno zmeniť.");
+    }
+    if (slot.calendarDay.date.getTime() < dateOnly(toIsoDate(now)).getTime()) {
+      throw new ConflictError(
+        "Určenie možno zmeniť len pre dnešný alebo budúci deň.",
+      );
+    }
+    const before = designationOf(slot);
+    if (before === input.designation) {
+      throw new ValidationError("Slot už má toto určenie.");
+    }
+
+    const target = resolveDesignation(input.designation, {
+      status: slot.status,
+      releaseAt: slot.releaseAt,
+    });
+
+    // Conditional write, same guard as bookSlot: a booking that commits between
+    // the read above and this update makes the match empty instead of
+    // overwriting a slot that now has a patient in it.
+    const written = await tx.appointmentSlot.updateMany({
+      where: { id: slot.id, status: { in: ["AVAILABLE", "LOCKED", "BLOCKED"] } },
+      data: {
+        appointmentType: target.appointmentType,
+        color: target.color,
+        status: target.status,
+        releaseAt: target.releaseAt,
+        typeOverride: true,
+        ...(target.manualLock
+          ? { manualLock: true, lockedReason: target.lockedReason }
+          : {}),
+      },
+    });
+    if (written.count !== 1) {
+      throw new ConflictError(
+        "Slot medzitým zmenil stav — obnovte kalendár a skúste znova.",
+      );
+    }
+    const updated = await tx.appointmentSlot.findUniqueOrThrow({
+      where: { id: slot.id },
+    });
+
+    await recordAudit(tx, {
+      entityType: "slot",
+      entityId: slot.id,
+      action: "change_type",
+      // The designations are carried alongside the raw rows so the audit page
+      // can render "porada → akútne" without re-deriving it from type+colour.
+      before: { ...slot, designation: before },
+      after: { ...updated, designation: input.designation },
+      reason:
+        input.reason ??
+        `${DESIGNATION_LABEL[before]} → ${DESIGNATION_LABEL[input.designation]}`,
       ctx: input.ctx,
     });
     return updated;

@@ -15,11 +15,14 @@ export function SlotUnlockDialog({
   dayIso,
   onClose,
   onUnlocked,
+  onChangeDesignation,
 }: {
   slot: SlotDTO;
   dayIso: string;
   onClose: () => void;
   onUnlocked: () => void;
+  /** Doctor/admin only — swaps this dialog for the designation one. */
+  onChangeDesignation?: () => void;
 }) {
   const { busy, run } = useAsyncAction();
   const [password, setPassword] = useState("");
@@ -77,6 +80,15 @@ export function SlotUnlockDialog({
         >
           Odomknúť slot
         </Button>
+        {onChangeDesignation && (
+          <button
+            type="button"
+            onClick={onChangeDesignation}
+            className="w-full rounded-lg py-1 text-center text-sm font-medium text-slate-500 transition hover:text-slate-900"
+          >
+            Zmeniť určenie slotu
+          </button>
+        )}
       </div>
     </Modal>
   );

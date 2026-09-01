@@ -116,7 +116,7 @@ export function TemplateEditor({
         automaticky. Pre už vytvorené (budúce) dni použi tlačidlo{" "}
         <strong>{'„Použiť na nadchádzajúce dni"'}</strong> — pridá nové sloty,
         upraví zmenené (čas otvárania, typ, farba) a odoberie zrušené.
-        Rezervované a ručne zamknuté sloty sa nikdy nezmenia.
+        Rezervované, ručne zamknuté a ručne preurčené sloty sa nikdy nezmenia.
       </p>
 
       {templates.map((t) => (

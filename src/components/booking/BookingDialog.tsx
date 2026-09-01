@@ -31,12 +31,19 @@ export function BookingDialog({
   isAdmin = false,
   onClose,
   onBooked,
+  onChangeDesignation,
 }: {
   slot: SlotDTO;
   dayIso: string;
+  /** ADMIN only — gates the manual slot lock, which is an ADMIN_ONLY endpoint. */
   isAdmin?: boolean;
   onClose: () => void;
   onBooked: () => void;
+  /**
+   * Doctor/admin — swaps this dialog for the designation one. Separate from
+   * isAdmin because changing a designation is DOCTOR_ADMIN, locking is not.
+   */
+  onChangeDesignation?: () => void;
 }) {
   const { busy, run } = useAsyncAction();
   const [patient, setPatient] = useState<PatientLite | null>(null);
@@ -220,6 +227,15 @@ export function BookingDialog({
                 </Button>
               )}
             </div>
+          )}
+          {onChangeDesignation && !lockMode && (
+            <button
+              type="button"
+              onClick={onChangeDesignation}
+              className="w-full rounded-lg py-1 text-center text-sm font-medium text-slate-500 transition hover:text-slate-900"
+            >
+              Zmeniť určenie slotu
+            </button>
           )}
         </div>
       ) : (

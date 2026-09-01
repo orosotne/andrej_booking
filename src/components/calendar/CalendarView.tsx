@@ -23,6 +23,7 @@ import { SlotCard } from "./SlotCard";
 import { BookingDialog } from "@/components/booking/BookingDialog";
 import { AppointmentActions } from "@/components/booking/AppointmentActions";
 import { SlotUnlockDialog } from "@/components/booking/SlotUnlockDialog";
+import { SlotDesignationDialog } from "@/components/booking/SlotDesignationDialog";
 import {
   isoAddDays,
   startOfWeek,
@@ -52,6 +53,7 @@ type Dialog =
   | { type: "book"; slot: SlotDTO; dayIso: string }
   | { type: "actions"; slot: SlotDTO; dayIso: string }
   | { type: "unlock"; slot: SlotDTO; dayIso: string }
+  | { type: "designation"; slot: SlotDTO; dayIso: string }
   | null;
 
 export function CalendarView({
@@ -125,6 +127,10 @@ export function CalendarView({
     else if (slot.status === "BOOKED") setDialog({ type: "actions", slot, dayIso });
     else if (slot.status === "LOCKED" && isAdmin)
       setDialog({ type: "unlock", slot, dayIso });
+    // Blocked slots (porada / ECHO oddelenie) have no other action, so a
+    // doctor's click goes straight to the only one they do have.
+    else if (slot.status === "BLOCKED" && canManageDays)
+      setDialog({ type: "designation", slot, dayIso });
   }
 
   async function handleOpen(
@@ -341,6 +347,16 @@ export function CalendarView({
           isAdmin={isAdmin}
           onClose={close}
           onBooked={afterChange}
+          onChangeDesignation={
+            canManageDays
+              ? () =>
+                  setDialog({
+                    type: "designation",
+                    slot: dialog.slot,
+                    dayIso: dialog.dayIso,
+                  })
+              : undefined
+          }
         />
       )}
       {dialog?.type === "actions" && (
@@ -357,6 +373,24 @@ export function CalendarView({
           dayIso={dialog.dayIso}
           onClose={close}
           onUnlocked={afterChange}
+          onChangeDesignation={
+            canManageDays
+              ? () =>
+                  setDialog({
+                    type: "designation",
+                    slot: dialog.slot,
+                    dayIso: dialog.dayIso,
+                  })
+              : undefined
+          }
+        />
+      )}
+      {dialog?.type === "designation" && (
+        <SlotDesignationDialog
+          slot={dialog.slot}
+          dayIso={dialog.dayIso}
+          onClose={close}
+          onChanged={afterChange}
         />
       )}
 
@@ -698,6 +732,7 @@ function DayColumn({
                 key={slot.id}
                 slot={slot}
                 highlight={slot.id === highlightId}
+                canRedesignate={canManage && day.status !== "CLOSED"}
                 onSelect={(s) => onSelect(s, iso)}
               />
             ))}

@@ -9,3 +9,13 @@ export const BLOCKING_STATUSES: AppointmentStatus[] = [
   AppointmentStatus.ARRIVED,
   AppointmentStatus.COMPLETED,
 ];
+
+// Statuses whose appointment still OCCUPIES its slot (the slot stays BOOKED).
+// NO_SHOW belongs here even though it is scheduling noise for deletion purposes:
+// marking a no-show never frees the slot, only /cancel and /reschedule do.
+export const SLOT_OCCUPYING_STATUSES: AppointmentStatus[] = [
+  AppointmentStatus.SCHEDULED,
+  AppointmentStatus.ARRIVED,
+  AppointmentStatus.COMPLETED,
+  AppointmentStatus.NO_SHOW,
+];

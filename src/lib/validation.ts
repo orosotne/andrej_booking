@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SLOT_DESIGNATIONS } from "./slot-designation";
 
 export const isoDate = z
   .string()
@@ -101,6 +102,17 @@ export const lockSchema = z.object({
   password: z.string().max(200).optional(),
   reason: z.string().max(500).optional(),
   until: isoDate.optional(),
+});
+
+// Zmena určenia slotu. Heslo ostáva nepovinné v schéme, aby chýbajúce/zlé heslo
+// hlásil assertUnlockPassword jednotnou hláškou (rovnako ako pri lockSchema).
+// "echo penta" nie je hodnota AppointmentType — je to pseudo-určenie, ktoré sa
+// na serveri rozloží na ECHO + žltú farbu (pozri slot-designation.ts). Preto sa
+// po drôte posiela určenie, nie dvojica {appointmentType, color}.
+export const slotDesignationSchema = z.object({
+  designation: z.enum(SLOT_DESIGNATIONS),
+  password: z.string().max(200).optional(),
+  reason: z.string().max(500).optional(),
 });
 
 // PATCH may only set "presence" outcomes. CANCELLED and RESCHEDULED are omitted

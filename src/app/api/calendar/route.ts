@@ -7,14 +7,7 @@ import { calendarRangeSchema } from "@/lib/validation";
 import { dateOnly } from "@/lib/calendar-date";
 import { toSlotDTO } from "@/lib/slot-dto";
 import type { CalendarResponse } from "@/lib/api-types";
-import type { AppointmentStatus } from "@/generated/prisma/client";
-
-const ACTIVE_APPOINTMENT_STATUSES: AppointmentStatus[] = [
-  "SCHEDULED",
-  "ARRIVED",
-  "COMPLETED",
-  "NO_SHOW",
-];
+import { SLOT_OCCUPYING_STATUSES } from "@/lib/appointment-status";
 
 // This endpoint pulls the full nested payload (days → slots → appointments →
 // patient), so the span is capped. The only callers are the week (7-day) and
@@ -43,7 +36,7 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
         orderBy: { startAt: "asc" },
         include: {
           appointments: {
-            where: { status: { in: ACTIVE_APPOINTMENT_STATUSES } },
+            where: { status: { in: SLOT_OCCUPYING_STATUSES } },
             include: {
               patient: {
                 select: {

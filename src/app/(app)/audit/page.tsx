@@ -6,6 +6,10 @@ import { getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
 import { TYPE_META } from "@/lib/slot-style";
 import { PATIENT_CATEGORY_LABEL } from "@/lib/patient-category";
+import {
+  DESIGNATION_LABEL,
+  type SlotDesignation,
+} from "@/lib/slot-designation";
 
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
@@ -50,6 +54,7 @@ const ACTION_LABEL: Record<string, string> = {
   "appointment.update": "Úprava objednávky",
   "slot.lock": "Zamknutie slotu",
   "slot.unlock": "Odomknutie slotu",
+  "slot.change_type": "Zmena určenia slotu",
   "calendar_day.delete": "Vymazanie dňa",
   "calendar_day.open": "Otvorenie dňa",
   "calendar_day.close": "Zatvorenie dňa",
@@ -343,6 +348,24 @@ export default async function AuditPage({
       case "slot.unlock": {
         const lbl = slotLabelOrNull(log.entityId);
         return <span>{lbl ?? `slot #${log.entityId.slice(-6)}`}</span>;
+      }
+      case "slot.change_type": {
+        const lbl = slotLabelOrNull(log.entityId) ?? `slot #${log.entityId.slice(-6)}`;
+        // changeSlotDesignation stamps the chosen designation alongside the raw
+        // rows, so the change reads as "porada → akútne" with no re-derivation.
+        const from = typeof before?.designation === "string" ? before.designation : null;
+        const to = typeof after?.designation === "string" ? after.designation : null;
+        return (
+          <span>
+            {lbl}
+            {from && to && (
+              <span className="ml-2 text-slate-600">
+                — {DESIGNATION_LABEL[from as SlotDesignation] ?? from} →{" "}
+                {DESIGNATION_LABEL[to as SlotDesignation] ?? to}
+              </span>
+            )}
+          </span>
+        );
       }
       case "calendar_day.delete": {
         const date = fmtIsoDate(before?.date);
