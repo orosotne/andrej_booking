@@ -1,4 +1,5 @@
 import { dateOnly, isLastFridayOfMonth } from "./calendar-date";
+import { isoAddDays, monthOf, startOfMonth, startOfWeek } from "./format";
 import { holidayName } from "./holidays-sk";
 import type { CalendarDayDTO, SlotDTO, SlotCountsDTO } from "./api-types";
 import type { AppointmentTypeLit } from "./slot-engine/types";
@@ -176,4 +177,27 @@ export function tallyDayByType(slots: SlotDTO[]): {
     else r[kind].booked++;
   }
   return r;
+}
+
+/**
+ * The Wed/Thu/Fri cells of one month grid, in render order — always a multiple
+ * of 3, with position % 3 giving 0 = Wed, 1 = Thu, 2 = Fri.
+ *
+ * Only the anchor's own month is shown. A week made entirely of neighbouring
+ * months is dropped (with fixed cell aspect ratios such a row is ~180px of
+ * nothing), but a stray day inside a kept week comes back as `null` rather than
+ * being removed: the grid fills left to right, so dropping it outright would
+ * pull the next day into the wrong weekday column.
+ */
+export function monthGridCells(anchorIso: string): (string | null)[] {
+  const month = monthOf(anchorIso);
+  // Anchor on the 1st, not on the given day: a mid-month anchor would otherwise
+  // start the grid at that week and silently drop the earlier days.
+  const gridStart = startOfWeek(startOfMonth(anchorIso));
+  return Array.from({ length: 6 }, (_, w) =>
+    [2, 3, 4].map((d) => isoAddDays(gridStart, w * 7 + d)),
+  )
+    .filter((week) => week.some((iso) => monthOf(iso) === month))
+    .flat()
+    .map((iso) => (monthOf(iso) === month ? iso : null));
 }

@@ -4,6 +4,8 @@ import {
   countSlots,
   availByType,
   tallyDayByType,
+  monthGridCells,
+  weekdayOf,
   openDayPasswordText,
 } from "@/lib/calendar-ui";
 import type { SlotDTO } from "@/lib/api-types";
@@ -243,5 +245,72 @@ describe("availByType is unchanged by the PENTA rule", () => {
       typed("AVAILABLE", "CUSTOM", "white"),
     ]);
     expect(r.custom).toEqual({ free: 2, total: 2 });
+  });
+});
+
+describe("monthGridCells", () => {
+  const days = (anchor: string) => monthGridCells(anchor);
+  const shown = (anchor: string) =>
+    days(anchor).filter((d): d is string => d !== null);
+
+  it("always returns whole weeks of Wed/Thu/Fri", () => {
+    for (const m of ["2026-09-01", "2026-10-01", "2026-11-01", "2027-02-01"]) {
+      const cells = days(m);
+      expect(cells.length % 3).toBe(0);
+      cells.forEach((iso, i) => {
+        // position % 3 → 0 = Wed, 1 = Thu, 2 = Fri, spacers included
+        if (iso !== null) expect(weekdayOf(iso)).toBe(3 + (i % 3));
+      });
+    }
+  });
+
+  it("never shows a day from a neighbouring month", () => {
+    for (const m of ["2026-09-01", "2026-10-01", "2026-11-01", "2026-12-01"]) {
+      expect(shown(m).every((iso) => iso.slice(0, 7) === m.slice(0, 7))).toBe(true);
+    }
+  });
+
+  it("shows every Wed/Thu/Fri of the month, in order", () => {
+    // September 2026: Wednesdays 2/9/16/23/30, Thursdays 3/10/17/24, Fridays 4/11/18/25.
+    expect(shown("2026-09-01")).toEqual([
+      "2026-09-02", "2026-09-03", "2026-09-04",
+      "2026-09-09", "2026-09-10", "2026-09-11",
+      "2026-09-16", "2026-09-17", "2026-09-18",
+      "2026-09-23", "2026-09-24", "2026-09-25",
+      "2026-09-30",
+    ]);
+  });
+
+  it("pads a trailing week so the last Wednesday keeps its column", () => {
+    // 2026-09-30 is a Wednesday; Oct 1 and 2 become spacers, not dropped.
+    const cells = days("2026-09-01");
+    expect(cells.slice(-3)).toEqual(["2026-09-30", null, null]);
+  });
+
+  it("pads a leading week the same way", () => {
+    // October 2026 opens on Thursday the 1st, so the Wednesday slot is a spacer.
+    expect(days("2026-10-01").slice(0, 3)).toEqual([null, "2026-10-01", "2026-10-02"]);
+  });
+
+  it("drops weeks made entirely of other months' days", () => {
+    // November 2026 starts on a Sunday and ends on a Monday, so its clinic
+    // weeks line up exactly: 4 rows, no spacers at all.
+    const cells = days("2026-11-01");
+    expect(cells).toHaveLength(12);
+    expect(cells.includes(null)).toBe(false);
+    expect(cells[0]).toBe("2026-11-04");
+    expect(cells[11]).toBe("2026-11-27");
+  });
+
+  it("handles a short February", () => {
+    // 2027-02-01 is a Monday; February 2027 has 28 days, ending Sunday the 28th.
+    const feb = shown("2027-02-01");
+    expect(feb[0]).toBe("2027-02-03");
+    expect(feb[feb.length - 1]).toBe("2027-02-26");
+    expect(feb.every((iso) => iso.startsWith("2027-02"))).toBe(true);
+  });
+
+  it("is stable whichever day of the month the anchor is", () => {
+    expect(days("2026-09-01")).toEqual(days("2026-09-17"));
   });
 });

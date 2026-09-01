@@ -40,6 +40,7 @@ import {
   weekdayOf,
   WORKING_WEEKDAYS,
   buildDayMap,
+  monthGridCells,
   countSlots,
   availByType,
   tallyDayByType,
@@ -89,13 +90,9 @@ export function MonthView({
   const gridStart = startOfWeek(anchor);
   // gridStart je pondelok; zobrazujeme len stredu/štvrtok/piatok (+2/+3/+4)
   // pre 6 týždňov mriežky → 18 buniek.
-  const cells = useMemo(
-    () =>
-      Array.from({ length: 6 }, (_, w) =>
-        [2, 3, 4].map((d) => isoAddDays(gridStart, w * 7 + d)),
-      ).flat(),
-    [gridStart],
-  );
+  // Wed/Thu/Fri of the anchor month only; null = a neighbouring month's day
+  // that has to hold its column. See monthGridCells.
+  const cells = monthGridCells(anchor);
 
   const { data, isLoading } = useCalendar(gridStart, isoAddDays(gridStart, 41));
   const { pendingIso, openDay, closeDay, reopenDay, requiresPassword } =
@@ -207,8 +204,8 @@ export function MonthView({
   // PDF/print export: this month's working days that carry slots, as a table.
   const printGroups: PrintGroup[] = cells
     .filter(
-      (iso) =>
-        monthOf(iso) === monthOf(anchor) && WORKING_WEEKDAYS.includes(weekdayOf(iso)),
+      (iso): iso is string =>
+        iso !== null && WORKING_WEEKDAYS.includes(weekdayOf(iso)),
     )
     .map((iso) => ({ iso, day: dayByIso.get(iso) }));
 
@@ -319,11 +316,19 @@ export function MonthView({
         </div>
 
         <div className={`mt-1 grid ${MONTH_GRID_COLS} gap-1`}>
-          {cells.map((iso) => (
+          {cells.map((iso, i) =>
+            iso === null ? (
+              // Spacer for a neighbouring month's day: keeps the weekday
+              // columns aligned without showing a foreign date.
+              <div
+                key={`gap-${i}`}
+                aria-hidden
+                className={i % 3 === 0 ? "aspect-[1/2]" : "aspect-[3/2]"}
+              />
+            ) : (
             <DayCell
               key={iso}
               iso={iso}
-              inMonth={monthOf(iso) === monthOf(anchor)}
               day={dayByIso.get(iso)}
               tally={tallyByIso.get(iso)}
               canManage={canManageDays}
@@ -335,7 +340,8 @@ export function MonthView({
               onRequestClose={() => setPendingClose(iso)}
               onRequestReopen={() => setPendingReopen(iso)}
             />
-          ))}
+            ),
+          )}
         </div>
       </div>
 
@@ -612,13 +618,13 @@ function AttendanceListDialog({
 const MONTH_GRID_COLS =
   "grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,3fr)]";
 
-/** Shared cell surface. min-h-0 + overflow-hidden keep content inside the aspect box. */
-function cellShell(inMonth: boolean): string {
-  return cn(
-    "flex h-full w-full min-h-0 overflow-hidden rounded-lg border p-1 text-left transition sm:p-1.5",
-    inMonth ? "bg-white" : "bg-transparent",
-  );
-}
+/**
+ * Shared cell surface. min-h-0 + overflow-hidden keep content inside the aspect
+ * box. The background stays white for every state — the border carries the
+ * state, so the counts sit on a consistent, quiet ground.
+ */
+const CELL_SHELL =
+  "flex h-full w-full min-h-0 overflow-hidden rounded-lg border bg-white p-1 text-left transition sm:p-1.5";
 
 type DayTally = ReturnType<typeof tallyDayByType>;
 
@@ -684,7 +690,6 @@ function tallyAriaLabel(iso: string, t: DayTally): string {
 
 function DayCell({
   iso,
-  inMonth,
   day,
   tally,
   canManage,
@@ -697,7 +702,6 @@ function DayCell({
   onRequestReopen,
 }: {
   iso: string;
-  inMonth: boolean;
   day: CalendarDayDTO | undefined;
   tally: DayTally | undefined;
   canManage: boolean;
@@ -730,14 +734,12 @@ function DayCell({
       className={cn(
         "relative rounded-lg",
         dow === 3 ? "aspect-[1/2]" : "aspect-[3/2]",
-        !inMonth && "opacity-50",
         isToday && "ring-2 ring-slate-900 ring-offset-1",
       )}
     >
       {dow === 3 ? (
         <WednesdayCell
           iso={iso}
-          inMonth={inMonth}
           day={day}
           canManage={canManage}
           opening={opening}
@@ -748,7 +750,6 @@ function DayCell({
       ) : (
         <WorkdayCell
           iso={iso}
-          inMonth={inMonth}
           day={day}
           tally={tally ?? EMPTY_TALLY}
           canManage={canManage}
@@ -792,7 +793,6 @@ function DayCell({
  */
 function WednesdayCell({
   iso,
-  inMonth,
   day,
   canManage,
   opening,
@@ -801,7 +801,6 @@ function WednesdayCell({
   onPick,
 }: {
   iso: string;
-  inMonth: boolean;
   day: CalendarDayDTO | undefined;
   canManage: boolean;
   opening: boolean;
@@ -821,7 +820,7 @@ function WednesdayCell({
         title={closed ? (day?.note ?? "Zatvorené") : undefined}
         aria-label={`${clinicLongDate(iso)} — ${closed ? "zatvorená streda" : "otvorená streda"}`}
         className={cn(
-          cellShell(inMonth),
+          CELL_SHELL,
           "items-center justify-center",
           closed
             ? "border-amber-200 bg-amber-50/50"
@@ -839,7 +838,7 @@ function WednesdayCell({
     return (
       <div
         className={cn(
-          cellShell(inMonth),
+          CELL_SHELL,
           "items-center justify-center border-dashed border-slate-200",
         )}
       >
@@ -855,7 +854,7 @@ function WednesdayCell({
       title="Otvoriť stredu"
       aria-label={`Otvoriť stredu ${clinicLongDate(iso)}`}
       className={cn(
-        cellShell(inMonth),
+        CELL_SHELL,
         "group relative items-center justify-center border-dashed border-slate-200",
         "hover:border-purple-300 hover:bg-purple-50/50 disabled:opacity-50",
       )}
@@ -886,7 +885,6 @@ function WednesdayCell({
  */
 function WorkdayCell({
   iso,
-  inMonth,
   day,
   tally,
   canManage,
@@ -896,7 +894,6 @@ function WorkdayCell({
   onPick,
 }: {
   iso: string;
-  inMonth: boolean;
   day: CalendarDayDTO | undefined;
   tally: DayTally;
   canManage: boolean;
@@ -921,11 +918,11 @@ function WorkdayCell({
             : tallyAriaLabel(iso, tally)
         }
         className={cn(
-          cellShell(inMonth),
+          CELL_SHELL,
           `grid ${CELL_INNER_COLS} gap-1`,
           closed
-            ? "border-amber-200 bg-amber-50/50"
-            : "border-emerald-300 bg-emerald-50/40 hover:border-emerald-400 hover:shadow-sm",
+            ? "border-amber-200"
+            : "border-emerald-300 hover:border-emerald-400 hover:shadow-sm",
         )}
       >
         <div className="flex min-w-0 items-center pl-0.5">
@@ -954,9 +951,9 @@ function WorkdayCell({
   return (
     <div
       className={cn(
-        cellShell(inMonth),
+        CELL_SHELL,
         `grid ${CELL_INNER_COLS} gap-1 border-dashed`,
-        holiday ? "border-amber-200 bg-amber-50/40" : "border-slate-200",
+        holiday ? "border-amber-200" : "border-slate-200",
       )}
     >
       <div className="flex min-w-0 items-center pl-0.5">
