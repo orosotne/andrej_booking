@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BarChart3 } from "lucide-react";
@@ -23,6 +24,7 @@ import { trendRange } from "@/lib/dashboard";
  */
 export function TrendSection({ today, enabled }: { today: string; enabled: boolean }) {
   const { from, to } = trendRange(today);
+  const chartRef = useRef<HTMLDivElement>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["statistics", "month", from, to],
     queryFn: () =>
@@ -31,6 +33,14 @@ export function TrendSection({ today, enabled }: { today: string; enabled: boole
       ),
     enabled,
   });
+
+  // On a phone the 12-month chart is wider than the screen. Left-aligned it
+  // opens on the oldest months — which for a clinic live since mid-2026 are
+  // empty, so the chart reads as broken. Start at the recent end instead.
+  useEffect(() => {
+    const el = chartRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [data]);
 
   if (!enabled) return null;
 
@@ -80,7 +90,7 @@ export function TrendSection({ today, enabled }: { today: string; enabled: boole
               </div>
             ))}
           </dl>
-          <div className="overflow-x-auto">
+          <div ref={chartRef} className="overflow-x-auto">
             <div className="min-w-[32rem]">
               <StatBarChart buckets={data.buckets} granularity="month" />
             </div>

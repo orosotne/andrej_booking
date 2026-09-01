@@ -59,13 +59,16 @@ export function DayPanel({
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-          <CalendarDays className="h-4 w-4 text-slate-400" aria-hidden />
+        <h2 className="flex flex-wrap items-center gap-x-2 text-base font-semibold text-slate-900">
+          <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
           {/* The clinic works Wed/Thu/Fri, so "dnes" is often not a clinic day —
               say which day this is rather than implying it is today. */}
           {isToday ? "Dnes" : "Najbližší ordinačný deň"}
-          <span className="font-normal text-slate-500">
-            · {clinicLongDate(day.date)}
+          {/* On a phone the date gets its own line; wrapping it beside the label
+              splits both into ragged two-line columns. */}
+          <span className="w-full font-normal text-slate-500 sm:w-auto">
+            <span className="hidden sm:inline">· </span>
+            {clinicLongDate(day.date)}
           </span>
         </h2>
         <Link
