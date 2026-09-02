@@ -5,6 +5,7 @@ import {
   availByType,
   tallyDayByType,
   monthGridCells,
+  monthStrip,
   weekdayOf,
   openDayPasswordText,
 } from "@/lib/calendar-ui";
@@ -312,5 +313,21 @@ describe("monthGridCells", () => {
 
   it("is stable whichever day of the month the anchor is", () => {
     expect(days("2026-09-01")).toEqual(days("2026-09-17"));
+  });
+});
+
+describe("monthStrip", () => {
+  it("starts at the current month and runs 15 months forward", () => {
+    const strip = monthStrip("2026-09-02");
+    expect(strip).toHaveLength(15);
+    expect(strip[0]).toBe("2026-09-01");
+    expect(strip[3]).toBe("2026-12-01");
+    expect(strip[7]).toBe("2027-04-01");
+    expect(strip[14]).toBe("2027-11-01");
+  });
+
+  it("anchors on the month even for a mid-month date", () => {
+    expect(monthStrip("2026-12-31")[0]).toBe("2026-12-01");
+    expect(monthStrip("2026-12-31")[1]).toBe("2027-01-01");
   });
 });

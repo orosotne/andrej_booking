@@ -1,5 +1,5 @@
 import { dateOnly, isLastFridayOfMonth } from "./calendar-date";
-import { isoAddDays, monthOf, startOfMonth, startOfWeek } from "./format";
+import { addMonths, isoAddDays, monthOf, startOfMonth, startOfWeek } from "./format";
 import { holidayName } from "./holidays-sk";
 import type { CalendarDayDTO, SlotDTO, SlotCountsDTO } from "./api-types";
 import type { AppointmentTypeLit } from "./slot-engine/types";
@@ -200,4 +200,15 @@ export function monthGridCells(anchorIso: string): (string | null)[] {
     .filter((week) => week.some((iso) => monthOf(iso) === month))
     .flat()
     .map((iso) => (monthOf(iso) === month ? iso : null));
+}
+
+/**
+ * The months of the quick-jump strip above the month grid: `count` consecutive
+ * months starting with the month `todayIso` falls in, as first-of-month ISO
+ * dates. The strip always starts at the current month, so it slides forward
+ * by itself once a month ends.
+ */
+export function monthStrip(todayIso: string, count = 15): string[] {
+  const first = startOfMonth(todayIso);
+  return Array.from({ length: count }, (_, i) => addMonths(first, i));
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -34,6 +34,7 @@ import {
   clinicTime,
   clinicDayChip,
   dayOfMonth,
+  isoWeekNumber,
   CLINIC_MONTHS_SHORT,
 } from "@/lib/format";
 import {
@@ -41,8 +42,7 @@ import {
   WORKING_WEEKDAYS,
   buildDayMap,
   monthGridCells,
-  countSlots,
-  availByType,
+  monthStrip,
   tallyDayByType,
   openDayPasswordText,
   type TypeTally,
@@ -51,7 +51,6 @@ import { cn } from "@/lib/cn";
 import { TYPE_META } from "@/lib/slot-style";
 import { holidayName } from "@/lib/holidays-sk";
 import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
-import { SlotTally, SlotAvailByType } from "./SlotTally";
 
 type AttendanceEntry = {
   appointmentId: string;
@@ -93,6 +92,10 @@ export function MonthView({
   // Wed/Thu/Fri of the anchor month only; null = a neighbouring month's day
   // that has to hold its column. See monthGridCells.
   const cells = monthGridCells(anchor);
+  // One row per week: [Wed, Thu, Fri], prefixed in the grid by the ISO week no.
+  const weekRows = Array.from({ length: cells.length / 3 }, (_, w) =>
+    cells.slice(w * 3, w * 3 + 3),
+  );
 
   const { data, isLoading } = useCalendar(gridStart, isoAddDays(gridStart, 41));
   const { pendingIso, openDay, closeDay, reopenDay, requiresPassword } =
@@ -119,20 +122,27 @@ export function MonthView({
     [data, anchor],
   );
 
-  // Totals above the grid: this month (from the loaded grid data) and the whole
-  // year (one tiny aggregate query). Year "voľné" is naturally small — far-future
-  // slots are still LOCKED — so booked is the headline number.
-  const { monthCounts, monthAvail } = useMemo(() => {
-    const monthSlots = (data?.days ?? [])
-      .filter((d) => monthOf(d.date) === monthOf(anchor))
-      .flatMap((d) => d.slots);
-    return {
-      monthCounts: countSlots(monthSlots),
-      monthAvail: availByType(monthSlots),
-    };
-  }, [data, anchor]);
-  const monthHasSlots =
-    monthCounts.available + monthCounts.booked + monthCounts.locked > 0;
+  // Totals above the grid: this month per type, with exactly the cells' logic
+  // (free / locked / booked; PENTA and "iné" excluded), so the strip is the sum
+  // of the cells below it. The whole year is one tiny aggregate query. Year
+  // "voľné" is naturally small — far-future slots are still LOCKED — so booked
+  // is the headline number.
+  const monthTally = useMemo(
+    () =>
+      tallyDayByType(
+        (data?.days ?? [])
+          .filter((d) => monthOf(d.date) === monthOf(anchor))
+          .flatMap((d) => d.slots),
+      ),
+    [data, anchor],
+  );
+  const monthHasSlots = (["akut", "disp", "echo"] as const).some(
+    (k) =>
+      monthTally[k].free + monthTally[k].locked + monthTally[k].booked > 0,
+  );
+  // Quick-jump strip: 15 months from today's month. Anchored on today, not on
+  // the viewed month, so it only moves when the calendar month rolls over.
+  const stripMonths = useMemo(() => monthStrip(todayIso()), []);
   const year = anchor.slice(0, 4);
   const yearStats = useCalendarStats(`${year}-01-01`, `${year}-12-31`);
 
@@ -247,9 +257,42 @@ export function MonthView({
         </div>
       </div>
 
+      {/* 15 black squares, one per month from the current one, numbered by
+          month-of-year. The viewed month (if inside the strip) reads yellow. */}
+      <div
+        role="group"
+        aria-label="Rýchly výber mesiaca"
+        className="mt-2 grid max-w-[640px] grid-cols-15 gap-0.5 sm:gap-1"
+      >
+        {stripMonths.map((iso) => {
+          const selected = iso === anchor;
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => setAnchor(iso)}
+              aria-label={clinicMonthLabel(iso)}
+              aria-pressed={selected}
+              className={cn(
+                "flex aspect-square items-center justify-center rounded bg-slate-900 text-xs font-semibold tabular-nums transition hover:bg-slate-700 sm:text-sm",
+                selected ? "text-yellow-400" : "text-white",
+              )}
+            >
+              {Number(iso.slice(5, 7))}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-        {monthHasSlots && <SlotTally counts={monthCounts} label="Tento mesiac" />}
-        <SlotAvailByType counts={monthAvail} />
+        {monthHasSlots && (
+          <div className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
+            <span className="font-medium text-slate-500">Tento mesiac:</span>
+            <TypeRow tally={monthTally.akut} freeClass="text-red-700" label="Akútne" />
+            <TypeRow tally={monthTally.disp} freeClass="text-emerald-700" label="Dispenzárne" />
+            <TypeRow tally={monthTally.echo} freeClass="text-blue-700" label="ECHO" />
+          </div>
+        )}
         {(monthAttendance.arrived.length > 0 ||
           monthAttendance.noShow.length > 0) && (
           <div className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200">
@@ -284,14 +327,6 @@ export function MonthView({
             )}
           </div>
         )}
-        <span className="inline-flex items-center gap-2 text-sm text-slate-500">
-          <span className="inline-flex items-center gap-0.5">
-            <Lock aria-hidden className="h-3.5 w-3.5 text-slate-400" /> zamknuté
-          </span>
-          <span className="inline-flex items-center gap-0.5">
-            <Check aria-hidden className="h-3.5 w-3.5 text-slate-400" /> obsadené
-          </span>
-        </span>
         <span className="text-sm text-slate-500">
           Za rok {year}:{" "}
           <span className="font-semibold text-slate-700">
@@ -308,6 +343,7 @@ export function MonthView({
           aspect ratios from making the month absurdly tall on a wide screen. */}
       <div className="mx-auto mt-3 w-full max-w-[640px]">
         <div className={`grid ${MONTH_GRID_COLS} gap-1 text-center text-xs font-medium uppercase tracking-wide text-slate-400`}>
+          <div aria-hidden />
           {WEEKDAY_HEADERS.map((h) => (
             <div key={h} className="py-1">
               {h}
@@ -316,32 +352,47 @@ export function MonthView({
         </div>
 
         <div className={`mt-1 grid ${MONTH_GRID_COLS} gap-1`}>
-          {cells.map((iso, i) =>
-            iso === null ? (
-              // Spacer for a neighbouring month's day: keeps the weekday
-              // columns aligned without showing a foreign date.
-              <div
-                key={`gap-${i}`}
-                aria-hidden
-                className={i % 3 === 0 ? "aspect-[1/2]" : "aspect-[3/2]"}
-              />
-            ) : (
-            <DayCell
-              key={iso}
-              iso={iso}
-              day={dayByIso.get(iso)}
-              tally={tallyByIso.get(iso)}
-              canManage={canManageDays}
-              canManageClosures={canManageClosures}
-              opening={pendingIso === iso}
-              loading={isLoading}
-              onOpen={() => requestOpen(iso)}
-              onPick={() => onPickDay(iso)}
-              onRequestClose={() => setPendingClose(iso)}
-              onRequestReopen={() => setPendingReopen(iso)}
-            />
-            ),
-          )}
+          {weekRows.map((row, w) => {
+            // Every cell of a row shares its ISO week; at least one is a real
+            // day (monthGridCells drops all-foreign weeks).
+            const weekIso = row.find((iso) => iso !== null)!;
+            return (
+              <Fragment key={weekIso}>
+                <div
+                  className="flex items-center justify-end pr-0.5 text-xs font-medium tabular-nums text-slate-400"
+                  title={`${isoWeekNumber(weekIso)}. týždeň`}
+                >
+                  {isoWeekNumber(weekIso)}.
+                </div>
+                {row.map((iso, i) =>
+                  iso === null ? (
+                    // Spacer for a neighbouring month's day: keeps the weekday
+                    // columns aligned without showing a foreign date.
+                    <div
+                      key={`gap-${w}-${i}`}
+                      aria-hidden
+                      className={i === 0 ? "aspect-[1/2]" : "aspect-[3/2]"}
+                    />
+                  ) : (
+                    <DayCell
+                      key={iso}
+                      iso={iso}
+                      day={dayByIso.get(iso)}
+                      tally={tallyByIso.get(iso)}
+                      canManage={canManageDays}
+                      canManageClosures={canManageClosures}
+                      opening={pendingIso === iso}
+                      loading={isLoading}
+                      onOpen={() => requestOpen(iso)}
+                      onPick={() => onPickDay(iso)}
+                      onRequestClose={() => setPendingClose(iso)}
+                      onRequestReopen={() => setPendingReopen(iso)}
+                    />
+                  ),
+                )}
+              </Fragment>
+            );
+          })}
         </div>
       </div>
 
@@ -613,10 +664,11 @@ function AttendanceListDialog({
  * Aspect ratios that pair with MONTH_GRID_COLS: with columns at 1:3:3, a
  * Wednesday at 1:2 and a Thu/Fri at 3:2 resolve to exactly the same height
  * (2 fr units), for any gap — so every grid row lines up. minmax(0,…) stops a
- * wide child from inflating a track and breaking the ratio.
+ * wide child from inflating a track and breaking the ratio. The leading auto
+ * column holds the ISO week number and takes no part in the ratio.
  */
 const MONTH_GRID_COLS =
-  "grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,3fr)]";
+  "grid-cols-[auto_minmax(0,1fr)_minmax(0,3fr)_minmax(0,3fr)]";
 
 /**
  * Shared cell surface. min-h-0 + overflow-hidden keep content inside the aspect
@@ -637,16 +689,20 @@ const EMPTY_TALLY: DayTally = {
 /**
  * One type row of a month cell: free count (hidden at zero, coloured by type),
  * then still-locked and already-booked counts in grey — those two always show,
- * zero included, so the three rows keep a stable shape. The icons are
- * decorative; the row's title carries the meaning.
+ * zero included, so the three rows keep a stable shape. The free count sits in
+ * a fixed-width slot so the lock and the tick stay put whether or not there is
+ * a number in front of them. The icons are decorative; the row's title carries
+ * the meaning. `freeSizeClass` lets one row (dispenzárne) run a larger digit.
  */
 function TypeRow({
   tally,
   freeClass,
+  freeSizeClass,
   label,
 }: {
   tally: TypeTally;
   freeClass: string;
+  freeSizeClass?: string;
   label: string;
 }) {
   return (
@@ -654,14 +710,20 @@ function TypeRow({
       className="flex min-w-0 items-center gap-1 text-[11px] leading-none sm:gap-1.5 sm:text-base"
       title={`${label}: ${tally.free} voľné, ${tally.locked} zamknuté, ${tally.booked} obsadené`}
     >
-      {tally.free > 0 && (
-        <span className={cn("font-bold tabular-nums", freeClass)}>{tally.free}</span>
-      )}
+      <span
+        className={cn(
+          "w-5 shrink-0 font-bold tabular-nums sm:w-8",
+          freeClass,
+          freeSizeClass,
+        )}
+      >
+        {tally.free > 0 ? tally.free : ""}
+      </span>
       <span className="inline-flex items-center gap-0.5 text-slate-500">
         <Lock aria-hidden className="h-3 w-3 shrink-0 text-slate-400 sm:h-4 sm:w-4" />
         <span className="tabular-nums">{tally.locked}</span>
       </span>
-      <span className="inline-flex items-center gap-0.5 text-slate-500">
+      <span className="ml-1 inline-flex items-center gap-0.5 text-slate-500 sm:ml-2">
         <Check aria-hidden className="h-3 w-3 shrink-0 text-slate-400 sm:h-4 sm:w-4" />
         <span className="tabular-nums">{tally.booked}</span>
       </span>
@@ -674,7 +736,12 @@ function TypeRows({ tally }: { tally: DayTally }) {
   return (
     <div className="grid h-full grid-rows-3 items-center">
       <TypeRow tally={tally.akut} freeClass="text-red-700" label="Akútne" />
-      <TypeRow tally={tally.disp} freeClass="text-emerald-700" label="Dispenzárne" />
+      <TypeRow
+        tally={tally.disp}
+        freeClass="text-emerald-700"
+        freeSizeClass="text-sm sm:text-[1.3rem]"
+        label="Dispenzárne"
+      />
       <TypeRow tally={tally.echo} freeClass="text-blue-700" label="ECHO" />
     </div>
   );
@@ -1017,7 +1084,7 @@ function DayNumber({
   return (
     <span
       className={cn(
-        "text-xl font-bold leading-none tabular-nums sm:text-4xl",
+        "text-[1.625rem] font-bold leading-none tabular-nums sm:text-[2.925rem]",
         toneClass,
       )}
     >
