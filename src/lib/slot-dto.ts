@@ -18,6 +18,8 @@ interface ActiveAppointment {
   id: string;
   status: string;
   note: string | null;
+  createdAt: Date;
+  patientCategory: string | null;
   patient: {
     id: string;
     firstName: string;
@@ -50,6 +52,8 @@ export function toSlotDTO(
           id: active.id,
           status: active.status,
           note: active.note,
+          createdAt: active.createdAt.toISOString(),
+          patientCategory: active.patientCategory,
           patient: active.patient,
         }
       : null,

@@ -5,7 +5,8 @@ import { patientCreateSchema } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit/audit";
 import { auditPatientSnapshot } from "@/lib/audit/patient-snapshot";
 import { defineRoute } from "@/lib/route";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import { accentInsensitiveRegex } from "@/lib/accent-search";
 
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = 20;
@@ -20,16 +21,23 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
   const pageRaw = Number(url.searchParams.get("page"));
   const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1;
 
-  const where: Prisma.PatientWhereInput = q
-    ? {
-        OR: [
-          { firstName: { contains: q, mode: "insensitive" } },
-          { lastName: { contains: q, mode: "insensitive" } },
-          { phone: { contains: q } },
-          { externalPatientId: { contains: q, mode: "insensitive" } },
-        ],
-      }
-    : {};
+  // Name matching ignores diacritics on both sides ("Danisova" finds
+  // "Danišová" and vice versa) — Prisma has no regex filter, so the matching
+  // ids come from one raw query and feed the regular paginated lookup.
+  let where: Prisma.PatientWhereInput = {};
+  if (q) {
+    const re = accentInsensitiveRegex(q);
+    const byName = await prisma.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT id FROM patients WHERE first_name ~* ${re} OR last_name ~* ${re}`,
+    );
+    where = {
+      OR: [
+        { id: { in: byName.map((r) => r.id) } },
+        { phone: { contains: q } },
+        { externalPatientId: { contains: q, mode: "insensitive" } },
+      ],
+    };
+  }
 
   const [total, patients] = await Promise.all([
     prisma.patient.count({ where }),
@@ -49,7 +57,15 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
           orderBy: { slot: { startAt: "asc" } },
           take: 1,
           select: {
-            slot: { select: { calendarDay: { select: { date: true } } } },
+            createdAt: true,
+            patientCategory: true,
+            slot: {
+              select: {
+                startAt: true,
+                appointmentType: true,
+                calendarDay: { select: { date: true } },
+              },
+            },
           },
         },
       },
@@ -62,6 +78,15 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
       nextAppointmentDate:
         appointments[0]?.slot.calendarDay.date.toISOString().slice(0, 10) ??
         null,
+      // Feeds the lead-time / category symbol next to the date in the list.
+      nextAppointment: appointments[0]
+        ? {
+            startAt: appointments[0].slot.startAt.toISOString(),
+            appointmentType: appointments[0].slot.appointmentType,
+            createdAt: appointments[0].createdAt.toISOString(),
+            patientCategory: appointments[0].patientCategory,
+          }
+        : null,
     })),
     total,
     page,

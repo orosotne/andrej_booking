@@ -11,7 +11,7 @@ import { AlertTriangle, CalendarClock, CalendarDays, Loader2, Printer } from "lu
 import type { SlotDTO } from "@/lib/api-types";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META, apptStatusLabel } from "@/lib/slot-style";
-import { clinicTime, clinicLongDate, clinicDayChip, todayIso } from "@/lib/format";
+import { clinicTime, clinicLongDate, clinicDayChip, clinicShortDate, clinicDate, todayIso } from "@/lib/format";
 import { SlotPickerCalendar } from "@/components/patients/SlotPickerCalendar";
 import { AppointmentSlip, printSlip } from "@/components/booking/AppointmentSlip";
 
@@ -154,6 +154,10 @@ export function AppointmentActions({
               {apptStatusLabel(status)}
             </span>
           </div>
+
+          <p className="text-xs text-slate-400">
+            Objednávka vytvorená {clinicShortDate(clinicDate(appointment.createdAt))}
+          </p>
 
           <button
             type="button"

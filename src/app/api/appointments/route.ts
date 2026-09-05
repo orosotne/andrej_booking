@@ -71,6 +71,8 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
       id: a.id,
       status: a.status,
       note: a.note,
+      createdAt: a.createdAt,
+      patientCategory: a.patientCategory,
       patient: a.patient,
     }),
   }));

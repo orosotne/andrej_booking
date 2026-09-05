@@ -16,6 +16,9 @@ export interface AppointmentLiteDTO {
   id: string;
   status: string;
   note: string | null;
+  /** ISO instant the booking was created — drives the lead-time symbol. */
+  createdAt: string;
+  patientCategory: string | null;
   patient: PatientLiteDTO;
 }
 

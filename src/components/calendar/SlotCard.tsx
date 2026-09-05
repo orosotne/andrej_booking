@@ -1,6 +1,7 @@
 "use client";
 
-import { Lock, Check, CheckCheck, User, Ban, Clock3, AlertTriangle } from "lucide-react";
+import { Lock, Check, CheckCheck, Ban, AlertTriangle } from "lucide-react";
+import { BookingMark } from "@/components/ui/BookingMark";
 import type { SlotDTO } from "@/lib/api-types";
 import { TYPE_META } from "@/lib/slot-style";
 import { clinicTime, clinicDayChip } from "@/lib/format";
@@ -93,11 +94,7 @@ export function SlotCard({
         >
           {clinicTime(slot.startAt)}
         </span>
-        <StatusIcon
-          status={slot.status}
-          appointmentStatus={slot.appointment?.status}
-          darkBg={isEchoDept}
-        />
+        <StatusIcon slot={slot} darkBg={isEchoDept} />
       </div>
 
       <div className="relative mt-1 leading-tight">
@@ -157,22 +154,15 @@ export function SlotCard({
   );
 }
 
-function StatusIcon({
-  status,
-  appointmentStatus,
-  darkBg,
-}: {
-  status: SlotDTO["status"];
-  appointmentStatus?: string;
-  darkBg?: boolean;
-}) {
+function StatusIcon({ slot, darkBg }: { slot: SlotDTO; darkBg?: boolean }) {
   const cls = "h-3.5 w-3.5";
   const lockColor = darkBg ? "text-white/80" : "text-slate-400";
-  switch (status) {
+  const appointmentStatus = slot.appointment?.status;
+  switch (slot.status) {
     case "LOCKED":
       return <Lock className={`${cls} ${lockColor}`} aria-label="Voľné, dočasne uzamknuté" />;
     case "AVAILABLE":
-      return <Clock3 className={`${cls} text-emerald-600`} aria-label="Voľné" />;
+      return null;
     case "BOOKED":
       if (appointmentStatus === "COMPLETED")
         return <CheckCheck className={`${cls} text-emerald-700`} aria-label="Vybavený" />;
@@ -180,7 +170,16 @@ function StatusIcon({
         return <Check className={`${cls} text-emerald-600`} aria-label="Prišiel" />;
       if (appointmentStatus === "NO_SHOW")
         return <AlertTriangle className={`${cls} text-orange-600`} aria-label="Neprišiel" />;
-      return <User className={`${cls} text-slate-700`} aria-label="Obsadené" />;
+      if (!slot.appointment) return null;
+      return (
+        <BookingMark
+          createdAt={slot.appointment.createdAt}
+          startAt={slot.startAt}
+          patientCategory={slot.appointment.patientCategory}
+          appointmentType={slot.appointmentType}
+          className={cls}
+        />
+      );
     case "BLOCKED":
       return <Ban className={`${cls} ${darkBg ? "text-white/80" : "text-slate-400"}`} aria-label="Blokované" />;
     case "COMPLETED":

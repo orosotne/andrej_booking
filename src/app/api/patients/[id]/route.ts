@@ -67,6 +67,8 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ params }) => {
       endAt: a.slot.endAt.toISOString(),
       appointmentType: a.slot.appointmentType,
       date: a.slot.calendarDay.date.toISOString().slice(0, 10),
+      createdAt: a.createdAt.toISOString(),
+      patientCategory: a.patientCategory,
     })),
     lastVisit: lastVisit
       ? {

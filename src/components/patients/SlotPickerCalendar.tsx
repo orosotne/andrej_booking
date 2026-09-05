@@ -28,6 +28,25 @@ export interface PickableSlot {
 
 const WEEKDAYS = ["Po", "Ut", "St", "Št", "Pi", "So", "Ne"];
 
+// Free days are tinted by appointment kind: dispenzár green, ECHO blue, akútne red.
+const DAY_TINT: Record<
+  "DISPENSARY" | "ECHO" | "PRE_HOSPITAL",
+  { day: string; dot: string }
+> = {
+  DISPENSARY: {
+    day: "bg-emerald-50 font-medium text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100",
+    dot: "bg-emerald-500",
+  },
+  ECHO: {
+    day: "bg-blue-50 font-medium text-blue-800 ring-1 ring-blue-200 hover:bg-blue-100",
+    dot: "bg-blue-500",
+  },
+  PRE_HOSPITAL: {
+    day: "bg-red-50 font-medium text-red-800 ring-1 ring-red-200 hover:bg-red-100",
+    dot: "bg-red-500",
+  },
+};
+
 export function SlotPickerCalendar({
   type,
   typeLabel,
@@ -211,7 +230,7 @@ export function SlotPickerCalendar({
                     isSelected
                       ? "bg-slate-900 font-semibold text-white"
                       : available
-                        ? "bg-emerald-50 font-medium text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                        ? DAY_TINT[type].day
                         : inMonth
                           ? "text-slate-300"
                           : "text-slate-200"
@@ -219,7 +238,9 @@ export function SlotPickerCalendar({
                 >
                   {dayOfMonth(iso)}
                   {available && !isSelected && (
-                    <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-500" />
+                    <span
+                      className={`absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${DAY_TINT[type].dot}`}
+                    />
                   )}
                 </button>
               );

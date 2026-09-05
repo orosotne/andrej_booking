@@ -23,6 +23,8 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
+import { bookingColor, birthYearShort } from "@/lib/booking-mark";
+import { BookingMark } from "@/components/ui/BookingMark";
 import { SlotPickerCalendar } from "./SlotPickerCalendar";
 import { AppointmentSlip, printSlip } from "@/components/booking/AppointmentSlip";
 import {
@@ -30,11 +32,21 @@ import {
   clinicLongDate,
   clinicDayChip,
   clinicShortDate,
+  clinicDate,
 } from "@/lib/format";
 import type {
   AppointmentTypeLit,
   PatientCategoryLit,
 } from "@/lib/slot-engine/types";
+import type { BookingColor } from "@/lib/booking-mark";
+
+// Text colour of a booked date / heading by patient category (akútne / dispenzár / echo).
+const DATE_TEXT: Record<BookingColor, string> = {
+  red: "text-red-600",
+  green: "text-emerald-700",
+  blue: "text-blue-700",
+  gray: "text-slate-500",
+};
 
 interface Patient {
   id: string;
@@ -49,6 +61,12 @@ interface Patient {
   note: string | null;
   // YYYY-MM-DD of the nearest upcoming scheduled appointment, or null if none.
   nextAppointmentDate: string | null;
+  nextAppointment: {
+    startAt: string;
+    appointmentType: string;
+    createdAt: string;
+    patientCategory: string | null;
+  } | null;
 }
 
 type Editing = Patient | "new" | null;
@@ -142,15 +160,39 @@ export function PatientsManager() {
                   <span className="block truncate font-medium text-slate-900">
                     {p.lastName} {p.firstName}
                   </span>
-                  {p.phone && (
-                    <span className="block text-sm text-slate-400">{p.phone}</span>
+                  {(p.phone || birthYearShort(p.birthYear, p.nationalId)) && (
+                    <span className="block text-sm text-slate-400">
+                      {p.phone}
+                      {birthYearShort(p.birthYear, p.nationalId) && (
+                        <span className="tabular-nums">
+                          {p.phone ? " " : ""}({birthYearShort(p.birthYear, p.nationalId)})
+                        </span>
+                      )}
+                    </span>
                   )}
                 </span>
-                <span className="shrink-0 text-sm font-medium tabular-nums">
-                  {p.nextAppointmentDate ? (
-                    <span className="text-emerald-700">
-                      {clinicShortDate(p.nextAppointmentDate)}
-                    </span>
+                <span className="flex shrink-0 items-center gap-2 text-sm font-medium tabular-nums">
+                  {p.nextAppointmentDate && p.nextAppointment ? (
+                    <>
+                      <BookingMark
+                        createdAt={p.nextAppointment.createdAt}
+                        startAt={p.nextAppointment.startAt}
+                        patientCategory={p.nextAppointment.patientCategory}
+                        appointmentType={p.nextAppointment.appointmentType}
+                      />
+                      <span
+                        className={
+                          DATE_TEXT[
+                            bookingColor(
+                              p.nextAppointment.patientCategory,
+                              p.nextAppointment.appointmentType,
+                            )
+                          ]
+                        }
+                      >
+                        {clinicShortDate(p.nextAppointmentDate)}
+                      </span>
+                    </>
                   ) : (
                     <span className="text-slate-900">Neobjednaný</span>
                   )}
@@ -504,6 +546,8 @@ interface UpcomingDTO {
   endAt: string;
   appointmentType: string;
   date: string;
+  createdAt: string;
+  patientCategory: string | null;
 }
 
 interface LastVisitDTO {
@@ -916,6 +960,9 @@ function UpcomingTermin({
           </Link>
           <p className="text-sm text-slate-600">
             {clinicTime(appt.startAt)}–{clinicTime(appt.endAt)} · {typeLabel}
+          </p>
+          <p className="text-xs text-slate-400">
+            Objednávka vytvorená {clinicShortDate(clinicDate(appt.createdAt))}
           </p>
         </div>
         {mode === "view" && (
