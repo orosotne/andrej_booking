@@ -9,11 +9,12 @@ import type { AppointmentTypeLit } from "@/lib/slot-engine/types";
 const querySchema = z.object({
   type: z.enum(["DISPENSARY", "ECHO", "PRE_HOSPITAL"]),
   // 0 = "najbližší termín" (od zajtra ďalej, nie dnes);
-  // 3/5.5/11 = prvý voľný termín o N mesiacov a neskôr. 5.5 stojí za tlačidlom
-  // "o 6 mes." — polročná kontrola sa smie objednať už od 5½ mesiaca. 6 už
-  // žiadny klient neposiela, ostáva platné kvôli záložkám otvoreným pred zmenou.
-  months: z.coerce.number().refine((n) => [0, 3, 5.5, 6, 11].includes(n), {
-    message: "months musí byť 0, 3, 5.5, 6 alebo 11",
+  // 2/5/11 = prvý voľný termín o N mesiacov a neskôr. 2 stojí za tlačidlom
+  // "o 3 mes." a 5 za "o 6 mes." — kontrola sa smie objednať mesiac vopred.
+  // 3, 5.5 a 6 už žiadny klient neposiela, ostávajú platné kvôli oknám
+  // otvoreným pred zmenou.
+  months: z.coerce.number().refine((n) => [0, 2, 3, 5, 5.5, 6, 11].includes(n), {
+    message: "months musí byť 0, 2, 3, 5, 5.5, 6 alebo 11",
   }),
   // Voliteľný horný strop "do N mesiacov" (zrkadlí dolný `months`). Keď je
   // zadaný, slot musí začať pred dnes+N mesiacov. Bez neho je horizont
