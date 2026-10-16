@@ -7,11 +7,21 @@ import {
   bucketShortLabel,
   type Granularity,
   type StatBucket,
+  type StatCategory,
   type StatCounts,
 } from "@/lib/statistics";
 import { STAT_CATEGORY_BAR } from "./stat-colors";
 
-const STACK_ORDER = [...STAT_CATEGORIES].reverse();
+// Segments of a bar from the top down (flex-col renders the first one on top):
+// ECHO on top, then akútne, then dispenzár do 100 dní, 100 – 250 dní and
+// nad 250 dní at the bottom.
+const STACK_ORDER: readonly StatCategory[] = [
+  "ECHO",
+  "AKUTNE",
+  "LEAD_0_100",
+  "LEAD_100_250",
+  "LEAD_250_PLUS",
+];
 
 /** Colour key shared by both charts and the table header. */
 export function StatLegend() {
@@ -85,8 +95,6 @@ export function StatBarChart({
                   }`}
                   style={{ height: `${(b.total / max) * 100}%` }}
                 >
-                  {/* Reversed so the first category sits at the bottom of the
-                      stack, matching the left-to-right order of the share bar. */}
                   {STACK_ORDER.map((c) =>
                     b.counts[c] > 0 ? (
                       <div
