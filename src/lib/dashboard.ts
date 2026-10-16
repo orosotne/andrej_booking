@@ -1,6 +1,6 @@
 import { isoAddDays, monthOf } from "./format";
 import { weekdayOf } from "./calendar-ui";
-import { isLastFridayOfMonth, dateOnly } from "./calendar-date";
+import { isGatedLastFriday, dateOnly } from "./calendar-date";
 import { holidayName, holidaysBetween } from "./holidays-sk";
 
 /**
@@ -48,7 +48,8 @@ export function pickFocusDays(
  *
  * Wednesdays and last Fridays are excluded because generateForward skips them
  * on purpose (they are password-gated extra days). Without those two exclusions
- * this would raise an alarm every single month.
+ * this would raise an alarm every single month. From 2028 the last Friday is an
+ * ordinary generated day (isGatedLastFriday), so a missing one counts again.
  */
 export function missingWorkingDays(
   days: DaySummary[],
@@ -61,7 +62,7 @@ export function missingWorkingDays(
   for (let iso = today; iso <= end; iso = isoAddDays(iso, 1)) {
     const dow = weekdayOf(iso);
     if (dow !== 4 && dow !== 5) continue; // Thu/Fri only — never Wednesday
-    if (dow === 5 && isLastFridayOfMonth(dateOnly(iso))) continue;
+    if (dow === 5 && isGatedLastFriday(dateOnly(iso))) continue;
     if (holidayName(iso)) continue; // holidays are closed on purpose
     if ((bySlots.get(iso) ?? 0) === 0) out.push(iso);
   }

@@ -1,8 +1,7 @@
 import "dotenv/config";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
-import { dayBlocksFor, type PolicyKey } from "@/lib/slot-engine/template";
-import { WEEKDAY } from "@/lib/calendar-date";
+import { createSlotConfig } from "./slot-config";
 
 // Production-safe initialization. Unlike prisma/seed.ts (which creates demo
 // users, demo patients, and a generated demo calendar for local dev), this
@@ -51,67 +50,7 @@ async function seedReleasePoliciesAndTemplates() {
     return;
   }
 
-  const policies = {
-    PRE_HOSPITAL_14D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:00 (14 dní)", releaseType: "DAYS_BEFORE", daysBefore: 14 },
-    }),
-    PRE_HOSPITAL_21D: await prisma.releasePolicy.create({
-      data: { name: "Predhospitalizačné 7:30 (21 dní)", releaseType: "DAYS_BEFORE", daysBefore: 21 },
-    }),
-    IMMEDIATE: await prisma.releasePolicy.create({
-      data: { name: "Voľné hneď (14 mesiacov popredu)", releaseType: "IMMEDIATE" },
-    }),
-    DISPENSARY_9_6M: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 9:00–9:30 (6 mesiacov)", releaseType: "MONTHS_BEFORE", monthsBefore: 6 },
-    }),
-    DISPENSARY_1130_6M: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 11:30 (6 mesiacov)", releaseType: "MONTHS_BEFORE", monthsBefore: 6 },
-    }),
-    DISPENSARY_12_3M: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 12:00 streda+štvrtok (3 mesiace)", releaseType: "MONTHS_BEFORE", monthsBefore: 3 },
-    }),
-    DISPENSARY_12_1M: await prisma.releasePolicy.create({
-      data: { name: "Dispenzár 12:00 piatok (1 mesiac)", releaseType: "MONTHS_BEFORE", monthsBefore: 1 },
-    }),
-    ECHO_13D: await prisma.releasePolicy.create({
-      data: { name: "ECHO 15:00 (13 dní)", releaseType: "DAYS_BEFORE", daysBefore: 13 },
-    }),
-    BLOCKED: await prisma.releasePolicy.create({
-      data: { name: "Blokované (Porada / ECHO oddelenie)", releaseType: "MANUAL_ONLY" },
-    }),
-  } satisfies Record<PolicyKey, { id: string }>;
-
-  const days = [
-    { dayOfWeek: WEEKDAY.WED, name: "Streda (mimoriadna)" },
-    { dayOfWeek: WEEKDAY.THU, name: "Štvrtok" },
-    { dayOfWeek: WEEKDAY.FRI, name: "Piatok" },
-  ];
-
-  for (const day of days) {
-    const template = await prisma.scheduleTemplate.create({
-      data: {
-        name: day.name,
-        dayOfWeek: day.dayOfWeek,
-        startTime: "07:00",
-        endTime: "15:20",
-        slotDurationMinutes: 30,
-      },
-    });
-    await prisma.slotRule.createMany({
-      data: dayBlocksFor(day.dayOfWeek).map((block, i) => ({
-        templateId: template.id,
-        name: `${block.start}–${block.end} ${block.type}`,
-        startTime: block.start,
-        endTime: block.end,
-        appointmentType: block.type,
-        color: block.colorKey,
-        isBookable: block.bookable,
-        slotDurationMinutes: block.slotDurationMinutes ?? 30,
-        releasePolicyId: policies[block.policyKey].id,
-        priority: i,
-      })),
-    });
-  }
+  await createSlotConfig(prisma);
   console.log("✓ created release policies, schedule templates, and slot rules");
 }
 

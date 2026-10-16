@@ -11,7 +11,7 @@ import { todayIso } from "@/lib/format";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import {
   dateOnly,
-  isLastFridayOfMonth,
+  isGatedLastFriday,
   weekdaysInMonth,
   WEEKDAY,
   isPastIsoDate,
@@ -27,8 +27,8 @@ export const POST = defineRoute(
     }
     const target = dateOnly(date);
     const isWednesday = target.getUTCDay() === WEEKDAY.WED;
-    const isLastFri =
-      target.getUTCDay() === WEEKDAY.FRI && isLastFridayOfMonth(target);
+    // Od 2028 je posledný piatok bežný deň — bez hesla (isGatedLastFriday).
+    const isLastFri = isGatedLastFriday(target);
     const isHoliday = holidayName(date) !== null;
 
     // Password gate: streda + posledný piatok v mesiaci + sviatok.

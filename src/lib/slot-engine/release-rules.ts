@@ -70,7 +70,9 @@ export function computeReleaseAt(
 // generation, template re-apply and the backfill script
 // (prisma/block-echo-1330-1410-feb2027.ts) all agree. Slots booked before the
 // cutover are never touched — those guards live in the callers (diffDaySlots
-// skips booked slots; the script skips BOOKED/COMPLETED).
+// skips booked slots; the script skips BOOKED/COMPLETED). The ECHO-type check
+// lives in the caller too (expandTemplateRules): a dispenzár slot at 13:30, as
+// on a Wednesday, is not password-only.
 export const PASSWORD_ONLY_FROM = new Date(Date.UTC(2027, 1, 1)); // 2027-02-01
 export const PASSWORD_ONLY_TIMES: readonly string[] = ["13:30", "13:50", "14:10"];
 

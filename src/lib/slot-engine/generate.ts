@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import {
   dateOnly,
   defaultDayType,
-  isLastFridayOfMonth,
+  isGatedLastFriday,
   toIsoDate,
   WEEKDAY,
   type DefaultDayType,
@@ -11,6 +11,7 @@ import { NotFoundError, ConflictError } from "@/lib/errors";
 import { holidayName, holidaysBetween } from "@/lib/holidays-sk";
 import { partitionReopenSlots } from "./release-rules";
 import { expandTemplateRules } from "./reconcile";
+import { pickTemplate } from "./template";
 
 export interface GenerateDayOptions {
   /** Overrides the computed day type (e.g. MANUAL_WEDNESDAY when opening a Wednesday). */
@@ -22,10 +23,12 @@ export interface GenerateDayOptions {
 }
 
 /**
- * Idempotently generates the calendar day + its slots from the active schedule
- * template. Slot release times come from each rule's policy; on the last Friday
- * of the month every non-blocked slot is overridden to the last-Friday policy,
- * and a day opened by hand (Wednesday / last Friday) opens all of them at once.
+ * Idempotently generates the calendar day + its slots from the schedule
+ * template version valid on that date (pickTemplate — Thursday and Friday
+ * switch layouts on 1 Jan 2028). Slot release times come from each rule's
+ * policy; on a password-gated last Friday every non-blocked slot is overridden
+ * to the last-Friday policy, and a day opened by hand (Wednesday / last Friday)
+ * opens all of them at once.
  */
 export async function generateDay(
   dateInput: Date | string,
@@ -43,7 +46,7 @@ export async function generateDay(
     });
     if (existing && existing.slots.length > 0) return existing; // already generated
 
-    const template = await tx.scheduleTemplate.findFirst({
+    const templates = await tx.scheduleTemplate.findMany({
       where: { dayOfWeek: dow, isActive: true },
       include: {
         slotRules: {
@@ -52,8 +55,11 @@ export async function generateDay(
         },
       },
     });
+    const template = pickTemplate(templates, date);
     if (!template) {
-      throw new Error(`No active schedule template for weekday ${dow}`);
+      throw new Error(
+        `No active schedule template for ${toIsoDate(date)} (weekday ${dow})`,
+      );
     }
 
     const opened = Boolean(opts.openedByUserId);
@@ -151,7 +157,8 @@ export async function reopenDay(
 /**
  * Generates working days (Thu/Fri) that don't yet exist, up to `months` ahead.
  * Most slots stay LOCKED — release rules open them over time. Wednesdays are
- * intentionally never auto-generated (they are opened manually).
+ * intentionally never auto-generated (they are opened manually), and neither
+ * is the last Friday of a month until 2027 (isGatedLastFriday).
  */
 export async function generateForward(opts: { months?: number; now?: Date } = {}) {
   const months = opts.months ?? 14;
@@ -176,8 +183,9 @@ export async function generateForward(opts: { months?: number; now?: Date } = {}
   ) {
     const dow = d.getUTCDay();
     if (dow !== WEEKDAY.THU && dow !== WEEKDAY.FRI) continue;
-    // Last Friday of the month is password-gated: must be opened manually like a Wednesday.
-    if (dow === WEEKDAY.FRI && isLastFridayOfMonth(d)) continue;
+    // Last Friday of the month is password-gated (until 2027): must be opened
+    // manually like a Wednesday. From 2028 it is generated like any Friday.
+    if (dow === WEEKDAY.FRI && isGatedLastFriday(d)) continue;
     if (existingIsos.has(toIsoDate(d))) continue;
 
     await generateDay(new Date(d), { now });

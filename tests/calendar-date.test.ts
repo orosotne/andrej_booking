@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isLastFridayOfMonth,
+  isGatedLastFriday,
   defaultDayType,
   weekdaysInMonth,
   WEEKDAY,
@@ -33,6 +34,22 @@ describe("defaultDayType", () => {
     expect(defaultDayType(dateOnly("2026-07-01"))).toBe("MANUAL_WEDNESDAY"));
   it("CLOSED for Monday", () =>
     expect(defaultDayType(dateOnly("2026-06-29"))).toBe("CLOSED"));
+  it("the last Friday of 2027 is still LAST_FRIDAY", () =>
+    expect(defaultDayType(dateOnly("2027-12-31"))).toBe("LAST_FRIDAY"));
+  it("from 2028 the last Friday is an ordinary REGULAR_FRIDAY", () =>
+    expect(defaultDayType(dateOnly("2028-01-28"))).toBe("REGULAR_FRIDAY"));
+});
+
+describe("isGatedLastFriday (password-gated last Friday, only until 2027)", () => {
+  it("true for the last Friday of December 2027", () => {
+    expect(isGatedLastFriday(dateOnly("2027-12-31"))).toBe(true);
+  });
+  it("false for the last Friday of January 2028", () => {
+    expect(isGatedLastFriday(dateOnly("2028-01-28"))).toBe(false);
+  });
+  it("false for a Friday that is not the last one", () => {
+    expect(isGatedLastFriday(dateOnly("2027-12-24"))).toBe(false);
+  });
 });
 
 describe("weekdaysInMonth", () => {

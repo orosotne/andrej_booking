@@ -173,6 +173,18 @@ describe("manually opened days (streda / posledný piatok otvorené heslom)", ()
     expect(slots.every((s) => s.releaseAt === null)).toBe(true);
   });
 
+  it("from 2028 a last Friday follows its own rules — no 30-day override", () => {
+    // 2028-01-28 is the last Friday of January 2028; until 2027 this slot
+    // would wait for the 30-days-before window (2027-12-29).
+    const [s] = expandTemplateRules(
+      [rule({ startTime: "10:00", endTime: "10:30" })],
+      dateOnly("2028-01-28"),
+      dateOnly("2026-11-01"),
+    );
+    expect(s.status).toBe("AVAILABLE");
+    expect(s.releaseAt).toEqual(new Date(0));
+  });
+
   it("password-only PENTA slots stay locked even on an opened day", () => {
     // 2027-02-24 is a Wednesday after the Feb 2027 cutover.
     const [s] = expandTemplateRules(
@@ -409,6 +421,23 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
     const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-02-26"), now);
     expect(s.status).toBe("LOCKED");
     expect(s.releaseAt).toBeNull();
+  });
+
+  it("only ECHO slots are blocked — a Wednesday dispenzár at 13:30 opens normally", () => {
+    // 2027-03-03 is a Wednesday after the cutover; the Wednesday layout runs
+    // 30-min dispenzár slots 13:30, 14:00, 14:30.
+    const slots = expandTemplateRules(
+      [rule({ startTime: "13:30", endTime: "15:00" })],
+      dateOnly("2027-03-03"),
+      now,
+      { manuallyOpened: true },
+    );
+    expect(slots).toHaveLength(3);
+    for (const s of slots) {
+      expect(s.status).toBe("AVAILABLE");
+      expect(s.releaseAt).toEqual(new Date(0));
+      expect(s.color).toBe("white");
+    }
   });
 
   it("the 14:40 ECHO slot stays immediately bookable after the cutover", () => {

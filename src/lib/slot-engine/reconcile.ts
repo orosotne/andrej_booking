@@ -1,4 +1,4 @@
-import { isLastFridayOfMonth } from "@/lib/calendar-date";
+import { isGatedLastFriday } from "@/lib/calendar-date";
 import { wallClockToUtc } from "@/lib/clinic-time";
 import { hhmmToMin, minToHhmm, SLOT_MINUTES } from "./template";
 import {
@@ -117,7 +117,9 @@ function expandRule(
  * slots (blocked types stay blocked either way):
  *   - a manually opened day (Wednesday / last Friday, opts.manuallyOpened)
  *     drops every release window — the slots open right away,
- *   - otherwise a last Friday uses the last-Friday policy for every slot.
+ *   - otherwise a password-gated last Friday (until 2027, isGatedLastFriday)
+ *     uses the last-Friday policy for every slot. From 2028 the last Friday
+ *     follows the Friday template like any other Friday.
  */
 export function expandTemplateRules(
   rules: RuleForExpansion[],
@@ -125,7 +127,7 @@ export function expandTemplateRules(
   now: Date,
   opts: ExpandOptions = {},
 ): DesiredSlot[] {
-  const lastFri = isLastFridayOfMonth(date);
+  const lastFri = isGatedLastFriday(date);
   return rules.flatMap((rule) => {
     const isLocked =
       rule.appointmentType === "CONSULTATION_BLOCKED" ||
@@ -139,12 +141,15 @@ export function expandTemplateRules(
           : toPolicyInput(rule.releasePolicy);
 
     return expandRule(rule.startTime, rule.endTime, rule.slotDurationMinutes).map((s) => {
-      // Password-only slots (13:30/13:50/14:10 from Feb 2027) trump every
+      // Password-only slots (ECHO 13:30/13:50/14:10 from Feb 2027) trump every
       // policy, including the last-Friday and manually-opened overrides: LOCKED
       // until a per-slot password unlock, never released automatically — those
       // are reserved capacity, not a time window. They also carry the dedicated
-      // "yellow" colour, which the UI renders with the PENTA watermark.
-      const passwordOnly = isPasswordOnlySlot(date, s.start);
+      // "yellow" colour, which the UI renders with the PENTA watermark. Only
+      // ECHO slots: the Wednesday layout runs a dispenzár slot at 13:30 that
+      // opens like the rest of that day.
+      const passwordOnly =
+        rule.appointmentType === "ECHO" && isPasswordOnlySlot(date, s.start);
       const slotPolicy: ReleasePolicyInput = passwordOnly
         ? { type: "MANUAL_ONLY" }
         : policyInput;

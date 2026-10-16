@@ -101,6 +101,12 @@ describe("missingWorkingDays", () => {
     expect(out).toContain("2026-06-19"); // the Friday before it is a real gap
   });
 
+  it("from 2028 the last Friday is generated like any Friday, so a gap is listed", () => {
+    // 2028-01-28 is the last Friday of January 2028.
+    const out = missingWorkingDays([], "2028-01-17", 2);
+    expect(out).toContain("2028-01-28");
+  });
+
   it("does not flag a holiday — those are closed deliberately", () => {
     // 2026-12-24 (Štedrý deň) is a Thursday; 2026-12-25 a Friday holiday too.
     const out = missingWorkingDays([], "2026-12-21", 1);

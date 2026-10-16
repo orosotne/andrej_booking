@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
 import { apiSend } from "@/lib/client";
+import { clinicShortDate } from "@/lib/format";
 
 interface RuleDTO {
   id: string;
@@ -19,6 +20,8 @@ interface TemplateDTO {
   id: string;
   name: string;
   dayOfWeek: number;
+  validFrom: string | null; // YYYY-MM-DD, inclusive
+  validTo: string | null;
   rules: RuleDTO[];
 }
 interface PolicyLite {
@@ -43,6 +46,15 @@ const DAY_NAMES: Record<number, string> = {
   5: "Piatok",
   6: "Sobota",
 };
+
+/** "od 1. 1. 2028" / "do 31. 12. 2027" — null for a template without limits. */
+function validityLabel(t: TemplateDTO): string | null {
+  if (t.validFrom && t.validTo)
+    return `${clinicShortDate(t.validFrom)} – ${clinicShortDate(t.validTo)}`;
+  if (t.validFrom) return `od ${clinicShortDate(t.validFrom)}`;
+  if (t.validTo) return `do ${clinicShortDate(t.validTo)}`;
+  return null;
+}
 
 const TYPE_OPTIONS = [
   { value: "PRE_HOSPITAL", label: "Akútne" },
@@ -123,6 +135,11 @@ export function TemplateEditor({
         <section key={t.id} className="mt-5 rounded-xl bg-white p-4 ring-1 ring-slate-200">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
             {DAY_NAMES[t.dayOfWeek] ?? t.name}
+            {validityLabel(t) && (
+              <span className="ml-2 font-medium normal-case tracking-normal text-slate-400">
+                {validityLabel(t)}
+              </span>
+            )}
           </h2>
           <div className="space-y-2">
             {[...t.rules]

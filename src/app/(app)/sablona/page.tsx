@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
+import { dateOnly, toIsoDate } from "@/lib/calendar-date";
+import { todayIso } from "@/lib/format";
 import { TemplateEditor } from "@/components/admin/TemplateEditor";
 
 export default async function TemplatePage() {
@@ -9,8 +11,11 @@ export default async function TemplatePage() {
   if (user.role !== "ADMIN") redirect("/calendar");
 
   const [templates, policies] = await Promise.all([
+    // A version that ended before today can no longer generate or re-apply
+    // anything, so it is left out.
     prisma.scheduleTemplate.findMany({
-      orderBy: { dayOfWeek: "asc" },
+      where: { OR: [{ validTo: null }, { validTo: { gte: dateOnly(todayIso()) } }] },
+      orderBy: [{ dayOfWeek: "asc" }, { validFrom: { sort: "asc", nulls: "first" } }],
       include: { slotRules: { orderBy: { priority: "asc" } } },
     }),
     prisma.releasePolicy.findMany({ orderBy: { name: "asc" } }),
@@ -22,6 +27,8 @@ export default async function TemplatePage() {
         id: t.id,
         name: t.name,
         dayOfWeek: t.dayOfWeek,
+        validFrom: t.validFrom ? toIsoDate(t.validFrom) : null,
+        validTo: t.validTo ? toIsoDate(t.validTo) : null,
         rules: t.slotRules.map((r) => ({
           id: r.id,
           startTime: r.startTime,

@@ -44,7 +44,7 @@ import {
   availByType,
   openDayPasswordText,
 } from "@/lib/calendar-ui";
-import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
+import { isGatedLastFriday, dateOnly } from "@/lib/calendar-date";
 import { holidayName } from "@/lib/holidays-sk";
 import { CalendarPrint, type PrintGroup } from "./CalendarPrint";
 import { SlotTally, SlotAvailByType } from "./SlotTally";
@@ -652,7 +652,7 @@ function DayColumn({
   highlightId?: string;
 }) {
   const isWednesday = weekdayOf(iso) === 3;
-  const isLastFriday = weekdayOf(iso) === 5 && isLastFridayOfMonth(dateOnly(iso));
+  const isLastFriday = weekdayOf(iso) === 5 && isGatedLastFriday(dateOnly(iso));
   const isWorkingDay = WORKING_WEEKDAYS.includes(weekdayOf(iso));
   const isToday = iso === todayIso();
   const holiday = isWorkingDay ? holidayName(iso) : null;

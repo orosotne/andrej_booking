@@ -1,4 +1,4 @@
-import { dateOnly, isLastFridayOfMonth } from "./calendar-date";
+import { dateOnly, isGatedLastFriday } from "./calendar-date";
 import { addMonths, isoAddDays, monthOf, startOfMonth, startOfWeek } from "./format";
 import { holidayName } from "./holidays-sk";
 import type { CalendarDayDTO, SlotDTO, SlotCountsDTO } from "./api-types";
@@ -39,7 +39,7 @@ export function openDayPasswordText(iso: string): {
 } {
   const dow = weekdayOf(iso);
   const isWednesday = dow === 3;
-  const isLastFri = dow === 5 && isLastFridayOfMonth(dateOnly(iso));
+  const isLastFri = dow === 5 && isGatedLastFriday(dateOnly(iso));
   const holiday = holidayName(iso);
   const base = holiday
     ? `Tento deň je sviatok (${holiday}). Otvorenie je výnimočné — zadajte heslo.`

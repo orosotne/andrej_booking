@@ -27,11 +27,26 @@ export function isLastFridayOfMonth(d: Date): boolean {
   return plus7.getUTCMonth() !== d.getUTCMonth();
 }
 
+// Od 1. 1. 2028 platí nový rozvrh: štvrtok a piatok majú vlastné verzie
+// šablón (validFrom) a posledný piatok v mesiaci je bežný ordinačný deň —
+// generuje sa automaticky, bez hesla a bez 30-dňového okna.
+export const SCHEDULE_2028_FROM = "2028-01-01";
+
+/**
+ * The last Friday of a month that is an extra, password-gated day: it is not
+ * generated automatically, opening it needs the password and, when generated
+ * without it, its slots wait for the 30-days-before window. Applies only to
+ * dates before SCHEDULE_2028_FROM; from 2028 it is an ordinary Friday.
+ */
+export function isGatedLastFriday(d: Date): boolean {
+  return isLastFridayOfMonth(d) && toIsoDate(d) < SCHEDULE_2028_FROM;
+}
+
 /** Maps a date to its default day type (before any manual opening). */
 export function defaultDayType(d: Date): DefaultDayType {
   switch (d.getUTCDay()) {
     case WEEKDAY.FRI:
-      return isLastFridayOfMonth(d) ? "LAST_FRIDAY" : "REGULAR_FRIDAY";
+      return isGatedLastFriday(d) ? "LAST_FRIDAY" : "REGULAR_FRIDAY";
     case WEEKDAY.THU:
       return "REGULAR_THURSDAY";
     case WEEKDAY.WED:

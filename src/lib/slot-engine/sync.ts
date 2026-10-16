@@ -9,6 +9,7 @@ import {
   type ExistingSlot,
   type SlotUpdate,
 } from "./reconcile";
+import { templateAppliesTo } from "./template";
 import type { AppointmentTypeLit, SlotStatusLit } from "./types";
 
 export interface SyncReport {
@@ -52,7 +53,9 @@ function bucketUpdates(updates: SlotUpdate[]) {
 
 /**
  * Re-applies a schedule template to its already-generated FUTURE days, so that
- * editing the template propagates to existing days. Past days are never touched.
+ * editing the template propagates to existing days. Past days are never touched,
+ * and neither are days outside the template's validity range (validFrom /
+ * validTo) — those belong to another version of the weekday's template.
  * Booked and manually-locked slots are never deleted or modified — only free
  * (AVAILABLE/LOCKED, unbooked) slots are added, removed, or refreshed in place
  * when their block's time-window / type / release rule changed. With
@@ -75,8 +78,9 @@ export async function syncTemplateToFutureDays(
   if (!template) throw new NotFoundError("Šablóna neexistuje.");
 
   // date is @db.Date, so weekday isn't queryable — fetch future days and filter
-  // to this template's weekday in JS. An active appointment = a non-cancelled,
-  // non-rescheduled booking on the slot (mirrors the partial unique index).
+  // to the days this template generates in JS (weekday + validity range). An
+  // active appointment = a non-cancelled, non-rescheduled booking on the slot
+  // (mirrors the partial unique index).
   const days = await prisma.calendarDay.findMany({
     where: { date: { gte: today } },
     include: {
@@ -98,7 +102,7 @@ export async function syncTemplateToFutureDays(
       },
     },
   });
-  const targetDays = days.filter((d) => d.date.getUTCDay() === template.dayOfWeek);
+  const targetDays = days.filter((d) => templateAppliesTo(template, d.date));
 
   const toCreate: (DesiredSlot & { calendarDayId: string })[] = [];
   const toUpdate: SlotUpdate[] = [];

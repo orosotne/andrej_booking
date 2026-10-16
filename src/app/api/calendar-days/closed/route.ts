@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { ADMIN_ONLY } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
 import { defineRoute } from "@/lib/route";
-import { dateOnly, toIsoDate, isLastFridayOfMonth, WEEKDAY } from "@/lib/calendar-date";
+import { dateOnly, toIsoDate, isGatedLastFriday, WEEKDAY } from "@/lib/calendar-date";
 import { holidayName } from "@/lib/holidays-sk";
 import type { ClosedDayDTO } from "@/lib/api-types";
 
 // Administratively closed days for the given year: CLOSED days NOT owned by a
 // vacation (those are managed in the vacation list). Rule-based default closures
-// (every Wednesday, every last Friday) are excluded — they are closed by the
+// (every Wednesday, every last Friday until 2027) are excluded — they are closed by the
 // standing schedule regardless, so listing them is noise. Closed public holidays
 // are kept (admins want them visible). What remains: genuine manual closures.
 export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
@@ -38,7 +38,7 @@ export const GET = defineRoute({ roles: ADMIN_ONLY }, async ({ req }) => {
       if (d.holiday) return true; // closed holidays stay visible
       const day = dateOnly(d.date);
       if (day.getUTCDay() === WEEKDAY.WED) return false; // default-closed by rule
-      if (isLastFridayOfMonth(day)) return false; // default-closed by rule
+      if (isGatedLastFriday(day)) return false; // default-closed by rule
       return true;
     });
 

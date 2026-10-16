@@ -21,7 +21,7 @@ import { useDayActions } from "@/hooks/useDayActions";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
-import { isLastFridayOfMonth, dateOnly } from "@/lib/calendar-date";
+import { isGatedLastFriday, dateOnly } from "@/lib/calendar-date";
 import {
   startOfWeek,
   startOfMonth,
@@ -970,7 +970,7 @@ function WorkdayCell({
   onPick: () => void;
 }) {
   const dow = weekdayOf(iso);
-  const lastFriday = dow === 5 && isLastFridayOfMonth(dateOnly(iso));
+  const lastFriday = dow === 5 && isGatedLastFriday(dateOnly(iso));
   const holiday = holidayName(iso);
 
   if (day && day.slots.length > 0) {
