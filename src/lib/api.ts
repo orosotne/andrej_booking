@@ -6,7 +6,10 @@ import type { AuditContext } from "./audit/audit";
 /** Maps thrown errors to JSON responses with the right HTTP status. */
 export function jsonError(e: unknown): NextResponse {
   if (e instanceof AppError) {
-    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
+    return NextResponse.json(
+      { error: e.message, code: e.code, ...(e.details ? { details: e.details } : {}) },
+      { status: e.status },
+    );
   }
   if (e instanceof ZodError) {
     return NextResponse.json(

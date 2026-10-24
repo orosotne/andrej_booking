@@ -15,8 +15,8 @@ export const TYPE_META: Record<
   },
   CONSULTATION_BLOCKED: {
     label: "Porada",
-    bg: "var(--slot-blocked)",
-    border: "var(--slot-blocked-bd)",
+    bg: "var(--slot-porada)",
+    border: "var(--slot-porada-bd)",
   },
   DISPENSARY: {
     label: "Dispenzárne",

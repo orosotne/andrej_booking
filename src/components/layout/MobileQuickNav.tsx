@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LayoutDashboard, Users } from "lucide-react";
+import { BarChart3, CalendarDays, LayoutDashboard, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITEMS = [
@@ -11,18 +11,25 @@ const ITEMS = [
   { href: "/pacienti", label: "Pacienti", Icon: Users },
 ];
 
+// Admin-only, like the page itself.
+const STATS = { href: "/statistika", label: "Štatistika", Icon: BarChart3 };
+
 const isOn = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
 
-export function MobileQuickNav() {
+export function MobileQuickNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
+  const items = isAdmin ? [...ITEMS, STATS] : ITEMS;
 
   return (
     <nav
-      className="no-print grid grid-cols-3 gap-2 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden"
+      className={cn(
+        "no-print grid gap-2 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden",
+        isAdmin ? "grid-cols-4" : "grid-cols-3",
+      )}
       aria-label="Rýchly prístup"
     >
-      {ITEMS.map(({ href, label, Icon }) => {
+      {items.map(({ href, label, Icon }) => {
         const active = isOn(pathname, href);
         return (
           <Link

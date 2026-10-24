@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { Field, TextareaField } from "@/components/ui/Field";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { PatientSearch, type PatientLite } from "./PatientSearch";
+import {
+  NewPatientGatePanel,
+  newPatientGateFor,
+  newPatientGateFromError,
+  type NewPatientGateInfo,
+} from "./NewPatientGate";
 import type { SlotDTO } from "@/lib/api-types";
 import type { PatientCategoryLit } from "@/lib/slot-engine/types";
 import { apiSend } from "@/lib/client";
@@ -56,7 +62,11 @@ export function BookingDialog({
   // slot odomkne release cron sám.
   const [lockKind, setLockKind] = useState<"PASSWORD" | "DATE">("PASSWORD");
   const [lockUntil, setLockUntil] = useState("");
+  // Set when the server refused the booking under the new-patient rule; the
+  // same verdict is usually known up front from the patient's createdAt.
+  const [serverGate, setServerGate] = useState<NewPatientGateInfo | null>(null);
   const meta = TYPE_META[slot.appointmentType];
+  const gate = patient ? (serverGate ?? newPatientGateFor(slot, patient)) : null;
 
   const categoryFits = category
     ? categoryAllowsSlot(category, slot.appointmentType)
@@ -68,7 +78,7 @@ export function BookingDialog({
     categoryFits &&
     (!needsReason || categoryReason.trim().length > 0);
 
-  function confirm() {
+  function confirm(newPatientPassword?: string) {
     if (!patient || !category) return;
     run(
       () =>
@@ -78,10 +88,16 @@ export function BookingDialog({
           patientCategory: category,
           categoryReason: needsReason ? categoryReason.trim() : undefined,
           note: note || undefined,
+          newPatientPassword,
         }),
       {
         success: `Objednané: ${patient.lastName} ${patient.firstName}`,
         onDone: onBooked,
+        onError: (e) => {
+          const g = newPatientGateFromError(e);
+          if (g) setServerGate(g);
+          return g !== null;
+        },
       },
     );
   }
@@ -253,6 +269,7 @@ export function BookingDialog({
                 setPatient(null);
                 setCategory(null);
                 setCategoryReason("");
+                setServerGate(null);
               }}
               className="mt-1 text-xs text-slate-500 underline hover:text-slate-700"
             >
@@ -297,15 +314,25 @@ export function BookingDialog({
             rows={2}
           />
 
-          <Button
-            variant="success"
-            fullWidth
-            loading={busy}
-            disabled={!canSubmit}
-            onClick={confirm}
-          >
-            Potvrdiť objednávku
-          </Button>
+          {gate ? (
+            <NewPatientGatePanel
+              info={gate}
+              busy={busy}
+              submitLabel="Objednať s heslom"
+              submitDisabled={!canSubmit}
+              onSubmit={(password) => confirm(password)}
+            />
+          ) : (
+            <Button
+              variant="success"
+              fullWidth
+              loading={busy}
+              disabled={!canSubmit}
+              onClick={() => confirm()}
+            >
+              Potvrdiť objednávku
+            </Button>
+          )}
         </div>
       )}
     </Modal>

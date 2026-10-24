@@ -185,7 +185,7 @@ describe("manually opened days (streda / posledný piatok otvorené heslom)", ()
     expect(s.releaseAt).toEqual(new Date(0));
   });
 
-  it("password-only PENTA slots stay locked even on an opened day", () => {
+  it("PENTA slots keep their 10-day window even on an opened day", () => {
     // 2027-02-24 is a Wednesday after the Feb 2027 cutover.
     const [s] = expandTemplateRules(
       [
@@ -202,7 +202,7 @@ describe("manually opened days (streda / posledný piatok otvorené heslom)", ()
       opened,
     );
     expect(s.status).toBe("LOCKED");
-    expect(s.releaseAt).toBeNull();
+    expect(s.releaseAt).toEqual(new Date("2027-02-14T06:00:00.000Z"));
     expect(s.color).toBe("yellow");
   });
 });
@@ -393,7 +393,7 @@ describe("diffDaySlots", () => {
   });
 });
 
-describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", () => {
+describe("ECHO PENTA slots (13:30/13:50/14:10 from Feb 2027 open 10 days before)", () => {
   const echo = (startTime: string, endTime: string) =>
     rule({
       startTime,
@@ -409,21 +409,45 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
     expect(s.color).toBe("blue");
   });
 
-  it("from 2027-02-01 the 13:30 slot generates LOCKED, no release time, yellow", () => {
+  it("from 2027-02-01 the 13:30 slot generates yellow, LOCKED until 10 days before", () => {
     const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-02-04"), now);
     expect(s.status).toBe("LOCKED");
-    expect(s.releaseAt).toBeNull();
+    expect(s.releaseAt).toEqual(new Date("2027-01-25T06:00:00.000Z"));
     expect(s.color).toBe("yellow");
   });
 
-  it("the block trumps the last-Friday override", () => {
+  it("all three PENTA slots share the window, whatever the rule's own policy", () => {
+    const slots = expandTemplateRules(
+      [echo("13:30", "14:30")], // 13:30, 13:50, 14:10 — IMMEDIATE by policy
+      dateOnly("2027-03-04"),
+      now,
+    );
+    expect(slots.map((s) => s.releaseAt?.toISOString())).toEqual([
+      "2027-02-22T06:00:00.000Z",
+      "2027-02-22T06:00:00.000Z",
+      "2027-02-22T06:00:00.000Z",
+    ]);
+    expect(slots.every((s) => s.color === "yellow")).toBe(true);
+  });
+
+  it("generates AVAILABLE once inside the 10-day window", () => {
+    const [s] = expandTemplateRules(
+      [echo("13:50", "14:10")],
+      dateOnly("2027-02-04"),
+      new Date("2027-01-25T06:00:00.000Z"), // exactly the release moment
+    );
+    expect(s.status).toBe("AVAILABLE");
+    expect(s.color).toBe("yellow");
+  });
+
+  it("the PENTA window trumps the last-Friday override", () => {
     // 2027-02-26 is the last Friday of February 2027.
     const [s] = expandTemplateRules([echo("13:30", "13:50")], dateOnly("2027-02-26"), now);
     expect(s.status).toBe("LOCKED");
-    expect(s.releaseAt).toBeNull();
+    expect(s.releaseAt).toEqual(new Date("2027-02-16T06:00:00.000Z"));
   });
 
-  it("only ECHO slots are blocked — a Wednesday dispenzár at 13:30 opens normally", () => {
+  it("only ECHO slots are PENTA — a Wednesday dispenzár at 13:30 opens normally", () => {
     // 2027-03-03 is a Wednesday after the cutover; the Wednesday layout runs
     // 30-min dispenzár slots 13:30, 14:00, 14:30.
     const slots = expandTemplateRules(
@@ -447,7 +471,7 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
     expect(s.color).toBe("blue");
   });
 
-  it("a template re-apply locks an existing free slot but never a booked one", () => {
+  it("a template re-apply moves an existing free slot to the PENTA window, never a booked one", () => {
     const day = dateOnly("2027-02-04");
     const desired = expandTemplateRules([echo("13:30", "13:50")], day, now);
     const base = {
@@ -466,7 +490,7 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
     expect(free.toUpdate[0]).toMatchObject({
       id: "free",
       status: "LOCKED",
-      releaseAt: null,
+      releaseAt: new Date("2027-01-25T06:00:00.000Z"),
       color: "yellow",
     });
 
@@ -478,10 +502,10 @@ describe("password-only ECHO slots (13:30/13:50/14:10 blocked from Feb 2027)", (
   });
 
   it("a hand-picked designation survives a re-apply, PENTA rule included", () => {
-    // isPasswordOnlySlot shapes the DESIRED slot, so the template still wants
-    // {ECHO, yellow, LOCKED}. diffDaySlots must skip the row anyway: the PENTA
-    // rule trumps every release policy, but not an explicit human decision
-    // about a slot that already exists.
+    // isPentaSlotTime shapes the DESIRED slot, so the template still wants
+    // {ECHO, yellow, 10-day window}. diffDaySlots must skip the row anyway: the
+    // PENTA rule trumps every release policy, but not an explicit human
+    // decision about a slot that already exists.
     const day = dateOnly("2027-02-04");
     const desired = expandTemplateRules([echo("13:30", "13:50")], day, now);
     expect(desired[0].color).toBe("yellow"); // guard: the rule really did fire

@@ -13,7 +13,7 @@ const now = dateOnly("2026-11-01");
 
 /** Expands a template version for `iso` into { "HH:MM": release } where the
  * release is "hneď" (opens on generation), a YYYY-MM-DD, or null (never opens
- * by itself — blocked or password-only). */
+ * by itself — blocked or manual only). */
 function releaseByStart(
   version: (typeof TEMPLATE_VERSIONS)[number],
   iso: string,
@@ -160,7 +160,6 @@ describe("Thursday/Friday from 2028", () => {
     "08:00": null, "08:30": null,
     "09:30": "hneď", "10:00": "hneď", "10:30": "hneď",
     "12:30": null, "13:00": null,
-    "13:30": null, "13:50": null, "14:10": null, // PENTA — password only
     "14:40": "hneď",
   };
 
@@ -171,6 +170,7 @@ describe("Thursday/Friday from 2028", () => {
       "07:30": "2028-03-02",
       "09:00": "2027-12-16",
       "11:00": "2027-08-16", "11:30": "2027-08-16", "12:00": "2027-08-16",
+      "13:30": "2028-03-06", "13:50": "2028-03-06", "14:10": "2028-03-06", // PENTA — 10 days
       "15:00": "2028-02-16",
     });
   });
@@ -182,6 +182,7 @@ describe("Thursday/Friday from 2028", () => {
       "07:30": "2028-03-03",
       "09:00": "2028-02-01",
       "11:00": "2027-08-17", "11:30": "2027-08-17", "12:00": "2027-08-17",
+      "13:30": "2028-03-07", "13:50": "2028-03-07", "14:10": "2028-03-07", // PENTA — 10 days
       "15:00": "2028-02-17",
     });
   });

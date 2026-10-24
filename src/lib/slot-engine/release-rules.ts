@@ -63,25 +63,38 @@ export function computeReleaseAt(
   }
 }
 
-// From 1 Feb 2027 the ECHO slots starting 13:30, 13:50 and 14:10 are blocked:
-// they generate as LOCKED with no release time (MANUAL_ONLY), the release cron
-// never opens them, and staff can open one only through the password-gated
-// unlock dialog. Keyed by calendar-day date + wall-clock start time so that
-// generation, template re-apply and the backfill script
-// (prisma/block-echo-1330-1410-feb2027.ts) all agree. Slots booked before the
+// ECHO PENTA: from 1 Feb 2027 the ECHO slots starting 13:30, 13:50 and 14:10
+// are reserved PENTA capacity — yellow, with the PENTA watermark. They used to
+// be password-only (LOCKED with no release time, opened one by one through the
+// unlock dialog); since 2026-10-24 every PENTA slot opens by itself
+// PENTA_RELEASE_DAYS_BEFORE days before its date, picked up by the regular
+// release cron like any DAYS_BEFORE policy. Keyed by calendar-day date +
+// wall-clock start time so that generation, template re-apply and the backfill
+// script (prisma/penta-release-10d.ts) all agree. Slots booked before the
 // cutover are never touched — those guards live in the callers (diffDaySlots
 // skips booked slots; the script skips BOOKED/COMPLETED). The ECHO-type check
 // lives in the caller too (expandTemplateRules): a dispenzár slot at 13:30, as
-// on a Wednesday, is not password-only.
-export const PASSWORD_ONLY_FROM = new Date(Date.UTC(2027, 1, 1)); // 2027-02-01
-export const PASSWORD_ONLY_TIMES: readonly string[] = ["13:30", "13:50", "14:10"];
+// on a Wednesday, is not a PENTA slot.
+export const PENTA_FROM = new Date(Date.UTC(2027, 1, 1)); // 2027-02-01
+export const PENTA_TIMES: readonly string[] = ["13:30", "13:50", "14:10"];
+export const PENTA_RELEASE_DAYS_BEFORE = 10;
 
-/** True when the slot at `startHhmm` on `dayDate` (@db.Date, midnight UTC) is password-only. */
-export function isPasswordOnlySlot(dayDate: Date, startHhmm: string): boolean {
+/** The release window every PENTA slot gets, whatever its rule or day says. */
+export const PENTA_POLICY: ReleasePolicyInput = {
+  type: "DAYS_BEFORE",
+  daysBefore: PENTA_RELEASE_DAYS_BEFORE,
+};
+
+/** True when the ECHO slot at `startHhmm` on `dayDate` (@db.Date, midnight UTC) is a PENTA slot. */
+export function isPentaSlotTime(dayDate: Date, startHhmm: string): boolean {
   return (
-    dayDate.getTime() >= PASSWORD_ONLY_FROM.getTime() &&
-    PASSWORD_ONLY_TIMES.includes(startHhmm)
+    dayDate.getTime() >= PENTA_FROM.getTime() && PENTA_TIMES.includes(startHhmm)
   );
+}
+
+/** When a PENTA slot on `dayDate` opens: 06:00 UTC, PENTA_RELEASE_DAYS_BEFORE days earlier. */
+export function pentaReleaseAt(dayDate: Date): Date {
+  return atSixUtc(subDaysUtc(dayDate, PENTA_RELEASE_DAYS_BEFORE));
 }
 
 /** Initial status for a freshly generated slot. */

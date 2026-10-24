@@ -3,6 +3,7 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly code?: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -11,8 +12,12 @@ export class ApiError extends Error {
 
 async function toError(res: Response): Promise<ApiError> {
   try {
-    const body = (await res.json()) as { error?: string; code?: string };
-    return new ApiError(body.error ?? res.statusText, res.status, body.code);
+    const body = (await res.json()) as {
+      error?: string;
+      code?: string;
+      details?: Record<string, unknown>;
+    };
+    return new ApiError(body.error ?? res.statusText, res.status, body.code, body.details);
   } catch {
     return new ApiError(res.statusText, res.status);
   }

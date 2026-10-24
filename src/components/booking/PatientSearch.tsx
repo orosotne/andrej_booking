@@ -14,6 +14,8 @@ export interface PatientLite {
   firstName: string;
   lastName: string;
   phone: string | null;
+  /** ISO instant of registration — drives the new-patient rule up front. */
+  createdAt?: string;
 }
 
 export function PatientSearch({

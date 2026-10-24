@@ -1,10 +1,9 @@
-import Image from "next/image";
 import { redirect } from "next/navigation";
-import logo from "@/assets/logo-02.png";
 import { AuthError } from "next-auth";
 import { signIn } from "@/lib/auth/auth";
 import { Field } from "@/components/ui/Field";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { AppLogo } from "@/components/layout/AppLogo";
 
 export const metadata = { title: "Prihlásenie — Ambulancia" };
 
@@ -34,13 +33,7 @@ export default async function LoginPage({
     <main className="flex min-h-dvh items-center justify-center bg-slate-100 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
         <div className="mb-6 flex justify-center">
-          <Image
-            src={logo}
-            alt="Kardiologická ambulancia"
-            width={234}
-            height={56}
-            priority
-          />
+          <AppLogo size="lg" />
         </div>
         <h1 className="text-xl font-semibold text-slate-900">
           Ambulantný objednávkový systém

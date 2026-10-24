@@ -9,6 +9,8 @@ import type { SlotDTO } from "@/lib/api-types";
 import { apiSend } from "@/lib/client";
 import { TYPE_META } from "@/lib/slot-style";
 import { clinicTime, clinicLongDate, clinicDayChip } from "@/lib/format";
+import { dateOnly } from "@/lib/calendar-date";
+import { PENTA_RELEASE_DAYS_BEFORE } from "@/lib/slot-engine/release-rules";
 import {
   SLOT_DESIGNATIONS,
   DESIGNATION_LABEL,
@@ -25,13 +27,22 @@ import {
 function consequence(
   designation: SlotDesignation,
   slot: SlotDTO,
+  dayIso: string,
 ): string {
-  const t = resolveDesignation(designation, {
-    status: slot.status,
-    releaseAt: slot.releaseAt ? new Date(slot.releaseAt) : null,
-  });
+  const t = resolveDesignation(
+    designation,
+    {
+      status: slot.status,
+      releaseAt: slot.releaseAt ? new Date(slot.releaseAt) : null,
+    },
+    { dayDate: dateOnly(dayIso), now: new Date() },
+  );
   if (designation === "ECHO_PENTA") {
-    return "Slot bude zamknutý a otvoriť sa dá len heslom. Zobrazí sa žlto s vodotlačou PENTA.";
+    const opens =
+      t.status === "AVAILABLE" || !t.releaseAt
+        ? "Slot bude voľný"
+        : `Slot bude zamknutý a otvorí sa ${clinicDayChip(t.releaseAt.toISOString().slice(0, 10))}`;
+    return `${opens} (ECHO PENTA sa otvára ${PENTA_RELEASE_DAYS_BEFORE} dní pred termínom). Zobrazí sa žlto s vodotlačou PENTA.`;
   }
   if (t.status === "BLOCKED") {
     return "Slot bude blokovaný — nedá sa doň objednať.";
@@ -131,7 +142,7 @@ export function SlotDesignationDialog({
 
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
           {changed
-            ? `${consequence(designation, slot)} Zmena je chránená heslom a auditovaná.`
+            ? `${consequence(designation, slot, dayIso)} Zmena je chránená heslom a auditovaná.`
             : "Vyberte iné určenie, než má slot teraz."}
         </p>
 

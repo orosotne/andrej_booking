@@ -12,6 +12,7 @@ import {
   Trash2,
   Ban,
   RotateCcw,
+  Printer,
 } from "lucide-react";
 import type { CalendarDayDTO, SlotDTO } from "@/lib/api-types";
 import { useCalendar, useInvalidateCalendar } from "@/hooks/useCalendar";
@@ -19,6 +20,7 @@ import { useDayActions } from "@/hooks/useDayActions";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PrintSheet } from "@/components/ui/PrintSheet";
 import { SlotCard } from "./SlotCard";
 import { BookingDialog } from "@/components/booking/BookingDialog";
 import { AppointmentActions } from "@/components/booking/AppointmentActions";
@@ -89,6 +91,9 @@ export function CalendarView({
   const [pendingReopen, setPendingReopen] = useState<string | null>(null);
   // Deep-link from a patient's appointment: the slot to flash green once.
   const [flashSlotId, setFlashSlotId] = useState(highlightSlotId);
+  // The day whose slot table is being printed on its own (printer icon in the
+  // day header) — mounted only for the print dialog's lifetime.
+  const [printIso, setPrintIso] = useState<string | null>(null);
 
   const weekEnd = isoAddDays(weekStart, 6);
   const { data, isLoading, isError, error } = useCalendar(weekStart, weekEnd);
@@ -272,6 +277,7 @@ export function CalendarView({
             onRequestDelete={() => setPendingDelete(selectedDay)}
             onRequestClose={() => setPendingClose(selectedDay)}
             onRequestReopen={() => setPendingReopen(selectedDay)}
+            onPrint={() => setPrintIso(selectedDay)}
             onSelect={handleSelect}
             stacked
           />
@@ -295,6 +301,7 @@ export function CalendarView({
                 onRequestDelete={() => setPendingDelete(iso)}
                 onRequestClose={() => setPendingClose(iso)}
                 onRequestReopen={() => setPendingReopen(iso)}
+                onPrint={() => setPrintIso(iso)}
                 onSelect={handleSelect}
               />
             ))}
@@ -332,6 +339,7 @@ export function CalendarView({
                 onRequestDelete={() => setPendingDelete(mobileDay)}
                 onRequestClose={() => setPendingClose(mobileDay)}
                 onRequestReopen={() => setPendingReopen(mobileDay)}
+                onPrint={() => setPrintIso(mobileDay)}
                 onSelect={handleSelect}
                 stacked
               />
@@ -468,6 +476,15 @@ export function CalendarView({
       )}
       </div>
       <CalendarPrint period={mode} periodLabel={printLabel} groups={printGroups} />
+      {printIso && (
+        <PrintSheet onDone={() => setPrintIso(null)}>
+          <CalendarPrint
+            period="day"
+            periodLabel={clinicLongDate(printIso)}
+            groups={[{ iso: printIso, day: dayByIso.get(printIso) }]}
+          />
+        </PrintSheet>
+      )}
     </>
   );
 }
@@ -634,6 +651,7 @@ function DayColumn({
   onRequestDelete,
   onRequestClose,
   onRequestReopen,
+  onPrint,
   onSelect,
   stacked,
   highlightId,
@@ -647,6 +665,8 @@ function DayColumn({
   onRequestDelete: () => void;
   onRequestClose: () => void;
   onRequestReopen: () => void;
+  /** Prints this day's slot table on its own, on one A4. */
+  onPrint: () => void;
   onSelect: (slot: SlotDTO, dayIso: string) => void;
   stacked?: boolean;
   highlightId?: string;
@@ -682,39 +702,52 @@ function DayColumn({
             </span>
           )}
         </div>
-        {canDelete && (
-          <button
-            type="button"
-            onClick={onRequestDelete}
-            aria-label="Zrušiť deň"
-            title="Zrušiť deň"
-            className="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
-        {canClose && (
-          <button
-            type="button"
-            onClick={onRequestClose}
-            aria-label="Zatvoriť deň"
-            title="Zatvoriť deň"
-            className="rounded-md p-1 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
-          >
-            <Ban className="h-4 w-4" />
-          </button>
-        )}
-        {canReopen && (
-          <button
-            type="button"
-            onClick={onRequestReopen}
-            aria-label="Znovu otvoriť deň"
-            title="Znovu otvoriť deň"
-            className="rounded-md p-1 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-0.5">
+          {day && day.slots.length > 0 && (
+            <button
+              type="button"
+              onClick={onPrint}
+              aria-label="Tlačiť tabuľku dňa"
+              title="Tlačiť tabuľku dňa (1 × A4)"
+              className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            >
+              <Printer className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={onRequestDelete}
+              aria-label="Zrušiť deň"
+              title="Zrušiť deň"
+              className="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+          {canClose && (
+            <button
+              type="button"
+              onClick={onRequestClose}
+              aria-label="Zatvoriť deň"
+              title="Zatvoriť deň"
+              className="rounded-md p-1 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
+            >
+              <Ban className="h-4 w-4" />
+            </button>
+          )}
+          {canReopen && (
+            <button
+              type="button"
+              onClick={onRequestReopen}
+              aria-label="Znovu otvoriť deň"
+              title="Znovu otvoriť deň"
+              className="rounded-md p-1 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </header>
       <div
         className={`space-y-1.5 p-2 ${stacked ? "" : "max-h-[70vh] overflow-y-auto"}`}

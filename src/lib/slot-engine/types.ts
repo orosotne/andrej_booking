@@ -42,7 +42,7 @@ export type ColorKey =
   | "blue" // ECHO bookable
   | "navy" // ECHO_DEPARTMENT_BLOCKED
   | "orange" // ACUTE_RESERVE (legacy)
-  | "yellow"; // password-only ECHO slots from Feb 2027 (PENTA watermark)
+  | "yellow"; // ECHO PENTA slots from Feb 2027 (PENTA watermark)
 
 export type PatientCategoryLit =
   | "DISPENZAR"

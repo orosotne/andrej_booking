@@ -89,8 +89,8 @@ export const SLOT_MINUTES = 30;
 //               štvrtok 3 mesiace, piatok 1 mesiac predtým
 //  12:30, 13:00 ECHO oddelenie — manual only (locked, dark blue)
 //  13:30, 13:50, 14:10, 14:40 — ECHO bookable, voľné hneď (4 sloty po 20 min)
-//                (od 1.2.2027 sú 13:30/13:50/14:10 blokované — otvorenie len
-//                 heslom, žlté s vodotlačou PENTA; pozri isPasswordOnlySlot
+//                (od 1.2.2027 sú 13:30/13:50/14:10 ECHO PENTA — žlté s vodotlačou
+//                 PENTA, otvoria sa 10 dní predtým; pozri isPentaSlotTime
 //                 v release-rules.ts)
 //  15:00        ECHO bookable — otvorí sa 13 dní predtým
 export const DEFAULT_DAY_BLOCKS: BlockDef[] = [
@@ -188,7 +188,7 @@ export const WEDNESDAY_BLOCKS: BlockDef[] = [
 //   9:30–10:30   dispenzár — voľné hneď
 //   11:00–12:00  dispenzár — otvorí sa 7 mesiacov predtým
 //   12:30, 13:00 ECHO oddelenie — zamknuté
-//   13:30, 13:50, 14:10 ECHO PENTA — zamknuté, otvorenie heslom (isPasswordOnlySlot)
+//   13:30, 13:50, 14:10 ECHO PENTA — otvorí sa 10 dní predtým (isPentaSlotTime)
 //   14:40        ECHO — voľné hneď
 //   15:00        ECHO — otvorí sa 1 mesiac predtým
 export const BLOCKS_2028: BlockDef[] = [
