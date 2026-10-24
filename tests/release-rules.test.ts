@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   computeReleaseAt,
   initialSlotStatus,
-  isPasswordOnlySlot,
+  isPentaSlotTime,
+  pentaReleaseAt,
 } from "@/lib/slot-engine/release-rules";
 import { dateOnly } from "@/lib/calendar-date";
 
@@ -93,19 +94,35 @@ describe("initialSlotStatus", () => {
   });
 });
 
-describe("isPasswordOnlySlot (13:30/13:50/14:10 blocked from Feb 2027)", () => {
+describe("isPentaSlotTime (13:30/13:50/14:10 are ECHO PENTA from Feb 2027)", () => {
   it("applies from 2027-02-01 onwards", () => {
-    expect(isPasswordOnlySlot(dateOnly("2027-02-01"), "13:30")).toBe(true);
-    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "13:50")).toBe(true);
-    expect(isPasswordOnlySlot(dateOnly("2028-06-15"), "14:10")).toBe(true);
+    expect(isPentaSlotTime(dateOnly("2027-02-01"), "13:30")).toBe(true);
+    expect(isPentaSlotTime(dateOnly("2027-02-04"), "13:50")).toBe(true);
+    expect(isPentaSlotTime(dateOnly("2028-06-15"), "14:10")).toBe(true);
   });
   it("does not apply before February 2027", () => {
-    expect(isPasswordOnlySlot(dateOnly("2027-01-31"), "13:30")).toBe(false);
-    expect(isPasswordOnlySlot(dateOnly("2026-08-06"), "13:50")).toBe(false);
+    expect(isPentaSlotTime(dateOnly("2027-01-31"), "13:30")).toBe(false);
+    expect(isPentaSlotTime(dateOnly("2026-08-06"), "13:50")).toBe(false);
   });
   it("affects only the three listed times", () => {
-    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "14:40")).toBe(false);
-    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "15:00")).toBe(false);
-    expect(isPasswordOnlySlot(dateOnly("2027-02-04"), "09:00")).toBe(false);
+    expect(isPentaSlotTime(dateOnly("2027-02-04"), "14:40")).toBe(false);
+    expect(isPentaSlotTime(dateOnly("2027-02-04"), "15:00")).toBe(false);
+    expect(isPentaSlotTime(dateOnly("2027-02-04"), "09:00")).toBe(false);
+  });
+});
+
+describe("pentaReleaseAt (ECHO PENTA opens 10 days before)", () => {
+  it("is 06:00 UTC ten calendar days before the day", () => {
+    expect(pentaReleaseAt(dateOnly("2027-02-04")).toISOString()).toBe(
+      "2027-01-25T06:00:00.000Z",
+    );
+  });
+  it("crosses month and year boundaries", () => {
+    expect(pentaReleaseAt(dateOnly("2028-01-06")).toISOString()).toBe(
+      "2027-12-27T06:00:00.000Z",
+    );
+    expect(pentaReleaseAt(dateOnly("2028-03-02")).toISOString()).toBe(
+      "2028-02-21T06:00:00.000Z", // 2028 is a leap year
+    );
   });
 });

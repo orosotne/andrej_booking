@@ -26,7 +26,17 @@ import { TYPE_META } from "@/lib/slot-style";
 import { bookingColor, birthYearShort } from "@/lib/booking-mark";
 import { BookingMark } from "@/components/ui/BookingMark";
 import { SlotPickerCalendar } from "./SlotPickerCalendar";
+import {
+  PatientHistory,
+  type AttendanceTotalsDTO,
+  type HistoryDTO,
+} from "./PatientHistory";
 import { AppointmentSlip, printSlip } from "@/components/booking/AppointmentSlip";
+import {
+  NewPatientGatePanel,
+  newPatientGateFromError,
+  type NewPatientGateInfo,
+} from "@/components/booking/NewPatientGate";
 import {
   clinicTime,
   clinicLongDate,
@@ -593,6 +603,13 @@ function PatientAppointment({
   // The single appointment whose slip is mounted for printing. Only one is ever
   // rendered, so printing never picks up another upcoming appointment's slip.
   const [printAppt, setPrintAppt] = useState<UpcomingDTO | null>(null);
+  // A booking / move the server refused under the new-patient rule, waiting
+  // for the override password; `retry` re-sends it with the password.
+  const [gate, setGate] = useState<{
+    kind: "book" | "reschedule";
+    info: NewPatientGateInfo;
+    retry: (password: string) => void;
+  } | null>(null);
 
   // Once the slip is mounted, trigger the print dialog; clear it afterwards so
   // the hidden slip unmounts again.
@@ -607,9 +624,15 @@ function PatientAppointment({
   const { data, isLoading } = useQuery({
     queryKey: ["patient-upcoming", patientId],
     queryFn: () =>
-      apiGet<{ upcomingList: UpcomingDTO[]; lastVisit: LastVisitDTO | null }>(
-        `/api/patients/${patientId}`,
-      ),
+      apiGet<{
+        upcomingList: UpcomingDTO[];
+        lastVisit: LastVisitDTO | null;
+        history: HistoryDTO[];
+        attendance: AttendanceTotalsDTO;
+      }>(`/api/patients/${patientId}`),
+    // Attendance is marked in the calendar, so reopening the detail re-reads it
+    // instead of trusting a cached copy.
+    refetchOnMount: "always",
   });
   const upcomingList = data?.upcomingList ?? [];
   const lastVisit = data?.lastVisit ?? null;
@@ -618,6 +641,7 @@ function PatientAppointment({
     setLookupBusy(true);
     setLookup(null);
     setPendingBook(null);
+    setGate(null);
     try {
       const r = await apiGet<{ slot: NextSlot | null }>(
         `/api/slots/next?type=${type}&months=${h.months}${
@@ -632,21 +656,38 @@ function PatientAppointment({
     }
   }
 
-  function doBook(slot: NextSlot, category: PatientCategoryLit) {
+  function doBook(
+    slot: NextSlot,
+    category: PatientCategoryLit,
+    newPatientPassword?: string,
+  ) {
     run(
       () =>
         apiSend(`/api/slots/${slot.id}/book`, "POST", {
           patientId,
           appointmentType: slot.appointmentType,
           patientCategory: category,
+          newPatientPassword,
         }),
       {
         success: "Pacient objednaný",
         onDone: () => {
           setLookup(null);
           setPendingBook(null);
+          setGate(null);
           qc.invalidateQueries({ queryKey: ["patient-upcoming", patientId] });
           qc.invalidateQueries({ queryKey: ["calendar"] });
+        },
+        onError: (e) => {
+          const info = newPatientGateFromError(e);
+          if (!info) return false;
+          setPendingBook(null);
+          setGate({
+            kind: "book",
+            info,
+            retry: (password) => doBook(slot, category, password),
+          });
+          return true;
         },
       },
     );
@@ -673,14 +714,29 @@ function PatientAppointment({
     });
   }
 
-  function rescheduleTermin(id: string, newSlotId: string) {
+  function rescheduleTermin(id: string, newSlotId: string, newPatientPassword?: string) {
     run(
-      () => apiSend(`/api/appointments/${id}/reschedule`, "POST", { newSlotId }),
+      () =>
+        apiSend(`/api/appointments/${id}/reschedule`, "POST", {
+          newSlotId,
+          newPatientPassword,
+        }),
       {
         success: "Termín presunutý",
         onDone: () => {
+          setGate(null);
           qc.invalidateQueries({ queryKey: ["patient-upcoming", patientId] });
           qc.invalidateQueries({ queryKey: ["calendar"] });
+        },
+        onError: (e) => {
+          const info = newPatientGateFromError(e);
+          if (!info) return false;
+          setGate({
+            kind: "reschedule",
+            info,
+            retry: (password) => rescheduleTermin(id, newSlotId, password),
+          });
+          return true;
         },
       },
     );
@@ -732,6 +788,25 @@ function PatientAppointment({
         />
       ))}
 
+      {gate?.kind === "reschedule" && (
+        <div className="mb-2">
+          <NewPatientGatePanel
+            info={gate.info}
+            busy={busy}
+            submitLabel="Presunúť s heslom"
+            onSubmit={gate.retry}
+            onCancel={() => setGate(null)}
+          />
+        </div>
+      )}
+
+      {data && (
+        <PatientHistory
+          history={data.history ?? []}
+          totals={data.attendance ?? { arrived: 0, noShow: 0, unmarked: 0 }}
+        />
+      )}
+
       <div className="mb-4 rounded-lg border border-slate-200 bg-white px-3 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           {upcomingList.length > 0
@@ -748,6 +823,7 @@ function PatientAppointment({
                 setType(t.type);
                 setLookup(null);
                 setPendingBook(null);
+                setGate(null);
               }}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                 type === t.type
@@ -844,6 +920,18 @@ function PatientAppointment({
                 Objednať aj tak
               </Button>
             </div>
+          </div>
+        )}
+
+        {gate?.kind === "book" && (
+          <div className="mt-2">
+            <NewPatientGatePanel
+              info={gate.info}
+              busy={busy}
+              submitLabel="Objednať s heslom"
+              onSubmit={gate.retry}
+              onCancel={() => setGate(null)}
+            />
           </div>
         )}
 

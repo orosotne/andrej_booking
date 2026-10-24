@@ -3,14 +3,15 @@ import type {
   ColorKey,
   SlotStatusLit,
 } from "./slot-engine/types";
+import { pentaReleaseAt } from "./slot-engine/release-rules";
 
 /**
  * The "určenie" (designation) a staff member can pick for a single slot.
  *
  * These are NOT the AppointmentType enum: "echo penta" is a pseudo-designation
  * that resolves to ECHO + the dedicated yellow colour, because the yellow
- * password-only ECHO slots (13:30/13:50/14:10 from Feb 2027) are distinguished
- * by colour alone. Sending a designation over the wire rather than a raw
+ * PENTA ECHO slots (13:30/13:50/14:10 from Feb 2027) are distinguished by
+ * colour alone. Sending a designation over the wire rather than a raw
  * {appointmentType, color} pair is what stops a client from producing nonsense
  * like a yellow DISPENSARY slot, which the UI would render with a PENTA
  * watermark while booking it as a dispenzár.
@@ -81,7 +82,9 @@ const BLOCKED_DESIGNATIONS: readonly SlotDesignation[] = [
  * available and a LOCKED one keeps its original releaseAt. Three exceptions,
  * all of which are properties of the target rather than of the old slot:
  *   - porada / ECHO oddelenie are never bookable      → BLOCKED, no release,
- *   - echo penta is reserved capacity opened by password only → LOCKED, none,
+ *   - echo penta carries its own window — every PENTA slot opens
+ *     PENTA_RELEASE_DAYS_BEFORE (10) days before its date, whatever the source
+ *     (AVAILABLE once inside the window, LOCKED until the cron opens it),
  *   - a slot coming FROM a blocked state has no meaningful release window to
  *     keep, so it lands on LOCKED rather than AVAILABLE. That is the
  *     conservative direction (the stricter source must not yield a looser
@@ -93,6 +96,8 @@ const BLOCKED_DESIGNATIONS: readonly SlotDesignation[] = [
 export function resolveDesignation(
   designation: SlotDesignation,
   current: { status: SlotStatusLit; releaseAt: Date | null },
+  /** The slot's calendar day (@db.Date, midnight UTC) and the moment of the change. */
+  when: { dayDate: Date; now: Date },
 ): DesignationTarget {
   const { appointmentType, color } = TYPE_AND_COLOR[designation];
   const base = { appointmentType, color };
@@ -107,10 +112,11 @@ export function resolveDesignation(
     };
   }
   if (designation === "ECHO_PENTA") {
+    const releaseAt = pentaReleaseAt(when.dayDate);
     return {
       ...base,
-      status: "LOCKED",
-      releaseAt: null,
+      status: releaseAt.getTime() <= when.now.getTime() ? "AVAILABLE" : "LOCKED",
+      releaseAt,
       manualLock: false,
       lockedReason: null,
     };

@@ -14,6 +14,11 @@ import { TYPE_META, apptStatusLabel } from "@/lib/slot-style";
 import { clinicTime, clinicLongDate, clinicDayChip, clinicShortDate, clinicDate, todayIso } from "@/lib/format";
 import { SlotPickerCalendar } from "@/components/patients/SlotPickerCalendar";
 import { AppointmentSlip, printSlip } from "@/components/booking/AppointmentSlip";
+import {
+  NewPatientGatePanel,
+  newPatientGateFromError,
+  type NewPatientGateInfo,
+} from "@/components/booking/NewPatientGate";
 
 // Appointment kinds the calendar slot picker / /api/slots/available support.
 const PICKER_TYPES = ["DISPENSARY", "ECHO", "PRE_HOSPITAL"] as const;
@@ -58,6 +63,11 @@ export function AppointmentActions({
   const [statusOpen, setStatusOpen] = useState(false);
   const [options, setOptions] = useState<RescheduleOption[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // A move the server refused under the new-patient rule, waiting for the
+  // override password.
+  const [gate, setGate] = useState<{ info: NewPatientGateInfo; newSlotId: string } | null>(
+    null,
+  );
   const meta = TYPE_META[slot.appointmentType];
   const pickerType = asPickerType(slot.appointmentType);
 
@@ -93,6 +103,7 @@ export function AppointmentActions({
   async function openReschedule() {
     setMode("reschedule");
     setOptions(null);
+    setGate(null);
     try {
       const res = await apiGet<{ options: RescheduleOption[] }>(
         `/api/appointments/${apptId}/reschedule-options`,
@@ -104,15 +115,25 @@ export function AppointmentActions({
     }
   }
 
-  function doReschedule(newSlotId: string) {
+  function doReschedule(newSlotId: string, newPatientPassword?: string) {
     runAction(
       () =>
-        apiSend(`/api/appointments/${apptId}/reschedule`, "POST", { newSlotId }),
+        apiSend(`/api/appointments/${apptId}/reschedule`, "POST", {
+          newSlotId,
+          newPatientPassword,
+        }),
       {
         success: "Objednávka presunutá",
         onDone: () => {
           onChanged();
           onClose();
+        },
+        onError: (e) => {
+          const info = newPatientGateFromError(e);
+          if (!info) return false;
+          setMode("reschedule");
+          setGate({ info, newSlotId });
+          return true;
         },
       },
     );
@@ -303,7 +324,17 @@ export function AppointmentActions({
         </div>
       )}
 
-      {mode === "reschedule" && (
+      {mode === "reschedule" && gate && (
+        <NewPatientGatePanel
+          info={gate.info}
+          busy={busy}
+          submitLabel="Presunúť s heslom"
+          onSubmit={(password) => doReschedule(gate.newSlotId, password)}
+          onCancel={() => setGate(null)}
+        />
+      )}
+
+      {mode === "reschedule" && !gate && (
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
             Najbližšie voľné termíny rovnakého typu ({meta.label}):

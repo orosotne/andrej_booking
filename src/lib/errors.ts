@@ -4,6 +4,8 @@ export class AppError extends Error {
     message: string,
     public readonly status: number,
     public readonly code: string,
+    /** Extra machine-readable context sent along in the JSON error body. */
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = code;
@@ -37,5 +39,20 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(message = "Konflikt") {
     super(message, 409, "CONFLICT");
+  }
+}
+
+/**
+ * A patient registered fewer than NEW_PATIENT_DAYS days ago is being booked
+ * into a dispenzár slot reserved for established patients
+ * (lib/new-patient-rule.ts). The client answers it by asking for the
+ * override password and retrying with it.
+ */
+export class NewPatientSlotError extends AppError {
+  constructor(
+    message: string,
+    details: { registeredOn: string; allowedFrom: string },
+  ) {
+    super(message, 403, "NEW_PATIENT_SLOT", details);
   }
 }

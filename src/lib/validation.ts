@@ -60,6 +60,11 @@ export const closeDaySchema = z.object({
   password: z.string().max(200).optional(),
 });
 
+// Heslo, ktorým sa nový pacient (registrovaný < 10 dní) predsa len objedná do
+// dispenzárneho slotu pre registrovaných pacientov (lib/new-patient-rule.ts).
+// Posiela ho klient až po odmietnutí s kódom NEW_PATIENT_SLOT.
+const newPatientPassword = z.string().min(1, "Heslo je povinné").max(200).optional();
+
 export const bookSlotSchema = z
   .object({
     patientId: z.string().min(1),
@@ -67,6 +72,7 @@ export const bookSlotSchema = z
     patientCategory: patientCategoryEnum,
     categoryReason: z.string().max(500).optional(),
     note: z.string().max(2000).optional(),
+    newPatientPassword,
   })
   .refine(
     (v) =>
@@ -85,6 +91,7 @@ export const cancelSchema = z.object({
 export const rescheduleSchema = z.object({
   newSlotId: z.string().min(1),
   reason: z.string().max(500).optional(),
+  newPatientPassword,
 });
 
 // Odomknutie zamknutého slotu je chránené heslom (rovnaké ako pri otváraní

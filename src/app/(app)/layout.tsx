@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { Megaphone } from "lucide-react";
-import logo from "@/assets/logo-02.png";
 import { signOut } from "@/lib/auth/auth";
 import { getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
@@ -10,6 +8,7 @@ import { NavLink } from "@/components/layout/NavLink";
 import { AdminMenu } from "@/components/layout/AdminMenu";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { MobileQuickNav } from "@/components/layout/MobileQuickNav";
+import { AppLogo } from "@/components/layout/AppLogo";
 import { TwoFactorSetup } from "@/components/admin/TwoFactorSetup";
 import { HackPrank } from "@/components/fun/HackPrank"; // DOČASNÝ ŽART — odstrániť neskôr
 import { ROLE_LABEL } from "@/lib/auth/roles";
@@ -96,16 +95,10 @@ export default async function AppLayout({
           <div className="flex items-center gap-4">
             <Link
               href="/calendar"
-              className="flex select-none items-center"
+              className="flex items-center"
               aria-label="Kardiologická ambulancia"
             >
-              <Image
-                src={logo}
-                alt="Kardiologická ambulancia"
-                width={134}
-                height={32}
-                priority
-              />
+              <AppLogo />
             </Link>
             <span className="hidden h-5 w-px bg-slate-200 md:block" aria-hidden="true" />
             <nav
@@ -117,6 +110,7 @@ export default async function AppLayout({
               <NavLink href="/pacienti">Pacienti</NavLink>
               {user.role === "ADMIN" && (
                 <>
+                  <NavLink href="/statistika">Štatistika</NavLink>
                   <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
                   <AdminMenu />
                 </>
@@ -151,7 +145,7 @@ export default async function AppLayout({
           </div>
         </div>
       </header>
-      <MobileQuickNav />
+      <MobileQuickNav isAdmin={user.role === "ADMIN"} />
       <main className="mx-auto max-w-6xl px-4 py-5">{children}</main>
     </div>
   );

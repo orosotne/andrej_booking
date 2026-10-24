@@ -7,8 +7,12 @@ import {
   type SlotDesignation,
 } from "@/lib/slot-designation";
 import type { SlotStatusLit } from "@/lib/slot-engine/types";
+import { dateOnly } from "@/lib/calendar-date";
 
 const RELEASE = new Date("2027-01-15T06:00:00.000Z");
+// The slot's day and the moment of the change. The PENTA window for
+// 2027-03-04 opens 2027-02-22 06:00 UTC, well after `now`.
+const when = { dayDate: dateOnly("2027-03-04"), now: new Date("2027-01-10T08:00:00.000Z") };
 const avail = { status: "AVAILABLE" as SlotStatusLit, releaseAt: RELEASE };
 const locked = { status: "LOCKED" as SlotStatusLit, releaseAt: RELEASE };
 const blocked = { status: "BLOCKED" as SlotStatusLit, releaseAt: null };
@@ -16,7 +20,7 @@ const blocked = { status: "BLOCKED" as SlotStatusLit, releaseAt: null };
 describe("resolveDesignation — type and colour", () => {
   it("maps every designation to its documented type/colour pair", () => {
     const pairs = SLOT_DESIGNATIONS.map((d) => {
-      const t = resolveDesignation(d, avail);
+      const t = resolveDesignation(d, avail, when);
       return [d, t.appointmentType, t.color];
     });
     expect(pairs).toEqual([
@@ -33,28 +37,28 @@ describe("resolveDesignation — type and colour", () => {
   it("clears the yellow colour when moving away from echo penta", () => {
     // The UI detects PENTA by colour alone, so a stale "yellow" would keep the
     // watermark on a slot that is no longer penta.
-    expect(resolveDesignation("ECHO", { ...avail }).color).toBe("blue");
-    expect(resolveDesignation("DISPENSARY", { ...avail }).color).toBe("white");
+    expect(resolveDesignation("ECHO", { ...avail }, when).color).toBe("blue");
+    expect(resolveDesignation("DISPENSARY", { ...avail }, when).color).toBe("white");
   });
 });
 
 describe("resolveDesignation — status and release window", () => {
   it("keeps an AVAILABLE slot available, with its release time untouched", () => {
-    const t = resolveDesignation("PRE_HOSPITAL", avail);
+    const t = resolveDesignation("PRE_HOSPITAL", avail, when);
     expect(t.status).toBe("AVAILABLE");
     expect(t.releaseAt).toBe(RELEASE);
     expect(t.manualLock).toBe(false);
   });
 
   it("keeps a LOCKED slot locked, with its release time untouched", () => {
-    const t = resolveDesignation("ECHO", locked);
+    const t = resolveDesignation("ECHO", locked, when);
     expect(t.status).toBe("LOCKED");
     expect(t.releaseAt).toBe(RELEASE);
     expect(t.manualLock).toBe(false);
   });
 
   it("lands a BLOCKED slot on LOCKED, manually locked and discoverable", () => {
-    const t = resolveDesignation("DISPENSARY", blocked);
+    const t = resolveDesignation("DISPENSARY", blocked, when);
     expect(t.status).toBe("LOCKED");
     expect(t.releaseAt).toBeNull();
     // manualLock is what puts it in the admin "ručne zamknuté sloty" list.
@@ -64,7 +68,7 @@ describe("resolveDesignation — status and release window", () => {
 
   it("forces BLOCKED with no release for porada, from any source status", () => {
     for (const cur of [avail, locked, blocked]) {
-      const t = resolveDesignation("CONSULTATION_BLOCKED", cur);
+      const t = resolveDesignation("CONSULTATION_BLOCKED", cur, when);
       expect(t.status).toBe("BLOCKED");
       expect(t.releaseAt).toBeNull();
     }
@@ -72,20 +76,31 @@ describe("resolveDesignation — status and release window", () => {
 
   it("forces BLOCKED with no release for echo oddelenie, from any source", () => {
     for (const cur of [avail, locked, blocked]) {
-      const t = resolveDesignation("ECHO_DEPARTMENT_BLOCKED", cur);
+      const t = resolveDesignation("ECHO_DEPARTMENT_BLOCKED", cur, when);
       expect(t.status).toBe("BLOCKED");
       expect(t.releaseAt).toBeNull();
     }
   });
 
-  it("forces LOCKED with no release for echo penta, from any source", () => {
-    // Penta is reserved capacity: password-only, never released by the cron
-    // (releaseDueSlots requires releaseAt != null).
+  it("gives echo penta its own 10-day window, from any source", () => {
+    // Before the window: LOCKED with the PENTA release time, so the morning
+    // release cron opens it 10 days before the date (never manual-only).
     for (const cur of [avail, locked, blocked]) {
-      const t = resolveDesignation("ECHO_PENTA", cur);
+      const t = resolveDesignation("ECHO_PENTA", cur, when);
       expect(t.status).toBe("LOCKED");
-      expect(t.releaseAt).toBeNull();
+      expect(t.releaseAt).toEqual(new Date("2027-02-22T06:00:00.000Z"));
+      expect(t.manualLock).toBe(false);
       expect(t.color).toBe("yellow");
+    }
+  });
+
+  it("opens echo penta right away inside the 10-day window, from any source", () => {
+    const inside = { ...when, now: new Date("2027-02-25T09:00:00.000Z") };
+    for (const cur of [avail, locked, blocked]) {
+      const t = resolveDesignation("ECHO_PENTA", cur, inside);
+      expect(t.status).toBe("AVAILABLE");
+      expect(t.releaseAt).toEqual(new Date("2027-02-22T06:00:00.000Z"));
+      expect(t.manualLock).toBe(false);
     }
   });
 });
@@ -118,7 +133,7 @@ describe("designationOf", () => {
 
   it("round-trips every designation through resolveDesignation", () => {
     for (const d of SLOT_DESIGNATIONS) {
-      const t = resolveDesignation(d as SlotDesignation, avail);
+      const t = resolveDesignation(d as SlotDesignation, avail, when);
       expect(designationOf(t)).toBe(d);
     }
   });

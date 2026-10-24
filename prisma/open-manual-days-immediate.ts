@@ -2,10 +2,7 @@ import "dotenv/config";
 import { prisma } from "@/lib/db";
 import { dateOnly, toIsoDate } from "@/lib/calendar-date";
 import { wallClockToUtc } from "@/lib/clinic-time";
-import {
-  isPasswordOnlySlot,
-  PASSWORD_ONLY_TIMES,
-} from "@/lib/slot-engine/release-rules";
+import { isPentaSlotTime, PENTA_TIMES } from "@/lib/slot-engine/release-rules";
 
 // Sloty bez časových obmedzení v dňoch otvorených heslom (streda / posledný
 // piatok v mesiaci) — zmena zavedená 2026-08-11.
@@ -19,8 +16,9 @@ import {
 //     na epochu (aby ich re-apply/reopen nezamkol späť),
 //   • NEDOTKNUTÉ: obsadené (BOOKED/COMPLETED), zrušené (CANCELLED), BLOCKED
 //     (porada, ECHO oddelenie, zatvorený deň / dovolenka), manuálne zamknuté
-//     a žlté PENTA sloty 13:30/13:50/14:10 od 1. 2. 2027 (tie sa aj naďalej
-//     otvárajú len jednotlivo heslom).
+//     a žlté PENTA sloty 13:30/13:50/14:10 od 1. 2. 2027 (tie majú vlastné
+//     okno — otvárajú sa 10 dní pred termínom, aj v dňoch otvorených heslom;
+//     dorovnáva ich prisma/penta-release-10d.ts).
 // Dni v minulosti sa nemenia. Idempotentné — bezpečné opakovať.
 //
 // Preview:  npx tsx prisma/open-manual-days-immediate.ts
@@ -83,10 +81,10 @@ async function main() {
         skippedBlocked++;
         continue;
       }
-      // Žlté PENTA sloty (13:30/13:50/14:10 od 1. 2. 2027) ostávajú len na heslo.
-      const isPenta = PASSWORD_ONLY_TIMES.some(
+      // Žlté PENTA sloty (13:30/13:50/14:10 od 1. 2. 2027) majú vlastné okno.
+      const isPenta = PENTA_TIMES.some(
         (t) =>
-          isPasswordOnlySlot(day.date, t) &&
+          isPentaSlotTime(day.date, t) &&
           s.startAt.getTime() === wallClockToUtc(day.date, t).getTime(),
       );
       if (isPenta) {

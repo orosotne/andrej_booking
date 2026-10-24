@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { ADMIN_ITEMS, PRIMARY_ITEMS } from "./nav-items";
+import { ADMIN_ITEMS, PRIMARY_ITEMS, STATS_ITEM } from "./nav-items";
 
 const isOn = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
@@ -41,7 +41,9 @@ export function MobileNav({
     };
   }, [open]);
 
-  const items = isAdmin ? [...PRIMARY_ITEMS, ...ADMIN_ITEMS] : PRIMARY_ITEMS;
+  const items = isAdmin
+    ? [...PRIMARY_ITEMS, STATS_ITEM, ...ADMIN_ITEMS]
+    : PRIMARY_ITEMS;
 
   return (
     <div ref={ref} className="relative">

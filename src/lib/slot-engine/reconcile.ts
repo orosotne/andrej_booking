@@ -4,7 +4,8 @@ import { hhmmToMin, minToHhmm, SLOT_MINUTES } from "./template";
 import {
   computeReleaseAt,
   initialSlotStatus,
-  isPasswordOnlySlot,
+  isPentaSlotTime,
+  PENTA_POLICY,
 } from "./release-rules";
 import type { AppointmentTypeLit, ReleasePolicyInput, SlotStatusLit } from "./types";
 
@@ -141,18 +142,15 @@ export function expandTemplateRules(
           : toPolicyInput(rule.releasePolicy);
 
     return expandRule(rule.startTime, rule.endTime, rule.slotDurationMinutes).map((s) => {
-      // Password-only slots (ECHO 13:30/13:50/14:10 from Feb 2027) trump every
-      // policy, including the last-Friday and manually-opened overrides: LOCKED
-      // until a per-slot password unlock, never released automatically — those
-      // are reserved capacity, not a time window. They also carry the dedicated
-      // "yellow" colour, which the UI renders with the PENTA watermark. Only
-      // ECHO slots: the Wednesday layout runs a dispenzár slot at 13:30 that
-      // opens like the rest of that day.
-      const passwordOnly =
-        rule.appointmentType === "ECHO" && isPasswordOnlySlot(date, s.start);
-      const slotPolicy: ReleasePolicyInput = passwordOnly
-        ? { type: "MANUAL_ONLY" }
-        : policyInput;
+      // PENTA slots (ECHO 13:30/13:50/14:10 from Feb 2027) trump every policy,
+      // including the last-Friday and manually-opened overrides: they always
+      // open PENTA_RELEASE_DAYS_BEFORE (10) days before the date. They also
+      // carry the dedicated "yellow" colour, which the UI renders with the
+      // PENTA watermark. Only ECHO slots: the Wednesday layout runs a dispenzár
+      // slot at 13:30 that opens like the rest of that day.
+      const penta =
+        rule.appointmentType === "ECHO" && isPentaSlotTime(date, s.start);
+      const slotPolicy: ReleasePolicyInput = penta ? PENTA_POLICY : policyInput;
       const releaseAt = computeReleaseAt(date, slotPolicy, lastFri);
       return {
         startAt: wallClockToUtc(date, s.start),
@@ -160,7 +158,7 @@ export function expandTemplateRules(
         appointmentType: rule.appointmentType,
         status: initialSlotStatus(rule.appointmentType, releaseAt, now),
         releaseAt,
-        color: passwordOnly ? "yellow" : rule.color,
+        color: penta ? "yellow" : rule.color,
         ruleId: rule.id,
       };
     });

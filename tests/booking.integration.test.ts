@@ -8,9 +8,11 @@ import {
   lockSlot,
   unlockSlot,
   changeSlotDesignation,
+  rescheduleAppointment,
+  NEW_PATIENT_OVERRIDE_REASON,
 } from "@/lib/booking/booking-service";
 import { releaseDueSlots } from "@/lib/slot-engine/release";
-import { ConflictError, ValidationError } from "@/lib/errors";
+import { ConflictError, NewPatientSlotError, ValidationError } from "@/lib/errors";
 
 // Requires a REAL (throwaway/test) Postgres. Run with:
 //   RUN_DB_TESTS=1 DATABASE_URL=postgres://... npm test
@@ -473,5 +475,134 @@ describe.skipIf(!RUN)("changeSlotDesignation (requires DB)", () => {
     const after = await prisma.appointmentSlot.findUniqueOrThrow({ where: { id: slot.id } });
     expect(after.status).toBe("AVAILABLE");
     expect(after.typeOverride).toBe(true);
+  });
+});
+
+describe.skipIf(!RUN)("new-patient rule (requires DB)", () => {
+  // 2099-12-24 is a Thursday; from 2028 the slot reserved for established
+  // patients is the 9:00 dispenzár (08:00 UTC in winter), 9:30 is ordinary.
+  const DAY = new Date("2099-12-24");
+  const RESERVED = new Date("2099-12-24T08:00:00.000Z");
+  const ORDINARY = new Date("2099-12-24T08:30:00.000Z");
+  const NOW = new Date("2099-11-01T10:00:00.000Z");
+  let dayId = "";
+  const patientIds: string[] = [];
+
+  async function mkPatient(createdAt: Date) {
+    const p = await prisma.patient.create({
+      data: { firstName: "Novy", lastName: "Pacient", createdAt },
+    });
+    patientIds.push(p.id);
+    return p.id;
+  }
+
+  async function freshSlot(startAt: Date) {
+    // Each test re-creates its slots so ordering never matters.
+    await prisma.appointment.deleteMany({ where: { slot: { calendarDayId: dayId, startAt } } });
+    await prisma.appointmentSlot.deleteMany({ where: { calendarDayId: dayId, startAt } });
+    return prisma.appointmentSlot.create({
+      data: {
+        calendarDayId: dayId,
+        startAt,
+        endAt: new Date(startAt.getTime() + 30 * 60_000),
+        appointmentType: "DISPENSARY",
+        status: "AVAILABLE",
+        releaseAt: new Date("2000-01-01T00:00:00.000Z"),
+        color: "white",
+      },
+    });
+  }
+
+  const book = (slotId: string, patientId: string, allowNewPatient?: boolean) =>
+    bookSlot({
+      slotId,
+      patientId,
+      appointmentType: "DISPENSARY",
+      patientCategory: "DISPENZAR",
+      allowNewPatient,
+      ctx,
+      now: NOW,
+    });
+
+  beforeAll(async () => {
+    dayId = (
+      await prisma.calendarDay.create({
+        data: { date: DAY, dayType: "REGULAR_THURSDAY", status: "OPEN" },
+      })
+    ).id;
+  });
+
+  afterAll(async () => {
+    const slots = await prisma.appointmentSlot.findMany({
+      where: { calendarDayId: dayId },
+      select: { id: true },
+    });
+    const appts = await prisma.appointment.findMany({
+      where: { slotId: { in: slots.map((s) => s.id) } },
+      select: { id: true },
+    });
+    await prisma.auditLog.deleteMany({
+      where: { entityType: "appointment", entityId: { in: appts.map((a) => a.id) } },
+    });
+    await prisma.appointment.deleteMany({ where: { id: { in: appts.map((a) => a.id) } } });
+    await prisma.appointmentSlot.deleteMany({ where: { calendarDayId: dayId } });
+    await prisma.calendarDay.deleteMany({ where: { id: dayId } });
+    await prisma.patient.deleteMany({ where: { id: { in: patientIds } } });
+    await prisma.$disconnect();
+  });
+
+  it("refuses a new patient in the reserved slot and leaves it free", async () => {
+    const patientId = await mkPatient(new Date("2099-10-28T10:00:00.000Z")); // 4 days before NOW
+    const slot = await freshSlot(RESERVED);
+    const err = await book(slot.id, patientId).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(NewPatientSlotError);
+    expect((err as NewPatientSlotError).details).toEqual({
+      registeredOn: "2099-10-28",
+      allowedFrom: "2099-11-07",
+    });
+    const after = await prisma.appointmentSlot.findUniqueOrThrow({ where: { id: slot.id } });
+    expect(after.status).toBe("AVAILABLE");
+  });
+
+  it("lets the same new patient in with the override, and audits it", async () => {
+    const patientId = await mkPatient(new Date("2099-10-28T10:00:00.000Z"));
+    const slot = await freshSlot(RESERVED);
+    const appt = await book(slot.id, patientId, true);
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { entityType: "appointment", entityId: appt.id, action: "create" },
+    });
+    expect(audit.reason).toBe(NEW_PATIENT_OVERRIDE_REASON);
+  });
+
+  it("books a patient registered 10+ days ago without any password", async () => {
+    const patientId = await mkPatient(new Date("2099-10-22T10:00:00.000Z")); // 10 days before NOW
+    const slot = await freshSlot(RESERVED);
+    const appt = await book(slot.id, patientId);
+    expect(appt.status).toBe("SCHEDULED");
+  });
+
+  it("never restricts an ordinary dispenzár slot", async () => {
+    const patientId = await mkPatient(new Date("2099-10-31T10:00:00.000Z"));
+    const slot = await freshSlot(ORDINARY);
+    const appt = await book(slot.id, patientId);
+    expect(appt.status).toBe("SCHEDULED");
+  });
+
+  it("applies to a reschedule into the reserved slot too", async () => {
+    const patientId = await mkPatient(new Date("2099-10-30T10:00:00.000Z"));
+    const from = await freshSlot(ORDINARY);
+    const to = await freshSlot(RESERVED);
+    const appt = await book(from.id, patientId);
+    await expect(
+      rescheduleAppointment({ appointmentId: appt.id, newSlotId: to.id, ctx, now: NOW }),
+    ).rejects.toBeInstanceOf(NewPatientSlotError);
+    const moved = await rescheduleAppointment({
+      appointmentId: appt.id,
+      newSlotId: to.id,
+      allowNewPatient: true,
+      ctx,
+      now: NOW,
+    });
+    expect(moved.slotId).toBe(to.id);
   });
 });

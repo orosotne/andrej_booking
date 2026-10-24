@@ -8,6 +8,11 @@ interface RunOptions {
   success?: string;
   /** Called after a successful action (e.g. close dialog, refresh). */
   onDone?: () => void;
+  /**
+   * Gets the first look at a failure; returning true marks it handled, so no
+   * error toast is shown (e.g. a refusal the surface answers with a prompt).
+   */
+  onError?: (e: unknown) => boolean;
 }
 
 /**
@@ -27,6 +32,7 @@ export function useAsyncAction() {
         if (options.success) toast(options.success, "success");
         options.onDone?.();
       } catch (e) {
+        if (options.onError?.(e)) return;
         toast(e instanceof Error ? e.message : "Operácia zlyhala", "error");
       } finally {
         setBusy(false);

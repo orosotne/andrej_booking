@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/db";
 import { recordAudit, type AuditContext } from "@/lib/audit/audit";
 import { auditPatientSnapshot } from "@/lib/audit/patient-snapshot";
-import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
+import {
+  ConflictError,
+  NewPatientSlotError,
+  NotFoundError,
+  ValidationError,
+} from "@/lib/errors";
 import type {
   AppointmentTypeLit,
   PatientCategoryLit,
@@ -22,6 +27,14 @@ import {
   DESIGNATION_LABEL,
   type SlotDesignation,
 } from "@/lib/slot-designation";
+import {
+  establishedFrom,
+  isEstablishedPatientSlot,
+  isNewPatient,
+  NEW_PATIENT_SLOT_MESSAGE,
+} from "@/lib/new-patient-rule";
+import { clinicDate } from "@/lib/format";
+import type { Prisma } from "@/generated/prisma/client";
 
 /** When a slot is freed, return it to AVAILABLE only if its release window is open. */
 function statusAfterFreeing(
@@ -33,6 +46,37 @@ function statusAfterFreeing(
     : "LOCKED";
 }
 
+/** Audit reason stamped when the override password let a new patient in. */
+export const NEW_PATIENT_OVERRIDE_REASON =
+  "Nový pacient v slote pre registrovaných pacientov — povolené heslom";
+
+/**
+ * Enforces the new-patient rule (lib/new-patient-rule.ts) for one target slot.
+ * Returns true when the override password was what let the patient in, so the
+ * caller can say so in the audit log; throws NewPatientSlotError when the
+ * patient is new and no (verified) override was given.
+ */
+async function checkNewPatientSlot(
+  tx: Prisma.TransactionClient,
+  slot: { appointmentType: string; startAt: Date },
+  patientId: string,
+  allowNewPatient: boolean,
+  now: Date,
+): Promise<boolean> {
+  if (!isEstablishedPatientSlot(slot)) return false;
+  const patient = await tx.patient.findUnique({
+    where: { id: patientId },
+    select: { createdAt: true },
+  });
+  if (!patient) throw new NotFoundError("Pacient neexistuje.");
+  if (!isNewPatient(patient.createdAt, now)) return false;
+  if (allowNewPatient) return true;
+  throw new NewPatientSlotError(NEW_PATIENT_SLOT_MESSAGE, {
+    registeredOn: clinicDate(patient.createdAt.toISOString()),
+    allowedFrom: establishedFrom(patient.createdAt),
+  });
+}
+
 export interface BookInput {
   slotId: string;
   patientId: string;
@@ -40,16 +84,24 @@ export interface BookInput {
   patientCategory: PatientCategoryLit;
   categoryReason?: string;
   note?: string;
+  /**
+   * The route verified the new-patient override password, so a patient
+   * registered < 10 days ago may take a slot reserved for established ones.
+   */
+  allowNewPatient?: boolean;
   ctx: AuditContext;
+  now?: Date;
 }
 
 /**
  * Books a patient into a slot. Race-free: an atomic conditional UPDATE
  * (AVAILABLE → BOOKED) is the optimistic lock; if it doesn't flip exactly one
  * row, the slot was already taken/locked. The appointment-type guard runs
- * inside the transaction so a mismatch rolls the slot back to AVAILABLE.
+ * inside the transaction so a mismatch rolls the slot back to AVAILABLE — as
+ * does the new-patient rule (checkNewPatientSlot).
  */
 export async function bookSlot(input: BookInput) {
+  const now = input.now ?? new Date();
   return prisma.$transaction(async (tx) => {
     const lock = await tx.appointmentSlot.updateMany({
       where: { id: input.slotId, status: "AVAILABLE" },
@@ -80,6 +132,13 @@ export async function bookSlot(input: BookInput) {
     ) {
       throw new ValidationError("Pri kategórii 'Iné' je dôvod povinný.");
     }
+    const overridden = await checkNewPatientSlot(
+      tx,
+      slot,
+      input.patientId,
+      input.allowNewPatient ?? false,
+      now,
+    );
 
     const appointment = await tx.appointment.create({
       data: {
@@ -100,6 +159,7 @@ export async function bookSlot(input: BookInput) {
       entityId: appointment.id,
       action: "create",
       after: appointment,
+      reason: overridden ? NEW_PATIENT_OVERRIDE_REASON : null,
       ctx: input.ctx,
     });
     return appointment;
@@ -155,6 +215,8 @@ export interface RescheduleInput {
   appointmentId: string;
   newSlotId: string;
   reason?: string;
+  /** See BookInput.allowNewPatient — the rule applies to the target slot too. */
+  allowNewPatient?: boolean;
   ctx: AuditContext;
   now?: Date;
 }
@@ -188,6 +250,13 @@ export async function rescheduleAppointment(input: RescheduleInput) {
     if (newSlot.appointmentType !== appointment.appointmentType) {
       throw new ValidationError("Typ cieľového slotu nesedí s objednávkou.");
     }
+    const overridden = await checkNewPatientSlot(
+      tx,
+      newSlot,
+      appointment.patientId,
+      input.allowNewPatient ?? false,
+      now,
+    );
 
     await tx.appointmentSlot.update({
       where: { id: appointment.slotId },
@@ -222,7 +291,10 @@ export async function rescheduleAppointment(input: RescheduleInput) {
       action: "reschedule",
       before: appointment,
       after: { rescheduledFrom: appointment.slotId, newAppointment },
-      reason: input.reason ?? null,
+      reason:
+        [input.reason, overridden ? NEW_PATIENT_OVERRIDE_REASON : null]
+          .filter(Boolean)
+          .join(" · ") || null,
       ctx: input.ctx,
     });
     return newAppointment;
@@ -385,8 +457,9 @@ export interface ChangeDesignationInput {
  * Status and release window are carried over untouched for bookable targets —
  * changing what a slot is for must not change when it opens. The exceptions
  * belong to the target, not the source: blocked types force BLOCKED, "echo
- * penta" forces LOCKED + yellow, and a slot coming from BLOCKED lands on a
- * manual LOCKED (see resolveDesignation).
+ * penta" turns yellow and takes the PENTA window (open from 10 days before the
+ * date), and a slot coming from BLOCKED lands on a manual LOCKED (see
+ * resolveDesignation).
  *
  * Sets typeOverride so a later "Použiť na nadchádzajúce dni" never reverts it.
  */
@@ -426,10 +499,11 @@ export async function changeSlotDesignation(input: ChangeDesignationInput) {
       throw new ValidationError("Slot už má toto určenie.");
     }
 
-    const target = resolveDesignation(input.designation, {
-      status: slot.status,
-      releaseAt: slot.releaseAt,
-    });
+    const target = resolveDesignation(
+      input.designation,
+      { status: slot.status, releaseAt: slot.releaseAt },
+      { dayDate: slot.calendarDay.date, now },
+    );
 
     // Conditional write, same guard as bookSlot: a booking that commits between
     // the read above and this update makes the match empty instead of
@@ -444,7 +518,11 @@ export async function changeSlotDesignation(input: ChangeDesignationInput) {
         typeOverride: true,
         ...(target.manualLock
           ? { manualLock: true, lockedReason: target.lockedReason }
-          : {}),
+          : target.status === "AVAILABLE"
+            ? // An open slot is never manually locked: echo penta inside its
+              // window opens even a hand-locked source slot.
+              { manualLock: false }
+            : {}),
       },
     });
     if (written.count !== 1) {

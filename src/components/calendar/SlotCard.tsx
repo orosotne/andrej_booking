@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Check, CheckCheck, Ban, AlertTriangle } from "lucide-react";
+import { Lock, Check, CheckCheck, Ban, X } from "lucide-react";
 import { BookingMark } from "@/components/ui/BookingMark";
 import type { SlotDTO } from "@/lib/api-types";
 import { TYPE_META } from "@/lib/slot-style";
@@ -39,10 +39,24 @@ export function SlotCard({
 
   // ECHO oddelenie & Porada both render as locked-dark blocks (cannot be opened).
   const isHardLocked = isEchoDept || (isPorada && isBlocked);
+  // Light text on the dark navy (ECHO oddelenie) / dark green (porada) fill.
+  const darkFg = isEchoDept
+    ? "var(--slot-echo-dept-fg)"
+    : isPorada && !isLocked
+      ? "var(--slot-porada-fg)"
+      : undefined;
+
+  // Prišiel / Neprišiel: celý slot sivý, meno preškrtnuté zelenou / červenou
+  // a vpravo od mena hrubá ✔ / ✖ — sivá prebíja aj farbu typu a PENTA.
+  const attendance =
+    slot.status === "BOOKED" &&
+    (slot.appointment?.status === "ARRIVED" || slot.appointment?.status === "NO_SHOW")
+      ? slot.appointment.status
+      : null;
 
   // Žlté PENTA sloty (13:30–14:10 od 2/2027): žlté pozadie aj v zamknutom
   // stave + vodotlač PENTA. Obsadené sloty spred zmeny ostávajú modré (ECHO).
-  const isPenta = slot.color === "yellow";
+  const isPenta = slot.color === "yellow" && !attendance;
 
   return (
     <button
@@ -53,15 +67,21 @@ export function SlotCard({
         clickable && (!isHardLocked || canRedesignate) && onSelect(slot)
       }
       style={{
-        backgroundColor: isPenta
-          ? "var(--slot-penta)"
-          : isHardLocked
-            ? meta.bg
-            : isLocked
-              ? "var(--surface)"
-              : meta.bg,
-        borderColor: isPenta ? "var(--slot-penta-bd)" : meta.border,
-        color: isEchoDept ? "var(--slot-echo-dept-fg)" : undefined,
+        backgroundColor: attendance
+          ? "var(--slot-attended)"
+          : isPenta
+            ? "var(--slot-penta)"
+            : isHardLocked
+              ? meta.bg
+              : isLocked
+                ? "var(--surface)"
+                : meta.bg,
+        borderColor: attendance
+          ? "var(--slot-attended-bd)"
+          : isPenta
+            ? "var(--slot-penta-bd)"
+            : meta.border,
+        color: darkFg,
       }}
       className={[
         "group relative w-full rounded-lg border border-l-4 px-2.5 py-2 text-left transition",
@@ -90,29 +110,45 @@ export function SlotCard({
       <div className="relative flex items-center justify-between gap-1">
         <span
           className="font-mono text-[13px] font-medium tabular-nums"
-          style={isEchoDept ? { color: "var(--slot-echo-dept-fg)" } : undefined}
+          style={darkFg ? { color: darkFg } : undefined}
         >
           {clinicTime(slot.startAt)}
         </span>
-        <StatusIcon slot={slot} darkBg={isEchoDept} />
+        <StatusIcon slot={slot} darkBg={!!darkFg} />
       </div>
 
       <div className="relative mt-1 leading-tight">
-        {slot.status === "BOOKED" && slot.appointment ? (
+        {slot.status === "BOOKED" && slot.appointment && attendance ? (
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
+            <span
+              className={`truncate line-through decoration-2 ${
+                attendance === "ARRIVED" ? "decoration-green-600" : "decoration-red-600"
+              }`}
+            >
+              {slot.appointment.patient.lastName} {slot.appointment.patient.firstName}
+            </span>
+            {attendance === "ARRIVED" ? (
+              <Check
+                className="h-5 w-5 shrink-0 text-green-600"
+                strokeWidth={4}
+                aria-label="Prišiel"
+              />
+            ) : (
+              <X
+                className="h-5 w-5 shrink-0 text-red-600"
+                strokeWidth={4}
+                aria-label="Neprišiel"
+              />
+            )}
+          </p>
+        ) : slot.status === "BOOKED" && slot.appointment ? (
           <p
             className={`flex items-center gap-1 truncate text-sm font-semibold ${
               slot.appointment.status === "COMPLETED"
                 ? "text-emerald-700 line-through"
-                : slot.appointment.status === "ARRIVED"
-                  ? "text-slate-500 line-through"
-                  : slot.appointment.status === "NO_SHOW"
-                    ? "italic text-orange-700 line-through"
-                    : "text-slate-900"
+                : "text-slate-900"
             }`}
           >
-            {slot.appointment.status === "NO_SHOW" && (
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            )}
             <span className="truncate">
               {slot.appointment.patient.lastName} {slot.appointment.patient.firstName}
             </span>
@@ -122,7 +158,11 @@ export function SlotCard({
             ECHO oddelenie
           </p>
         ) : isPorada ? (
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <p
+            className={`text-xs font-semibold uppercase tracking-wide ${
+              darkFg ? "" : "text-slate-600"
+            }`}
+          >
             Porada
           </p>
         ) : slot.status === "AVAILABLE" ? (
@@ -166,10 +206,8 @@ function StatusIcon({ slot, darkBg }: { slot: SlotDTO; darkBg?: boolean }) {
     case "BOOKED":
       if (appointmentStatus === "COMPLETED")
         return <CheckCheck className={`${cls} text-emerald-700`} aria-label="Vybavený" />;
-      if (appointmentStatus === "ARRIVED")
-        return <Check className={`${cls} text-emerald-600`} aria-label="Prišiel" />;
-      if (appointmentStatus === "NO_SHOW")
-        return <AlertTriangle className={`${cls} text-orange-600`} aria-label="Neprišiel" />;
+      // Prišiel / Neprišiel carry their big ✔ / ✖ next to the name instead.
+      if (appointmentStatus === "ARRIVED" || appointmentStatus === "NO_SHOW") return null;
       if (!slot.appointment) return null;
       return (
         <BookingMark

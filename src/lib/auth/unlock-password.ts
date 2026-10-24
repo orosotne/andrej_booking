@@ -29,3 +29,23 @@ export function assertUnlockPassword(
     throw new ValidationError(wrongMessage);
   }
 }
+
+/**
+ * Verifies the password that lets a new patient (registered < 10 days ago) into
+ * a dispenzár slot reserved for established patients (lib/new-patient-rule.ts).
+ * NEW_PATIENT_SLOT_PASSWORD when set — so the clinic can hand it to the staff
+ * who book without also handing out the manager unlock password — otherwise
+ * the manager unlock password (WEDNESDAY_UNLOCK_PASSWORD).
+ */
+export function assertNewPatientSlotPassword(provided: string | undefined): void {
+  const expected =
+    process.env.NEW_PATIENT_SLOT_PASSWORD || process.env.WEDNESDAY_UNLOCK_PASSWORD;
+  if (!expected) {
+    throw new ValidationError(
+      "Server nie je nakonfigurovaný (chýba NEW_PATIENT_SLOT_PASSWORD aj WEDNESDAY_UNLOCK_PASSWORD).",
+    );
+  }
+  if (!provided || !constantTimeEqual(provided, expected)) {
+    throw new ValidationError("Nesprávne heslo pre objednanie nového pacienta.");
+  }
+}

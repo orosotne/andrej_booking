@@ -109,9 +109,10 @@ function bookableKind(type: AppointmentTypeLit): BookableKind {
 }
 
 /**
- * True for the password-only ECHO slots (13:30/13:50/14:10 from Feb 2027),
- * which carry the dedicated "yellow" colour and render with the PENTA
- * watermark. The type stays ECHO, so colour is the only discriminator.
+ * True for the ECHO PENTA slots (13:30/13:50/14:10 from Feb 2027, or any slot
+ * re-designated as echo penta), which carry the dedicated "yellow" colour and
+ * render with the PENTA watermark. The type stays ECHO, so colour is the only
+ * discriminator.
  */
 export function isPentaSlot(slot: { color: string }): boolean {
   return slot.color === "yellow";
