@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -499,16 +499,15 @@ function MonthPicker({
   const selYear = Number(anchor.slice(0, 4));
   const selMonth = Number(anchor.slice(5, 7));
 
-  // Re-sync the displayed year when the month changes via arrows while closed.
-  useEffect(() => {
-    if (!open) setYear(Number(anchor.slice(0, 4)));
-  }, [anchor, open]);
-
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          // Open on the shown month's year, also after the month changed via arrows.
+          if (!open) setYear(selYear);
+          setOpen(!open);
+        }}
         aria-haspopup="true"
         aria-expanded={open}
         className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-lg font-semibold capitalize text-slate-900 transition hover:bg-slate-100"

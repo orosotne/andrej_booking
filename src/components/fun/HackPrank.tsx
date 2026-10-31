@@ -38,10 +38,9 @@ export function HackPrank() {
     return () => clearTimeout(t);
   }, [open, remaining]);
 
-  // Náhodná hláška pri každom prelete (mení sa každých ~6 s).
+  // Náhodná hláška pri každom prelete (mení sa každých ~6 s, prvú vyberie close()).
   useEffect(() => {
     if (!flying) return;
-    setQuote(QUOTES[Math.floor(Math.random() * QUOTES.length)]);
     const i = setInterval(() => {
       setQuote(QUOTES[Math.floor(Math.random() * QUOTES.length)]);
     }, 6000);
@@ -52,6 +51,7 @@ export function HackPrank() {
     if (remaining > 0) return;
     setOpen(false);
     setFlying(true);
+    setQuote(QUOTES[Math.floor(Math.random() * QUOTES.length)]);
   }
 
   if (!ENABLED) return null;
