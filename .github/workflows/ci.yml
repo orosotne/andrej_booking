@@ -33,8 +33,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # next-env.d.ts (types for .svg/image imports) and the route types are
+      # generated, not committed — create them first, as `next build` would.
       - name: Type-check
-        run: npx tsc --noEmit
+        run: |
+          npx next typegen
+          npx tsc --noEmit
 
       - name: Unit tests
         run: npm test
