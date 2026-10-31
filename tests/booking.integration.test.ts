@@ -606,3 +606,140 @@ describe.skipIf(!RUN)("new-patient rule (requires DB)", () => {
     expect(moved.slotId).toBe(to.id);
   });
 });
+
+// Once a slot has been opened — by its release time or by the password — and
+// a patient was booked into it, removing the patient must leave it open, even
+// when its release window has not come yet. Only the password re-locks it.
+describe.skipIf(!RUN)("a freed slot stays open (requires DB)", () => {
+  // Wednesdays, so the Thu/Fri new-patient rule never interferes.
+  const DAY = "2099-11-25";
+  const CLOSED_DAY = "2099-11-18";
+  let dayId = "";
+  let closedDayId = "";
+  let patientId = "";
+  const patientIds: string[] = [];
+  let minute = 0;
+
+  async function mkSlot(
+    calendarDayId: string,
+    dayIso: string,
+    status: "LOCKED" | "AVAILABLE",
+    releaseAt: Date | null,
+  ) {
+    const startAt = new Date(`${dayIso}T07:00:00.000Z`);
+    startAt.setUTCMinutes(minute);
+    minute += 30;
+    return prisma.appointmentSlot.create({
+      data: {
+        calendarDayId,
+        startAt,
+        endAt: new Date(startAt.getTime() + 30 * 60_000),
+        appointmentType: "DISPENSARY",
+        status,
+        releaseAt,
+        color: "white",
+      },
+    });
+  }
+
+  // A slot whose window is still shut, opened by the password.
+  async function unlockedSlot(releaseAt: Date | null) {
+    const slot = await mkSlot(dayId, DAY, "LOCKED", releaseAt);
+    await unlockSlot({ slotId: slot.id, ctx });
+    return slot.id;
+  }
+
+  const book = (slotId: string, pid = patientId) =>
+    bookSlot({
+      slotId,
+      patientId: pid,
+      appointmentType: "DISPENSARY",
+      patientCategory: "DISPENZAR",
+      ctx,
+    });
+
+  const statusOf = async (slotId: string) =>
+    (await prisma.appointmentSlot.findUniqueOrThrow({ where: { id: slotId } })).status;
+
+  beforeAll(async () => {
+    dayId = (
+      await prisma.calendarDay.create({
+        data: { date: new Date(DAY), dayType: "MANUAL_WEDNESDAY", status: "OPEN" },
+      })
+    ).id;
+    closedDayId = (
+      await prisma.calendarDay.create({
+        data: { date: new Date(CLOSED_DAY), dayType: "MANUAL_WEDNESDAY", status: "OPEN" },
+      })
+    ).id;
+    patientId = (
+      await prisma.patient.create({ data: { firstName: "Voľný", lastName: "Slot" } })
+    ).id;
+    patientIds.push(patientId);
+  });
+
+  afterAll(async () => {
+    const days = [dayId, closedDayId];
+    await prisma.appointment.deleteMany({ where: { slot: { calendarDayId: { in: days } } } });
+    await prisma.appointmentSlot.deleteMany({ where: { calendarDayId: { in: days } } });
+    await prisma.calendarDay.deleteMany({ where: { id: { in: days } } });
+    await prisma.patient.deleteMany({ where: { id: { in: patientIds } } });
+    await prisma.$disconnect();
+  });
+
+  it("after a cancellation, for a password-only slot", async () => {
+    const slotId = await unlockedSlot(null);
+    const appt = await book(slotId);
+    await cancelAppointment({ appointmentId: appt.id, reason: "test", ctx });
+    expect(await statusOf(slotId)).toBe("AVAILABLE");
+  });
+
+  it("after a cancellation, for a slot whose window opens later", async () => {
+    const slotId = await unlockedSlot(new Date("2099-10-25T06:00:00.000Z"));
+    const appt = await book(slotId);
+    await cancelAppointment({ appointmentId: appt.id, reason: "test", ctx });
+    expect(await statusOf(slotId)).toBe("AVAILABLE");
+  });
+
+  it("when its patient is moved to another slot", async () => {
+    const slotId = await unlockedSlot(null);
+    const target = await mkSlot(dayId, DAY, "AVAILABLE", new Date("2000-01-01T00:00:00.000Z"));
+    const appt = await book(slotId);
+    await rescheduleAppointment({ appointmentId: appt.id, newSlotId: target.id, ctx });
+    expect(await statusOf(slotId)).toBe("AVAILABLE");
+    expect(await statusOf(target.id)).toBe("BOOKED");
+  });
+
+  it("when its no-show patient is deleted", async () => {
+    const p = await prisma.patient.create({ data: { firstName: "Del", lastName: "Voľný" } });
+    patientIds.push(p.id);
+    const slotId = await unlockedSlot(null);
+    const appt = await book(slotId, p.id);
+    await updateAppointment({ appointmentId: appt.id, status: "NO_SHOW", ctx });
+    await deletePatient({ patientId: p.id, ctx });
+    expect(await statusOf(slotId)).toBe("AVAILABLE");
+  });
+
+  it("and the password still locks it again", async () => {
+    const slotId = await unlockedSlot(null);
+    const appt = await book(slotId);
+    await cancelAppointment({ appointmentId: appt.id, reason: "test", ctx });
+    const locked = await lockSlot({ slotId, reason: "test", ctx });
+    expect(locked.status).toBe("LOCKED");
+    expect(locked.manualLock).toBe(true);
+  });
+
+  it("goes BLOCKED instead when its day was closed in the meantime", async () => {
+    const slot = await mkSlot(
+      closedDayId,
+      CLOSED_DAY,
+      "AVAILABLE",
+      new Date("2000-01-01T00:00:00.000Z"),
+    );
+    const appt = await book(slot.id);
+    // Closing a day with bookings (force) blocks only its free slots.
+    await prisma.calendarDay.update({ where: { id: closedDayId }, data: { status: "CLOSED" } });
+    await cancelAppointment({ appointmentId: appt.id, reason: "test", ctx });
+    expect(await statusOf(slot.id)).toBe("BLOCKED");
+  });
+});

@@ -5,6 +5,8 @@ import { BookingMark } from "@/components/ui/BookingMark";
 import type { SlotDTO } from "@/lib/api-types";
 import { TYPE_META } from "@/lib/slot-style";
 import { clinicTime, clinicDayChip } from "@/lib/format";
+import { isPastBlockedSlot } from "@/lib/calendar-ui";
+import { useCurrentMinute } from "@/hooks/useCurrentMinute";
 
 export function SlotCard({
   slot,
@@ -23,6 +25,7 @@ export function SlotCard({
    */
   canRedesignate?: boolean;
 }) {
+  const now = useCurrentMinute();
   const meta = TYPE_META[slot.appointmentType];
   // LOCKED + BLOCKED slots are not clickable for staff (no override flow exposed).
   // Admin still has unlock dialog for LOCKED via slot-actions menu.
@@ -39,15 +42,20 @@ export function SlotCard({
 
   // ECHO oddelenie & Porada both render as locked-dark blocks (cannot be opened).
   const isHardLocked = isEchoDept || (isPorada && isBlocked);
+  // Porada / ECHO oddelenie zošednú od poslednej minúty slotu (8:00 → 8:29),
+  // tou istou sivou ako slot so zmeneným stavom.
+  const isOver = isPastBlockedSlot(slot, now);
   // Light text on the dark navy (ECHO oddelenie) / dark green (porada) fill.
-  const darkFg = isEchoDept
-    ? "var(--slot-echo-dept-fg)"
-    : isPorada && !isLocked
-      ? "var(--slot-porada-fg)"
-      : undefined;
+  const darkFg = isOver
+    ? undefined
+    : isEchoDept
+      ? "var(--slot-echo-dept-fg)"
+      : isPorada && !isLocked
+        ? "var(--slot-porada-fg)"
+        : undefined;
 
   // Prišiel / Neprišiel: celý slot sivý, meno preškrtnuté zelenou / červenou
-  // a vpravo od mena hrubá ✔ / ✖ — sivá prebíja aj farbu typu a PENTA.
+  // a v strede slotu veľká hrubá ✔ / ✖ — sivá prebíja aj farbu typu a PENTA.
   const attendance =
     slot.status === "BOOKED" &&
     (slot.appointment?.status === "ARRIVED" || slot.appointment?.status === "NO_SHOW")
@@ -67,7 +75,7 @@ export function SlotCard({
         clickable && (!isHardLocked || canRedesignate) && onSelect(slot)
       }
       style={{
-        backgroundColor: attendance
+        backgroundColor: attendance || isOver
           ? "var(--slot-attended)"
           : isPenta
             ? "var(--slot-penta)"
@@ -76,7 +84,7 @@ export function SlotCard({
               : isLocked
                 ? "var(--surface)"
                 : meta.bg,
-        borderColor: attendance
+        borderColor: attendance || isOver
           ? "var(--slot-attended-bd)"
           : isPenta
             ? "var(--slot-penta-bd)"
@@ -107,6 +115,23 @@ export function SlotCard({
           </span>
         </span>
       )}
+      {attendance && (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          {attendance === "ARRIVED" ? (
+            <Check
+              className="h-10 w-10 text-green-600"
+              strokeWidth={4.5}
+              aria-label="Prišiel"
+            />
+          ) : (
+            <X
+              className="h-10 w-10 text-red-600"
+              strokeWidth={4.5}
+              aria-label="Neprišiel"
+            />
+          )}
+        </span>
+      )}
       <div className="relative flex items-center justify-between gap-1">
         <span
           className="font-mono text-[13px] font-medium tabular-nums"
@@ -119,27 +144,12 @@ export function SlotCard({
 
       <div className="relative mt-1 leading-tight">
         {slot.status === "BOOKED" && slot.appointment && attendance ? (
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-            <span
-              className={`truncate line-through decoration-2 ${
-                attendance === "ARRIVED" ? "decoration-green-600" : "decoration-red-600"
-              }`}
-            >
-              {slot.appointment.patient.lastName} {slot.appointment.patient.firstName}
-            </span>
-            {attendance === "ARRIVED" ? (
-              <Check
-                className="h-5 w-5 shrink-0 text-green-600"
-                strokeWidth={4}
-                aria-label="Prišiel"
-              />
-            ) : (
-              <X
-                className="h-5 w-5 shrink-0 text-red-600"
-                strokeWidth={4}
-                aria-label="Neprišiel"
-              />
-            )}
+          <p
+            className={`truncate text-sm font-semibold text-slate-600 line-through decoration-2 ${
+              attendance === "ARRIVED" ? "decoration-green-600" : "decoration-red-600"
+            }`}
+          >
+            {slot.appointment.patient.lastName} {slot.appointment.patient.firstName}
           </p>
         ) : slot.status === "BOOKED" && slot.appointment ? (
           <p
@@ -154,7 +164,11 @@ export function SlotCard({
             </span>
           </p>
         ) : isEchoDept ? (
-          <p className="text-xs font-semibold uppercase tracking-wide">
+          <p
+            className={`text-xs font-semibold uppercase tracking-wide ${
+              darkFg ? "" : "text-slate-600"
+            }`}
+          >
             ECHO oddelenie
           </p>
         ) : isPorada ? (
@@ -206,7 +220,7 @@ function StatusIcon({ slot, darkBg }: { slot: SlotDTO; darkBg?: boolean }) {
     case "BOOKED":
       if (appointmentStatus === "COMPLETED")
         return <CheckCheck className={`${cls} text-emerald-700`} aria-label="Vybavený" />;
-      // Prišiel / Neprišiel carry their big ✔ / ✖ next to the name instead.
+      // Prišiel / Neprišiel carry their big ✔ / ✖ in the middle of the slot instead.
       if (appointmentStatus === "ARRIVED" || appointmentStatus === "NO_SHOW") return null;
       if (!slot.appointment) return null;
       return (

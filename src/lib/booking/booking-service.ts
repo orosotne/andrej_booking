@@ -36,14 +36,16 @@ import {
 import { clinicDate } from "@/lib/format";
 import type { Prisma } from "@/generated/prisma/client";
 
-/** When a slot is freed, return it to AVAILABLE only if its release window is open. */
-function statusAfterFreeing(
-  releaseAt: Date | null,
-  now: Date,
-): "AVAILABLE" | "LOCKED" {
-  return releaseAt !== null && releaseAt.getTime() <= now.getTime()
-    ? "AVAILABLE"
-    : "LOCKED";
+/**
+ * Status of a slot whose patient just left it (cancelled, moved away, or the
+ * patient deleted). Only an AVAILABLE slot can be booked, so a freed slot was
+ * open — by its release time or by the password — and it stays open even when
+ * its release window has not come yet; only the password locks it again. The
+ * one exception is a day closed while the patient was still booked (closing a
+ * day with bookings blocks just its free slots): the freed slot joins them.
+ */
+function statusAfterFreeing(dayStatus: string): "AVAILABLE" | "BLOCKED" {
+  return dayStatus === "CLOSED" ? "BLOCKED" : "AVAILABLE";
 }
 
 /** Audit reason stamped when the override password let a new patient in. */
@@ -170,15 +172,15 @@ export interface CancelInput {
   appointmentId: string;
   reason: string;
   ctx: AuditContext;
-  now?: Date;
 }
 
 export async function cancelAppointment(input: CancelInput) {
-  const now = input.now ?? new Date();
   return prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.findUnique({
       where: { id: input.appointmentId },
-      include: { slot: true },
+      include: {
+        slot: { include: { calendarDay: { select: { status: true } } } },
+      },
     });
     if (!appointment) throw new NotFoundError("Objednávka neexistuje.");
     if (appointment.status === "CANCELLED") {
@@ -195,7 +197,7 @@ export async function cancelAppointment(input: CancelInput) {
     });
     await tx.appointmentSlot.update({
       where: { id: appointment.slotId },
-      data: { status: statusAfterFreeing(appointment.slot.releaseAt, now) },
+      data: { status: statusAfterFreeing(appointment.slot.calendarDay.status) },
     });
 
     await recordAudit(tx, {
@@ -226,7 +228,9 @@ export async function rescheduleAppointment(input: RescheduleInput) {
   return prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.findUnique({
       where: { id: input.appointmentId },
-      include: { slot: true },
+      include: {
+        slot: { include: { calendarDay: { select: { status: true } } } },
+      },
     });
     if (!appointment) throw new NotFoundError("Objednávka neexistuje.");
     if (["CANCELLED", "RESCHEDULED", "COMPLETED"].includes(appointment.status)) {
@@ -260,7 +264,7 @@ export async function rescheduleAppointment(input: RescheduleInput) {
 
     await tx.appointmentSlot.update({
       where: { id: appointment.slotId },
-      data: { status: statusAfterFreeing(appointment.slot.releaseAt, now) },
+      data: { status: statusAfterFreeing(appointment.slot.calendarDay.status) },
     });
     await tx.appointment.update({
       where: { id: appointment.id },
@@ -554,7 +558,6 @@ export async function changeSlotDesignation(input: ChangeDesignationInput) {
 export interface DeletePatientInput {
   patientId: string;
   ctx: AuditContext;
-  now?: Date;
 }
 
 /**
@@ -567,10 +570,9 @@ export interface DeletePatientInput {
  * without releasing its slot would leave an orphaned BOOKED slot — phantom,
  * unbookable capacity that no longer maps to any appointment. So every slot
  * still held by one of this patient's purged rows is released first, exactly as
- * a cancellation would (statusAfterFreeing → AVAILABLE if released, else LOCKED).
+ * a cancellation would (statusAfterFreeing → AVAILABLE, BLOCKED on a closed day).
  */
 export async function deletePatient(input: DeletePatientInput) {
-  const now = input.now ?? new Date();
   return prisma.$transaction(async (tx) => {
     const patient = await tx.patient.findUnique({
       where: { id: input.patientId },
@@ -600,12 +602,12 @@ export async function deletePatient(input: DeletePatientInput) {
           },
         },
       },
-      select: { id: true, releaseAt: true },
+      select: { id: true, calendarDay: { select: { status: true } } },
     });
     for (const slot of heldSlots) {
       await tx.appointmentSlot.update({
         where: { id: slot.id },
-        data: { status: statusAfterFreeing(slot.releaseAt, now) },
+        data: { status: statusAfterFreeing(slot.calendarDay.status) },
       });
     }
 

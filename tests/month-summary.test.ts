@@ -35,6 +35,7 @@ function booked(startAt: string, status = "SCHEDULED"): SlotDTO {
         lastName: "Danišová",
         phone: "+421 917 123 456",
         note: null,
+        noteCategories: [],
       },
     },
   });

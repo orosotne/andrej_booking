@@ -63,6 +63,11 @@ const ACTION_LABEL: Record<string, string> = {
   "user.create": "Pridaný používateľ",
   "user.update": "Upravený používateľ",
   "user.delete": "Vymazaný používateľ",
+  "note_category.create": "Pridaná podkategória",
+  "note_category.rename": "Premenovaná podkategória",
+  "note_category.delete": "Zmazaná podkategória",
+  "note_category.add_patient": "Pridanie do podkategórie",
+  "note_category.remove_patient": "Odobratie z podkategórie",
 };
 
 const PATIENT_FIELD_LABEL: Record<string, string> = {
@@ -148,6 +153,9 @@ export default async function AuditPage({
       if (from) slotIds.add(from);
     } else if (log.entityType === "slot") {
       slotIds.add(log.entityId);
+    } else if (log.entityType === "note_category") {
+      const pid = str(after?.patientId) ?? str(before?.patientId);
+      if (pid) patientIds.add(pid);
     }
   }
 
@@ -364,6 +372,29 @@ export default async function AuditPage({
                 {DESIGNATION_LABEL[to as SlotDesignation] ?? to}
               </span>
             )}
+          </span>
+        );
+      }
+      case "note_category.rename":
+        return (
+          <span>
+            <span className="text-slate-400 line-through">
+              {str(before?.name) ?? "—"}
+            </span>{" "}
+            <span className="text-slate-400">→</span>{" "}
+            <strong>{str(after?.name) ?? "—"}</strong>
+          </span>
+        );
+      case "note_category.add_patient":
+      case "note_category.remove_patient": {
+        const snap = after ?? before;
+        return (
+          <span>
+            <strong>{patientFromIdOrSnapshot(str(snap?.patientId), null)}</strong>
+            <span className="text-slate-400">
+              {log.action === "add_patient" ? " → " : " ← "}
+            </span>
+            <strong>{str(snap?.name) ?? "—"}</strong>
           </span>
         );
       }

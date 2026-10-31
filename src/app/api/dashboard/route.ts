@@ -25,6 +25,7 @@ import type {
 } from "@/lib/api-types";
 import type { AppointmentTypeLit } from "@/lib/slot-engine/types";
 import { toSlotDTO } from "@/lib/slot-dto";
+import { NOTE_CATEGORY_NAMES } from "@/lib/notes/note-category-names";
 
 const DAY_HORIZON = 60; // days ahead for the day scan / holidays / Wednesdays
 const CAPACITY_HORIZON = 30;
@@ -109,6 +110,7 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ user }) => {
                         lastName: true,
                         phone: true,
                         note: true,
+                        noteCategories: NOTE_CATEGORY_NAMES,
                       },
                     },
                   },

@@ -2,30 +2,49 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, LayoutDashboard, Users } from "lucide-react";
+import { BarChart3, CalendarDays, NotebookTabs, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITEMS = [
-  { href: "/prehlad", label: "Prehľad", Icon: LayoutDashboard },
   { href: "/calendar", label: "Kalendár", Icon: CalendarDays },
   { href: "/pacienti", label: "Pacienti", Icon: Users },
 ];
 
+// Doctor/admin only, like the page itself.
+const NOTES = { href: "/poznamky", label: "Poznámky", Icon: NotebookTabs };
+
 // Admin-only, like the page itself.
 const STATS = { href: "/statistika", label: "Štatistika", Icon: BarChart3 };
+
+// Literal class names so Tailwind keeps them; indexed by the item count.
+const GRID_COLS: Record<number, string> = {
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+};
 
 const isOn = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
 
-export function MobileQuickNav({ isAdmin = false }: { isAdmin?: boolean }) {
+export function MobileQuickNav({
+  isAdmin = false,
+  canSeeNotes = false,
+}: {
+  isAdmin?: boolean;
+  canSeeNotes?: boolean;
+}) {
   const pathname = usePathname();
-  const items = isAdmin ? [...ITEMS, STATS] : ITEMS;
+  const items = [
+    ...ITEMS,
+    ...(canSeeNotes ? [NOTES] : []),
+    ...(isAdmin ? [STATS] : []),
+  ];
 
   return (
     <nav
       className={cn(
         "no-print grid gap-2 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden",
-        isAdmin ? "grid-cols-4" : "grid-cols-3",
+        GRID_COLS[items.length],
       )}
       aria-label="Rýchly prístup"
     >

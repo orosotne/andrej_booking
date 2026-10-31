@@ -5,6 +5,7 @@ import { defineRoute } from "@/lib/route";
 import { dateOnly, toIsoDate } from "@/lib/calendar-date";
 import { todayIso } from "@/lib/format";
 import { toSlotDTO } from "@/lib/slot-dto";
+import { NOTE_CATEGORY_NAMES } from "@/lib/notes/note-category-names";
 import type { BookedAppointmentDTO } from "@/lib/api-types";
 import type { Prisma, AppointmentStatus } from "@/generated/prisma/client";
 
@@ -20,6 +21,7 @@ const patientSelect = {
   lastName: true,
   phone: true,
   note: true,
+  noteCategories: NOTE_CATEGORY_NAMES,
 } as const;
 
 // Admin "Objednaní ľudia" list: every booked patient in one table, filtered by

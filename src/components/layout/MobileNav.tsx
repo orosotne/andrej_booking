@@ -5,18 +5,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { ADMIN_ITEMS, PRIMARY_ITEMS, STATS_ITEM } from "./nav-items";
+import { ADMIN_ITEMS, NOTES_ITEM, PRIMARY_ITEMS, STATS_ITEM } from "./nav-items";
 
 const isOn = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
 
 export function MobileNav({
   isAdmin,
+  canSeeNotes,
   userName,
   roleLabel,
   signOutAction,
 }: {
   isAdmin: boolean;
+  canSeeNotes: boolean;
   userName: string;
   roleLabel: string;
   signOutAction: () => void | Promise<void>;
@@ -41,9 +43,11 @@ export function MobileNav({
     };
   }, [open]);
 
-  const items = isAdmin
-    ? [...PRIMARY_ITEMS, STATS_ITEM, ...ADMIN_ITEMS]
-    : PRIMARY_ITEMS;
+  const items = [
+    ...PRIMARY_ITEMS,
+    ...(canSeeNotes ? [NOTES_ITEM] : []),
+    ...(isAdmin ? [STATS_ITEM, ...ADMIN_ITEMS] : []),
+  ];
 
   return (
     <div ref={ref} className="relative">

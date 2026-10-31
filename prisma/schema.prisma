@@ -127,10 +127,40 @@ model Patient {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  appointments Appointment[]
+  appointments   Appointment[]
+  noteCategories PatientNoteCategory[]
 
   @@index([lastName, firstName])
   @@map("patients")
+}
+
+// "Poznámky": subcategories the doctor defines (e.g. PCSK9I, AR) and files
+// patients under. Their names are shown in red above the patient's free-text
+// note; membership is managed only from the /poznamky page (doctor/admin), so
+// the note itself can never edit them.
+model NoteCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patients PatientNoteCategory[]
+
+  @@map("note_categories")
+}
+
+// A patient filed under a subcategory. Deleting either side drops the link.
+model PatientNoteCategory {
+  patientId  String   @map("patient_id")
+  categoryId String   @map("category_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  patient  Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  category NoteCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([patientId, categoryId])
+  @@index([categoryId])
+  @@map("patient_note_categories")
 }
 
 model ScheduleTemplate {

@@ -159,6 +159,19 @@ export const patientCreateSchema = z.object({
 // Update keeps phone optional (admins may edit other fields without resending phone).
 export const patientUpdateSchema = patientCreateSchema.partial();
 
+// Poznámky — a subcategory's name, shown in red on the patient's note.
+export const noteCategoryNameSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Názov podkategórie je povinný")
+    .max(40, "Názov podkategórie môže mať najviac 40 znakov"),
+});
+
+export const noteCategoryPatientSchema = z.object({
+  patientId: z.string().min(1),
+});
+
 export const openDaySchema = z.object({
   note: z.string().max(500).optional(),
   overrideReason: z.string().max(500).optional(),

@@ -1,9 +1,15 @@
 /** Navigation targets available to every signed-in role. */
 export const PRIMARY_ITEMS = [
-  { href: "/prehlad", label: "Prehľad" },
   { href: "/calendar", label: "Kalendár" },
   { href: "/pacienti", label: "Pacienti" },
 ];
+
+/**
+ * Poznámky (the doctor's patient subcategories) sit next to Pacienti, but only
+ * for the doctor/admin accounts — the page and /api/note-categories are
+ * DOCTOR_ADMIN. Nurses see the subcategories on the patient's note instead.
+ */
+export const NOTES_ITEM = { href: "/poznamky", label: "Poznámky" };
 
 /**
  * Statistics sit in the main navigation next to the primary items, but stay

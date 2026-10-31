@@ -26,6 +26,7 @@ import { TYPE_META } from "@/lib/slot-style";
 import { bookingColor, birthYearShort } from "@/lib/booking-mark";
 import { BookingMark } from "@/components/ui/BookingMark";
 import { SlotPickerCalendar } from "./SlotPickerCalendar";
+import { PatientNoteField } from "./PatientNote";
 import {
   PatientHistory,
   type AttendanceTotalsDTO,
@@ -69,6 +70,8 @@ interface Patient {
   email: string | null;
   externalPatientId: string | null;
   note: string | null;
+  // Poznámky subcategory names — the red first line of the note.
+  noteCategories: string[];
   // YYYY-MM-DD of the nearest upcoming scheduled appointment, or null if none.
   nextAppointmentDate: string | null;
   nextAppointment: {
@@ -440,11 +443,10 @@ function PatientDialog({
           value={form.email}
           onChange={(e) => set("email", e.target.value)}
         />
-        <TextareaField
-          label="Poznámka"
+        <PatientNoteField
+          categories={patient?.noteCategories ?? []}
           value={form.note}
-          onChange={(e) => set("note", e.target.value)}
-          rows={2}
+          onChange={(v) => set("note", v)}
         />
         <Button
           type="submit"

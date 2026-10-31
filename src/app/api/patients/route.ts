@@ -7,6 +7,10 @@ import { auditPatientSnapshot } from "@/lib/audit/patient-snapshot";
 import { defineRoute } from "@/lib/route";
 import { Prisma } from "@/generated/prisma/client";
 import { accentInsensitiveRegex } from "@/lib/accent-search";
+import {
+  NOTE_CATEGORY_NAMES,
+  noteCategoryNames,
+} from "@/lib/notes/note-category-names";
 
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = 20;
@@ -49,6 +53,8 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
       // Nearest still-scheduled future appointment per patient — same definition
       // as the patient detail's "upcoming". Lets the list show booked-or-not.
       include: {
+        // Red subcategory line on the patient's note (detail dialog).
+        noteCategories: NOTE_CATEGORY_NAMES,
         appointments: {
           where: {
             status: "SCHEDULED",
@@ -73,8 +79,9 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
   ]);
 
   return NextResponse.json({
-    patients: patients.map(({ appointments, ...rest }) => ({
+    patients: patients.map(({ appointments, noteCategories, ...rest }) => ({
       ...rest,
+      noteCategories: noteCategoryNames(noteCategories),
       nextAppointmentDate:
         appointments[0]?.slot.calendarDay.date.toISOString().slice(0, 10) ??
         null,

@@ -6,6 +6,8 @@ import {
   tallyDayByType,
   monthGridCells,
   monthStrip,
+  monthStripTone,
+  isPastBlockedSlot,
   weekdayOf,
   openDayPasswordText,
 } from "@/lib/calendar-ui";
@@ -329,5 +331,79 @@ describe("monthStrip", () => {
   it("anchors on the month even for a mid-month date", () => {
     expect(monthStrip("2026-12-31")[0]).toBe("2026-12-01");
     expect(monthStrip("2026-12-31")[1]).toBe("2027-01-01");
+  });
+});
+
+describe("monthStripTone", () => {
+  // October: 10 red, 1 yellow, 4 green, the next 10 violet, the rest white.
+  it("colours today's month and the ones 3, 6 and 12 months ahead", () => {
+    const today = "2026-10-31";
+    expect(monthStripTone("2026-10-01", today)).toBe("current");
+    expect(monthStripTone("2027-01-01", today)).toBe("plus3");
+    expect(monthStripTone("2027-04-01", today)).toBe("plus6");
+    expect(monthStripTone("2027-10-01", today)).toBe("plus12");
+  });
+
+  it("leaves every other month plain", () => {
+    const today = "2026-10-31";
+    for (const m of ["2026-11-01", "2026-12-01", "2027-02-01", "2027-07-01", "2027-11-01", "2027-12-01"]) {
+      expect(monthStripTone(m, today)).toBeNull();
+    }
+  });
+
+  it("moves with the calendar month", () => {
+    expect(monthStripTone("2026-11-01", "2026-11-01")).toBe("current");
+    expect(monthStripTone("2027-02-01", "2026-11-15")).toBe("plus3");
+    expect(monthStripTone("2027-01-01", "2026-11-15")).toBeNull();
+  });
+});
+
+describe("isPastBlockedSlot", () => {
+  // Thursday 5 Nov 2026 (CET, UTC+1): porada 8:00–8:30 = 07:00–07:30Z,
+  // ECHO oddelenie 12:30–13:00 = 11:30–12:00Z and 13:00–13:30 = 12:00–12:30Z.
+  const porada800 = {
+    appointmentType: "CONSULTATION_BLOCKED" as const,
+    endAt: "2026-11-05T07:30:00.000Z",
+  };
+  const echo1230 = {
+    appointmentType: "ECHO_DEPARTMENT_BLOCKED" as const,
+    endAt: "2026-11-05T12:00:00.000Z",
+  };
+  const echo1300 = {
+    appointmentType: "ECHO_DEPARTMENT_BLOCKED" as const,
+    endAt: "2026-11-05T12:30:00.000Z",
+  };
+  const at = (iso: string) => Date.parse(iso);
+
+  it("turns porada grey from its last minute (8:00 slot at 8:29)", () => {
+    expect(isPastBlockedSlot(porada800, at("2026-11-05T07:28:59.000Z"))).toBe(false);
+    expect(isPastBlockedSlot(porada800, at("2026-11-05T07:29:00.000Z"))).toBe(true);
+  });
+
+  it("turns ECHO oddelenie grey from its last minute (12:59 and 13:29)", () => {
+    expect(isPastBlockedSlot(echo1230, at("2026-11-05T11:58:00.000Z"))).toBe(false);
+    expect(isPastBlockedSlot(echo1230, at("2026-11-05T11:59:00.000Z"))).toBe(true);
+    expect(isPastBlockedSlot(echo1300, at("2026-11-05T12:28:00.000Z"))).toBe(false);
+    expect(isPastBlockedSlot(echo1300, at("2026-11-05T12:29:00.000Z"))).toBe(true);
+  });
+
+  it("stays grey for the rest of the day and after", () => {
+    expect(isPastBlockedSlot(porada800, at("2026-11-05T14:00:00.000Z"))).toBe(true);
+    expect(isPastBlockedSlot(echo1300, at("2026-11-12T06:00:00.000Z"))).toBe(true);
+  });
+
+  it("never applies to a slot re-designated to something else", () => {
+    for (const appointmentType of ["DISPENSARY", "ECHO", "PRE_HOSPITAL"] as const) {
+      expect(
+        isPastBlockedSlot(
+          { appointmentType, endAt: porada800.endAt },
+          at("2026-11-05T14:00:00.000Z"),
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it("is off while the time is unknown (server render)", () => {
+    expect(isPastBlockedSlot(porada800, 0)).toBe(false);
   });
 });

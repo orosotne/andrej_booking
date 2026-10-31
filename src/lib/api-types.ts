@@ -10,6 +10,8 @@ export interface PatientLiteDTO {
   lastName: string;
   phone: string | null;
   note: string | null;
+  /** Poznámky subcategory names, shown in red above the note (read-only here). */
+  noteCategories: string[];
 }
 
 export interface AppointmentLiteDTO {

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Megaphone } from "lucide-react";
 import { signOut } from "@/lib/auth/auth";
-import { getSessionUser } from "@/lib/auth/rbac";
+import { DOCTOR_ADMIN, getSessionUser } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db";
 import { NavLink } from "@/components/layout/NavLink";
 import { AdminMenu } from "@/components/layout/AdminMenu";
@@ -30,6 +30,9 @@ export default async function AppLayout({
   });
   const announcement =
     typeof announcementRow?.value === "string" ? announcementRow.value.trim() : "";
+
+  // Poznámky are the doctor's tool: doctor and admin accounts, never a nurse.
+  const canSeeNotes = DOCTOR_ADMIN.includes(user.role);
 
   async function signOutToLogin() {
     "use server";
@@ -105,9 +108,9 @@ export default async function AppLayout({
               className="hidden items-center gap-4 text-sm md:flex"
               aria-label="Hlavná navigácia"
             >
-              <NavLink href="/prehlad">Prehľad</NavLink>
               <NavLink href="/calendar">Kalendár</NavLink>
               <NavLink href="/pacienti">Pacienti</NavLink>
+              {canSeeNotes && <NavLink href="/poznamky">Poznámky</NavLink>}
               {user.role === "ADMIN" && (
                 <>
                   <NavLink href="/statistika">Štatistika</NavLink>
@@ -138,6 +141,7 @@ export default async function AppLayout({
           <div className="md:hidden">
             <MobileNav
               isAdmin={user.role === "ADMIN"}
+              canSeeNotes={canSeeNotes}
               userName={user.name ?? ""}
               roleLabel={ROLE_LABEL[user.role] ?? user.role}
               signOutAction={signOutToLogin}
@@ -145,7 +149,7 @@ export default async function AppLayout({
           </div>
         </div>
       </header>
-      <MobileQuickNav isAdmin={user.role === "ADMIN"} />
+      <MobileQuickNav isAdmin={user.role === "ADMIN"} canSeeNotes={canSeeNotes} />
       <main className="mx-auto max-w-6xl px-4 py-5">{children}</main>
     </div>
   );

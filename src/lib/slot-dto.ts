@@ -1,5 +1,6 @@
 import type { SlotDTO } from "@/lib/api-types";
 import type { AppointmentTypeLit, SlotStatusLit } from "@/lib/slot-engine/types";
+import { noteCategoryNames } from "@/lib/notes/note-category-names";
 
 // Minimal structural shapes — the only fields the SlotDTO serialization needs.
 // Kept Prisma-agnostic so any query that selects these columns can reuse it.
@@ -26,6 +27,8 @@ interface ActiveAppointment {
     lastName: string;
     phone: string | null;
     note: string | null;
+    // Selected with NOTE_CATEGORY_NAMES (lib/notes/note-category-names.ts).
+    noteCategories: { category: { name: string } }[];
   };
 }
 
@@ -54,7 +57,14 @@ export function toSlotDTO(
           note: active.note,
           createdAt: active.createdAt.toISOString(),
           patientCategory: active.patientCategory,
-          patient: active.patient,
+          patient: {
+            id: active.patient.id,
+            firstName: active.patient.firstName,
+            lastName: active.patient.lastName,
+            phone: active.patient.phone,
+            note: active.patient.note,
+            noteCategories: noteCategoryNames(active.patient.noteCategories),
+          },
         }
       : null,
   };

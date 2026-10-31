@@ -43,8 +43,10 @@ import {
   buildDayMap,
   monthGridCells,
   monthStrip,
+  monthStripTone,
   tallyDayByType,
   openDayPasswordText,
+  type MonthStripTone,
   type TypeTally,
 } from "@/lib/calendar-ui";
 import { cn } from "@/lib/cn";
@@ -64,6 +66,14 @@ type AttendanceEntry = {
 
 // Ambulancia pracuje len v stredu/štvrtok/piatok — ostatné dni sa nezobrazujú.
 const WEEKDAY_HEADERS = ["St", "Št", "Pi"];
+
+// Month numbers in the quick-jump strip: this month, +3, +6 and +12 months.
+const STRIP_TONE_TEXT: Record<MonthStripTone, string> = {
+  current: "text-red-500",
+  plus3: "text-yellow-400",
+  plus6: "text-green-500",
+  plus12: "text-violet-400",
+};
 
 export function MonthView({
   canManageDays,
@@ -258,7 +268,8 @@ export function MonthView({
       </div>
 
       {/* 15 black squares, one per month from the current one, numbered by
-          month-of-year. The viewed month (if inside the strip) reads yellow. */}
+          month-of-year. Today's month reads red, +3 months yellow, +6 green,
+          +12 violet, the rest white; the viewed month gets a white frame. */}
       <div
         role="group"
         aria-label="Rýchly výber mesiaca"
@@ -266,6 +277,7 @@ export function MonthView({
       >
         {stripMonths.map((iso) => {
           const selected = iso === anchor;
+          const tone = monthStripTone(iso, stripMonths[0]);
           return (
             <button
               key={iso}
@@ -275,7 +287,8 @@ export function MonthView({
               aria-pressed={selected}
               className={cn(
                 "flex aspect-square items-center justify-center rounded bg-slate-900 text-xs font-semibold tabular-nums transition hover:bg-slate-700 sm:text-sm",
-                selected ? "text-yellow-400" : "text-white",
+                tone ? STRIP_TONE_TEXT[tone] : "text-white",
+                selected && "ring-2 ring-inset ring-white",
               )}
             >
               {Number(iso.slice(5, 7))}

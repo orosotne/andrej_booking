@@ -8,6 +8,7 @@ import { dateOnly } from "@/lib/calendar-date";
 import { toSlotDTO } from "@/lib/slot-dto";
 import type { CalendarResponse } from "@/lib/api-types";
 import { SLOT_OCCUPYING_STATUSES } from "@/lib/appointment-status";
+import { NOTE_CATEGORY_NAMES } from "@/lib/notes/note-category-names";
 
 // This endpoint pulls the full nested payload (days → slots → appointments →
 // patient), so the span is capped. The only callers are the week (7-day) and
@@ -45,6 +46,7 @@ export const GET = defineRoute({ roles: ALL_STAFF }, async ({ req }) => {
                   lastName: true,
                   phone: true,
                   note: true,
+                  noteCategories: NOTE_CATEGORY_NAMES,
                 },
               },
             },

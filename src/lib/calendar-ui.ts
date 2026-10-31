@@ -213,3 +213,46 @@ export function monthStrip(todayIso: string, count = 15): string[] {
   const first = startOfMonth(todayIso);
   return Array.from({ length: count }, (_, i) => addMonths(first, i));
 }
+
+/** How a month square in the quick-jump strip is coloured, see monthStripTone. */
+export type MonthStripTone = "current" | "plus3" | "plus6" | "plus12";
+
+const STRIP_TONE_BY_OFFSET: Record<number, MonthStripTone> = {
+  0: "current",
+  3: "plus3",
+  6: "plus6",
+  12: "plus12",
+};
+
+/**
+ * The tone of `monthIso` relative to today's month: today's month, 3, 6 and
+ * 12 months ahead are coloured (red / yellow / green / violet in MonthView),
+ * every other month is plain (null).
+ */
+export function monthStripTone(
+  monthIso: string,
+  todayIso: string,
+): MonthStripTone | null {
+  const months = (iso: string) =>
+    Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
+  return STRIP_TONE_BY_OFFSET[months(monthIso) - months(todayIso)] ?? null;
+}
+
+/**
+ * Porada and ECHO oddelenie slots turn grey once their time is up: from the
+ * slot's last minute on (the 8:00 porada at 8:29, the 12:30 ECHO oddelenie at
+ * 12:59), for good. Only these two designations — a slot re-designated to
+ * anything else keeps its colour. `nowMs` 0 means "time not known yet" (the
+ * server render) and never greys anything.
+ */
+export function isPastBlockedSlot(
+  slot: { appointmentType: AppointmentTypeLit; endAt: string },
+  nowMs: number,
+): boolean {
+  if (
+    slot.appointmentType !== "CONSULTATION_BLOCKED" &&
+    slot.appointmentType !== "ECHO_DEPARTMENT_BLOCKED"
+  )
+    return false;
+  return nowMs > 0 && nowMs >= Date.parse(slot.endAt) - 60_000;
+}
